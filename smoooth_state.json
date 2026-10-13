@@ -1,0 +1,92 @@
+{
+  "plans": {},
+  "idempotency": {
+    "default:execute_plan:idemp_client_key_demo_01": {
+      "key": {
+        "workspace_id": "default",
+        "operation_type": "execute_plan",
+        "client_key": "idemp_client_key_demo_01"
+      },
+      "request_hash": "d0996949ad6cb604eeee8dcbe5d8674892a2ff2db46a00da778f10f23ec0f1e6",
+      "operation_id": "op_48d4aec5c878405082a32ee5055cf5b3",
+      "created_at": "2026-10-13T11:52:52.699081100Z"
+    }
+  },
+  "operations": {
+    "op_48d4aec5c878405082a32ee5055cf5b3": {
+      "id": "op_48d4aec5c878405082a32ee5055cf5b3",
+      "workspace_id": "default",
+      "operation_type": "execute_plan",
+      "plan_id": "plan_demo_01",
+      "plan_hash": "d0996949ad6cb604eeee8dcbe5d8674892a2ff2db46a00da778f10f23ec0f1e6",
+      "request_hash": "d0996949ad6cb604eeee8dcbe5d8674892a2ff2db46a00da778f10f23ec0f1e6",
+      "idempotency_client_key": "idemp_client_key_demo_01",
+      "status": "failed",
+      "progress_percent": 0,
+      "lease_epoch": 1,
+      "lease_owner": "worker_df22e91f69ac454893655387b19488af",
+      "lease_expires_at": "2026-10-13T11:57:52.691926700Z",
+      "intended_state": {
+        "actions": [
+          {
+            "action_type": "create",
+            "config": {
+              "image": "postgres:16-alpine",
+              "port": 5432
+            },
+            "exposes_network_publicly": false,
+            "is_persistent": true,
+            "provider": "docker",
+            "resource_name": "smoooth-postgres",
+            "service_type": "database"
+          },
+          {
+            "action_type": "create",
+            "config": {
+              "image": "app:v1",
+              "port": 8080
+            },
+            "exposes_network_publicly": true,
+            "is_persistent": false,
+            "provider": "docker",
+            "resource_name": "smoooth-api",
+            "service_type": "compute"
+          }
+        ],
+        "dependencies": [
+          {
+            "from": "smoooth-api",
+            "to": "smoooth-postgres"
+          }
+        ],
+        "environment": "development",
+        "immutable_artifacts": {
+          "web_app": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "policy_envelope": {
+          "allow_data_destruction": false,
+          "allow_public_network": true,
+          "max_monthly_budget_usd": 50
+        },
+        "schema_version": 1,
+        "target_id": "local_docker_node",
+        "workspace_id": "default"
+      },
+      "observed_state": {},
+      "logs": [
+        {
+          "timestamp": "2026-10-13T11:52:52.692033600Z",
+          "message": "Worker worker_df22e91f69ac454893655387b19488af acquired lease [epoch: 1] for plan plan_demo_01 [hash: d0996949]",
+          "level": "INFO"
+        }
+      ],
+      "evidence": null,
+      "error_message": "Container failure: Failed while pulling image 'postgres:16-alpine': Error in the hyper legacy client: client error (Connect)",
+      "created_at": "2026-10-13T11:52:52.692037700Z",
+      "updated_at": "2026-10-13T11:52:52.701699100Z"
+    }
+  },
+  "resources": {},
+  "bindings": {},
+  "audit_events": []
+}

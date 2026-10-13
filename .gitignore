@@ -1,0 +1,26 @@
+# Rust
+/target
+Cargo.lock.bak
+**/*.rs.bk
+
+# Node & Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Browser test profiles & scratch edge data
+**/edge-profile*/
+
+# Environment & local files
+.env
+.env*.local
+*.local
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini

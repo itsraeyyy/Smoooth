@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smoooth — Infrastructure Freedom for AI Agents | Early Access Waitlist</title>
+  <meta name="description" content="Give coding agents a consistent, deterministic way to provision, connect, deploy, and operate the infrastructure your product needs—from databases and containers to cache and microservices.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Smoooth — Infrastructure Freedom for AI Agents">
+  <meta property="og:description" content="Your agent chooses the stack. Smoooth makes it work. Supabase-level convenience without vendor lock-in.">
+  <meta property="og:type" content="website">
+
+  <!-- Google Fonts: Lexend (Requested) & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lexend:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="page-wrapper">
+
+    <!-- Top Status Announcement Ribbon -->
+    <div class="top-announcement">
+      <div class="status-dot"></div>
+      <span><strong>Smoooth v0.1 Protocol:</strong> Private developer preview now opening. Priority invites sent weekly.</span>
+    </div>
+
+    <!-- Navigation Bar -->
+    <header class="navbar">
+      <div class="container navbar-inner">
+        <div class="brand-group">
+          <a href="#" class="brand-logo" aria-label="Smoooth Home">
+            <div class="brand-icon-mark">
+              <!-- Geometric S Mark -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </div>
+            <span>smoooth</span>
+          </a>
+          <span class="brand-tag">v0.1 PREVIEW</span>
+        </div>
+
+        <nav>
+          <ul class="nav-links">
+            <li><a href="#hero" class="nav-link">Overview</a></li>
+            <li><a href="#features" class="nav-link">Architecture</a></li>
+            <li><a href="#how-it-works" class="nav-link">Workflow</a></li>
+            <li><a href="#safety" class="nav-link">Control & Safety</a></li>
+            <li><a href="#faq" class="nav-link">FAQ</a></li>
+          </ul>
+        </nav>
+
+        <div class="nav-actions">
+          <a href="#waitlist-form-section" class="btn btn-secondary" style="font-size: 0.8125rem;">Sign In</a>
+          <a href="#waitlist-form-section" class="btn btn-primary">Join Waitlist</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ===================================================================
+           HERO SECTION: EDITORIAL 2-COLUMN GRID
+           =================================================================== -->
+      <section class="hero-section" id="hero">
+        <div class="container hero-grid">
+
+          <!-- Persistent Vertical Hairline Divider -->
+          <div class="hero-vertical-divider" aria-hidden="true"></div>
+
+          <!-- Hero Left Column -->
+          <div class="hero-left-col">
+            <div class="eyebrow-badge">
+              <span class="status-dot"></span>
+              <span>Infrastructure for AI Agents • Early Access</span>
+            </div>
+
+            <h1 class="hero-headline">
+              Your agent chooses the stack.<br>
+              <span class="highlight">Smoooth makes it work.</span>
+            </h1>
+
+            <p class="hero-subtitle">
+              Supabase-level convenience across databases, containers, and services—with complete freedom to pick the exact technologies that fit your product.
+            </p>
+
+            <!-- Waitlist Form Card -->
+            <div class="waitlist-card" id="waitlist-form-section">
+
+              <!-- Form State -->
+              <div id="waitlistFormCard">
+                <div class="waitlist-form-header">
+                  <div class="waitlist-form-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect width="18" height="18" x="3" y="3" rx="2"/>
+                      <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                    <span>Request Priority Access</span>
+                  </div>
+                  <span class="waitlist-counter-pill">3,492 IN QUEUE</span>
+                </div>
+
+                <form id="waitlistForm">
+                  <div class="waitlist-input-group">
+                    <input 
+                      type="email" 
+                      id="waitlistEmail" 
+                      class="waitlist-input" 
+                      placeholder="developer@company.com or agent-id" 
+                      required 
+                      autocomplete="email"
+                    >
+                    <button type="submit" class="waitlist-submit-btn">
+                      <span>Request Access</span>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <!-- Stack selection chips -->
+                  <span class="waitlist-stack-label">Select stack your agents need (optional):</span>
+                  <div class="stack-chips-row">
+                    <button type="button" class="stack-chip active" data-stack="PostgreSQL 16">PostgreSQL</button>
+                    <button type="button" class="stack-chip active" data-stack="Redis Cluster">Redis</button>
+                    <button type="button" class="stack-chip active" data-stack="Docker Engine">Docker</button>
+                    <button type="button" class="stack-chip" data-stack="MongoDB">MongoDB</button>
+                    <button type="button" class="stack-chip" data-stack="Kubernetes">Kubernetes</button>
+                    <button type="button" class="stack-chip" data-stack="Fly.io">Fly.io</button>
+                    <button type="button" class="stack-chip" data-stack="S3 Storage">S3 Storage</button>
+                  </div>
+                </form>
+
+                <div class="waitlist-footer-meta">
+                  <span>⚡ Instant MCP Sandbox on Invite</span>
+                  <span>🔒 Zero Credit Card Required</span>
+                </div>
+              </div>
+
+              <!-- Ticket Pass State (Shows on submission or return visit) -->
+              <div id="waitlistTicketCard" class="waitlist-ticket">
+                <div class="ticket-header">
+                  <div class="ticket-badge-group">
+                    <span class="ticket-badge-early">● Access Pass Issued</span>
+                    <h3 class="ticket-title">Smoooth Early Access</h3>
+                  </div>
+                  <div class="ticket-number-box">
+                    <div class="ticket-number-label">Queue Position</div>
+                    <div class="ticket-number" id="ticketQueueNum">#3,493</div>
+                  </div>
+                </div>
+
+                <div class="ticket-body-row">
+                  <div>
+                    <div class="ticket-field-label">Developer Email</div>
+                    <div class="ticket-field-val" id="ticketEmailVal">developer@smoooth.ai</div>
+                  </div>
+                  <div>
+                    <div class="ticket-field-label">Target Stack</div>
+                    <div class="ticket-field-val" id="ticketStackVal">Postgres, Redis, Docker</div>
+                  </div>
+                </div>
+
+                <div class="ticket-body-row">
+                  <div>
+                    <div class="ticket-field-label">Status</div>
+                    <div class="ticket-field-val" style="color: var(--color-accent-green-hover);">Batch #4 Invited Next</div>
+                  </div>
+                  <div>
+                    <div class="ticket-field-label">Date Issued</div>
+                    <div class="ticket-field-val" id="ticketDateVal">Today</div>
+                  </div>
+                </div>
+
+                <div class="ticket-referral-box">
+                  <div class="ticket-referral-label">
+                    <span>Move up 5 spots for each developer referred:</span>
+                  </div>
+                  <div class="ticket-copy-input-row">
+                    <input type="text" id="refLinkInput" class="ticket-ref-input" readonly value="https://smoooth.dev/join?ref=SMOOOTH-3493">
+                    <button type="button" id="copyRefBtn" class="ticket-copy-btn">Copy</button>
+                  </div>
+                </div>
+
+                <button type="button" id="resetTicketBtn" class="ticket-reset-btn">Register another email or test again</button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Hero Right Column -->
+          <div class="hero-right-col">
+            <div>
+              <p class="hero-right-description">
+                Give coding agents a consistent, deterministic way to provision, connect, deploy, and operate the infrastructure your product needs—from databases and containers to cache, queues, and microservices.
+              </p>
+
+              <div class="hero-value-points">
+                <div class="value-point-item">
+                  <div class="value-point-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  <div class="value-point-content">
+                    <h4>Strict Idempotent Plans</h4>
+                    <p>Every resource operation generates a verifiable DAG with automatic rollback checkpoints.</p>
+                  </div>
+                </div>
+
+                <div class="value-point-item">
+                  <div class="value-point-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  <div class="value-point-content">
+                    <h4>Agent-Native MCP Protocols</h4>
+                    <p>Standardized tools for Claude Code, Cursor, Windsurf, Cline, and custom LLM agents.</p>
+                  </div>
+                </div>
+
+                <div class="value-point-item">
+                  <div class="value-point-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </div>
+                  <div class="value-point-content">
+                    <h4>Zero Vendor Lock-In</h4>
+                    <p>Develop on local Docker engine, promote seamlessly to cloud VPCs or Kubernetes clusters.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Verified Tech Logos -->
+            <div class="tech-logos-box">
+              <div class="tech-logos-label">Verified Stack Adapters</div>
+              <div class="tech-logos-row">
+                <span class="tech-badge-item">
+                  <svg viewBox="0 0 24 24"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.186.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.186.185.186m-2.953 0h2.118a.186.186 0 00.186-.186V6.29a.186.186 0 00-.186-.185H8.076a.185.185 0 00-.185.185v1.888c0 .102.083.186.185.186m-2.954 0h2.119a.186.186 0 00.185-.186V6.29a.186.186 0 00-.185-.185H5.122a.185.185 0 00-.185.185v1.888c0 .102.083.186.185.186m11.815 0h2.119a.186.186 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.186.185.186m-8.861 2.714h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186H8.076a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954 0h2.119a.186.186 0 00.185-.185V9.006a.186.186 0 00-.185-.186H5.122a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m14.77 0h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185M23.977 12.02c-.116-.846-.867-1.39-1.92-1.39h-1.896a.186.186 0 00-.186.185v2.802c0 .548-.285 1.056-.763 1.358-.479.303-1.077.348-1.598.118l-.513-.227a.184.184 0 00-.236.079l-1.007 1.832a.187.187 0 00.063.242c1.472.955 3.315.864 4.708-.231 1.767-1.39 3.342-4.767 3.342-4.767"/></svg>
+                  <span>Docker</span>
+                </span>
+                <span class="tech-badge-item">PostgreSQL</span>
+                <span class="tech-badge-item">Redis</span>
+                <span class="tech-badge-item">MongoDB</span>
+                <span class="tech-badge-item">Kubernetes</span>
+                <span class="tech-badge-item">Fly.io</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           HERO PRODUCT COMPOSITION: MONOCHROME TERRAIN & DUAL UI PANELS
+           Matches the signature visual composition from the reference brief
+           =================================================================== -->
+      <section class="hero-composition-wrapper" aria-label="Interactive Architecture Preview">
+
+        <!-- Procedural Terrain Canvas Layer -->
+        <div class="terrain-background-layer">
+          <canvas id="terrainCanvas"></canvas>
+        </div>
+
+        <div class="container hero-panels-grid">
+
+          <!-- Left Column: Floating Chat Prompt Pill + Code Editor Window -->
+          <div style="display: flex; flex-direction: column;">
+            <div class="floating-prompt-pill">
+              <span class="prompt-dot"></span>
+              <span>Agent Request: "Provision MongoDB + Redis and connect the app"</span>
+            </div>
+
+            <div class="terminal-window">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <span class="terminal-dot red"></span>
+                  <span class="terminal-dot yellow"></span>
+                  <span class="terminal-dot green"></span>
+                </div>
+                <span class="terminal-title">smoooth.mcp.session ~ session_084</span>
+                <div class="terminal-tabs">
+                  <button type="button" class="terminal-tab-btn active" data-tab="plan">Plan</button>
+                  <button type="button" class="terminal-tab-btn" data-tab="tools">Tools</button>
+                  <button type="button" class="terminal-tab-btn" data-tab="diff">Diff</button>
+                  <button type="button" class="terminal-tab-btn" data-tab="logs">Logs</button>
+                </div>
+              </div>
+
+              <!-- Code Execution Body -->
+              <div class="terminal-body">
+                <pre><code id="terminalCodeBlock">// Call: smoooth.plan.create (Idempotent: plan_89f41b2c)
+{
+  <span class="token-key">"intent"</span>: <span class="token-string">"Provision production cluster with caching and automated mutual TLS"</span>,
+  <span class="token-key">"resources"</span>: [
+    {
+      <span class="token-key">"id"</span>: <span class="token-string">"res_pg_primary"</span>,
+      <span class="token-key">"type"</span>: <span class="token-string">"postgres"</span>,
+      <span class="token-key">"version"</span>: <span class="token-string">"16-alpine"</span>,
+      <span class="token-key">"persistence"</span>: <span class="token-string">"100GiB"</span>,
+      <span class="token-key">"port"</span>: <span class="token-number">5432</span>
+    },
+    {
+      <span class="token-key">"id"</span>: <span class="token-string">"res_redis_cache"</span>,
+      <span class="token-key">"type"</span>: <span class="token-string">"redis"</span>,
+      <span class="token-key">"version"</span>: <span class="token-string">"7.2-alpine"</span>,
+      <span class="token-key">"topology"</span>: <span class="token-string">"high-availability-cluster"</span>,
+      <span class="token-key">"memory_limit"</span>: <span class="token-string">"4GiB"</span>
+    },
+    {
+      <span class="token-key">"id"</span>: <span class="token-string">"res_app_gateway"</span>,
+      <span class="token-key">"type"</span>: <span class="token-string">"container_service"</span>,
+      <span class="token-key">"image"</span>: <span class="token-string">"ghcr.io/org/backend-api:v1.4"</span>,
+      <span class="token-key">"ingress"</span>: <span class="token-string">"smoooth-mesh.internal"</span>,
+      <span class="token-key">"bindings"</span>: [<span class="token-string">"res_pg_primary"</span>, <span class="token-string">"res_redis_cache"</span>]
+    }
+  ],
+  <span class="token-key">"risk_tier"</span>: <span class="token-string">"Tier1_LowImpact"</span>,
+  <span class="token-key">"destructive_actions"</span>: <span class="token-number">0</span>
+}</code></pre>
+              </div>
+
+              <!-- Interactive Prompt Input Bar -->
+              <div class="terminal-prompt-bar">
+                <input type="text" class="prompt-bar-input" placeholder="Ask agent to adjust resources or scale..." readonly value="smoooth apply --auto-approve">
+                <button type="button" class="prompt-send-btn" title="Execute command" onclick="showToast('Executing: smoooth apply --auto-approve')">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Terminal Actions Footer -->
+              <div class="terminal-footer-bar">
+                <div class="terminal-live-status">
+                  <span class="status-dot"></span>
+                  <span>Plan Validated • 0 Destructive Actions</span>
+                </div>
+                <div class="terminal-actions-quick">
+                  <button type="button" class="terminal-btn-small" data-action="add-mongo">+ Add Mongo</button>
+                  <button type="button" class="terminal-btn-small" data-action="scale-redis">Scale Redis</button>
+                  <button type="button" class="terminal-btn-small" data-action="reconcile">Reconcile</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Window: Live Cluster Topology & Health Card (Vertical device style) -->
+          <div class="topology-panel">
+            <div class="topology-header">
+              <span style="font-size: 0.8125rem; font-weight: 700; color: var(--color-ink-primary);">9:41</span>
+              <div class="topology-device-status">
+                <span class="status-dot"></span>
+                <span>Mesh 5G • 2.1ms</span>
+              </div>
+            </div>
+
+            <!-- Health & Metrics Header -->
+            <div class="topology-hero-balance-box">
+              <div class="topology-balance-label">Total Cluster Health</div>
+              <div class="topology-cluster-name">99.98% Uptime</div>
+              <div class="topology-device-actions">
+                <button type="button" class="topology-device-btn primary" onclick="showToast('Active services re-provisioned')">Scale Stack</button>
+                <button type="button" class="topology-device-btn secondary" onclick="showToast('Telemetry stream synchronized')">Inspect Logs</button>
+              </div>
+            </div>
+
+            <div class="topology-services-list">
+              <!-- Service 1 -->
+              <div class="service-item-row">
+                <div class="service-info">
+                  <span class="service-status-pill"></span>
+                  <div>
+                    <div class="service-name">PostgreSQL 16 Primary</div>
+                    <div class="service-port">Port 5432 • 100GiB Persistent</div>
+                  </div>
+                </div>
+                <div class="service-metrics">
+                  <div class="service-uptime">HEALTHY</div>
+                  <div class="service-latency">12 pools</div>
+                </div>
+              </div>
+
+              <!-- Service 2 -->
+              <div class="service-item-row">
+                <div class="service-info">
+                  <span class="service-status-pill"></span>
+                  <div>
+                    <div class="service-name">Redis HA Cluster</div>
+                    <div class="service-port">Port 6379 • In-memory cache</div>
+                  </div>
+                </div>
+                <div class="service-metrics">
+                  <div class="service-uptime">CONNECTED</div>
+                  <div class="service-latency">0.8ms</div>
+                </div>
+              </div>
+
+              <!-- Service 3 -->
+              <div class="service-item-row">
+                <div class="service-info">
+                  <span class="service-status-pill"></span>
+                  <div>
+                    <div class="service-name">App Mesh API Gateway</div>
+                    <div class="service-port">Port 443 • Mutual TLS Active</div>
+                  </div>
+                </div>
+                <div class="service-metrics">
+                  <div class="service-uptime">ROUTING</div>
+                  <div class="service-latency">3 pods</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Injected Connection Strings -->
+            <div class="connection-string-box">
+              <span class="conn-text">POSTGRES_URL=postgres://agent:***@10.0.4.12:5432/db</span>
+              <button type="button" class="conn-copy-btn" onclick="showToast('Connection string copied to clipboard')">Copy</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Hairline Section Divider -->
+      <hr class="hairline-divider">
+
+      <!-- ===================================================================
+           FEATURE SECTION: TWO BROAD EDITORIAL CARDS
+           =================================================================== -->
+      <section class="features-section" id="features">
+        <div class="container">
+          <div class="section-header-row">
+            <div>
+              <div class="eyebrow-badge">
+                <span class="status-dot"></span>
+                <span>Why Agent-First Infrastructure</span>
+              </div>
+              <h2 class="section-title">
+                Everything Developers Need<br>to Move Faster
+              </h2>
+            </div>
+            <p class="section-description">
+              Powerful infrastructure control plane engineered to streamline agent operations, reduce repetitive DevOps plumbing, and build with greater speed and deterministic safety.
+            </p>
+          </div>
+
+          <div class="features-grid-two-col">
+
+            <!-- Card 1: Architecture Without Lock-In -->
+            <div class="feature-card">
+              <div class="feature-card-header">
+                <div class="feature-icon-tile">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="8" height="8" rx="2"/>
+                    <rect x="14" y="2" width="8" height="8" rx="2"/>
+                    <rect x="8" y="14" width="8" height="8" rx="2"/>
+                    <path d="M6 10v4h2M18 10v4h-2"/>
+                  </svg>
+                </div>
+                <h3 class="feature-card-title">Architecture Without Lock-In</h3>
+                <p class="feature-card-body">
+                  Let your coding agent pick the exact database, cache, or message broker that fits your product domain. No proprietary SDKs or forced cloud silos.
+                </p>
+              </div>
+
+              <!-- Visual Representation -->
+              <div class="feature-visual-pane">
+                <svg width="100%" height="160" viewBox="0 0 460 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Node 1: Agent -->
+                  <rect x="20" y="55" width="90" height="50" rx="8" fill="#FFFFFF" stroke="#E4E6E8" stroke-width="1.5"/>
+                  <text x="65" y="80" fill="#111111" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="600" text-anchor="middle">Agent MCP</text>
+                  <circle cx="35" cy="80" r="3" fill="#19B981"/>
+
+                  <!-- Signal Lines -->
+                  <path d="M110 80 L180 80" stroke="#111111" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  
+                  <!-- Node 2: Smoooth Core -->
+                  <rect x="180" y="45" width="100" height="70" rx="8" fill="#111111"/>
+                  <text x="230" y="78" fill="#FFFFFF" font-family="'Lexend', sans-serif" font-size="12" font-weight="700" text-anchor="middle">smoooth</text>
+                  <text x="230" y="94" fill="#9CA3AF" font-family="'JetBrains Mono', monospace" font-size="9" text-anchor="middle">DAG Engine</text>
+
+                  <!-- Branch Lines -->
+                  <path d="M280 65 L350 40" stroke="#CBD5E1" stroke-width="1.5"/>
+                  <path d="M280 80 L350 80" stroke="#CBD5E1" stroke-width="1.5"/>
+                  <path d="M280 95 L350 120" stroke="#CBD5E1" stroke-width="1.5"/>
+
+                  <!-- Dest Nodes -->
+                  <rect x="350" y="20" width="90" height="36" rx="6" fill="#FFFFFF" stroke="#E4E6E8"/>
+                  <text x="395" y="42" fill="#343A40" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="600" text-anchor="middle">PostgreSQL</text>
+
+                  <rect x="350" y="62" width="90" height="36" rx="6" fill="#FFFFFF" stroke="#E4E6E8"/>
+                  <text x="395" y="84" fill="#343A40" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="600" text-anchor="middle">Redis Cache</text>
+
+                  <rect x="350" y="104" width="90" height="36" rx="6" fill="#FFFFFF" stroke="#E4E6E8"/>
+                  <text x="395" y="126" fill="#343A40" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="600" text-anchor="middle">Docker Mesh</text>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Card 2: Infrastructure Agents Can Operate -->
+            <div class="feature-card">
+              <div class="feature-card-header">
+                <div class="feature-icon-tile">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5"/>
+                    <line x1="12" y1="19" x2="20" y2="19"/>
+                  </svg>
+                </div>
+                <h3 class="feature-card-title">Infrastructure Agents Can Operate</h3>
+                <p class="feature-card-body">
+                  Provisioning is only step one. Agents continuously observe telemetry, patch database schemas, heal containers, and execute zero-downtime rolling updates.
+                </p>
+              </div>
+
+              <!-- Visual Representation -->
+              <div class="feature-visual-pane" style="font-family: var(--font-mono); font-size: 0.75rem; color: #343A40;">
+                <div style="background: #FFFFFF; border: 1px solid #E4E6E8; border-radius: 6px; padding: 12px; margin-bottom: 8px;">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="color: #6B7280;">smoooth.reconcile.state</span>
+                    <span style="color: var(--color-accent-green); font-weight: 600;">STATUS: CONVERGED</span>
+                  </div>
+                  <div style="color: #111111; font-weight: 500;">
+                    ✓ Database replica synchronized (lag: 0ms)<br>
+                    ✓ Mutual TLS certificate rotated (expires in 89d)<br>
+                    ✓ CPU threshold 14% below limit
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                  <span style="background: #FFFFFF; border: 1px solid #E4E6E8; padding: 4px 8px; border-radius: 4px; font-size: 0.6875rem;">Step 1: Discover</span>
+                  <span style="background: #FFFFFF; border: 1px solid #E4E6E8; padding: 4px 8px; border-radius: 4px; font-size: 0.6875rem;">Step 2: Plan</span>
+                  <span style="background: #111111; color: #FFFFFF; padding: 4px 8px; border-radius: 4px; font-size: 0.6875rem;">Step 3: Self-Heal</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           HOW IT WORKS SECTION: 4-STAGE PIPELINE
+           =================================================================== -->
+      <section class="how-it-works-section" id="how-it-works">
+        <div class="container">
+          <div class="section-header-row">
+            <div>
+              <div class="eyebrow-badge">
+                <span class="status-dot"></span>
+                <span>Deterministic Lifecycle</span>
+              </div>
+              <h2 class="section-title">From Agent Prompt to Live Infrastructure</h2>
+            </div>
+            <p class="section-description">
+              A hardened, inspectable execution pipeline that gives AI agents autonomy without unpredictable infrastructure side-effects.
+            </p>
+          </div>
+
+          <div class="pipeline-grid">
+            <div class="pipeline-step-card">
+              <div class="step-number">01 / PLAN</div>
+              <h3 class="step-title">Intent DAG Synthesis</h3>
+              <p class="step-desc">The agent queries supported capabilities and creates an explicit execution DAG with dependencies and risk classification.</p>
+            </div>
+
+            <div class="pipeline-step-card">
+              <div class="step-number">02 / VERIFY</div>
+              <h3 class="step-title">Safety Boundaries</h3>
+              <p class="step-desc">Deterministic linting flags destructive actions. Low-risk operations run automatically; high-risk actions request signed approval.</p>
+            </div>
+
+            <div class="pipeline-step-card">
+              <div class="step-number">03 / PROVISION</div>
+              <h3 class="step-title">Atomic Execution</h3>
+              <p class="step-desc">Adapters spin up resources on Docker, Postgres, or cloud VPCs with transactional checkpoints and instant rollback.</p>
+            </div>
+
+            <div class="pipeline-step-card">
+              <div class="step-number">04 / OPERATE</div>
+              <h3 class="step-title">Continuous Telemetry</h3>
+              <p class="step-desc">Connection strings are securely injected. The agent monitors logs, handles health checks, and heals failed dependencies.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           SAFETY & CONTROL SECTION
+           =================================================================== -->
+      <section class="safety-section" id="safety">
+        <div class="container">
+          <div class="section-header-row">
+            <div>
+              <div class="eyebrow-badge">
+                <span class="status-dot"></span>
+                <span>Security & Reliability</span>
+              </div>
+              <h2 class="section-title">Built for Autonomous Agent Safety</h2>
+            </div>
+            <p class="section-description">
+              Giving LLMs direct shell access to raw servers is hazardous. Smoooth provides a deterministic control boundary with full audit logging.
+            </p>
+          </div>
+
+          <div class="safety-grid">
+            <div class="safety-card">
+              <h4>Tiered Risk Gates</h4>
+              <p>Operations are categorized into Tier 1 (Low), Tier 2 (Moderate), and Tier 3 (Destructive). Destructive drops or migrations require human or cryptographically signed approvals.</p>
+            </div>
+
+            <div class="safety-card">
+              <h4>Zero-Leak Credential Vault</h4>
+              <p>Credentials, root passwords, and certificates are handled in the local kernel vault. LLM context windows only receive sanitized connection tokens.</p>
+            </div>
+
+            <div class="safety-card">
+              <h4>Idempotent State Replay</h4>
+              <p>Every plan generates an idempotency key. Network retries and agent replays converge deterministically on desired cluster state without duplicate resources.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           FAQ SECTION
+           =================================================================== -->
+      <section class="faq-section" id="faq">
+        <div class="container faq-container">
+          <div style="text-align: center;">
+            <div class="eyebrow-badge" style="justify-content: center;">
+              <span class="status-dot"></span>
+              <span>Common Questions</span>
+            </div>
+            <h2 class="section-title">Frequently Asked Questions</h2>
+          </div>
+
+          <div class="faq-list">
+            <div class="faq-item">
+              <button class="faq-question" type="button">
+                <span>How is Smoooth different from Supabase or Firebase?</span>
+                <span class="faq-icon">+</span>
+              </button>
+              <div class="faq-answer">
+                Supabase offers an exceptional developer experience for Postgres. But modern applications frequently need Redis caching, vector databases, custom Docker microservices, or specific storage engines. Smoooth gives coding agents that same level of convenience across any chosen stack, without vendor lock-in.
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <button class="faq-question" type="button">
+                <span>Which AI agents and coding tools are supported?</span>
+                <span class="faq-icon">+</span>
+              </button>
+              <div class="faq-answer">
+                Smoooth implements the official Model Context Protocol (MCP) server standard. It integrates natively with Claude Code, Cursor, Windsurf, Cline, Aider, and custom Python or TypeScript agent scripts.
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <button class="faq-question" type="button">
+                <span>Can I run Smoooth locally during development?</span>
+                <span class="faq-icon">+</span>
+              </button>
+              <div class="faq-answer">
+                Yes. Smoooth is compiled in Rust with first-class local Docker engine support. Your agents can develop and test entirely offline on your local machine, then promote identical plans to cloud staging or production environments.
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <button class="faq-question" type="button">
+                <span>How does early access roll out?</span>
+                <span class="faq-icon">+</span>
+              </button>
+              <div class="faq-answer">
+                We are inviting developers and autonomous agent builders in weekly batches. Priority is granted to teams deploying active agents with custom stack requirements.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================
+           FINAL CALL TO ACTION
+           =================================================================== -->
+      <section class="final-cta-section">
+        <div class="container final-cta-box">
+          <div class="eyebrow-badge" style="justify-content: center;">
+            <span class="status-dot"></span>
+            <span>Join the Developer Preview</span>
+          </div>
+          <h2 class="section-title" style="margin-bottom: 20px;">
+            Let your agents build infrastructure with zero friction.
+          </h2>
+          <p style="font-size: 1.0625rem; color: var(--color-ink-muted); margin-bottom: 32px;">
+            Reserve your place in line today and get early access to the Smoooth MCP server and CLI.
+          </p>
+          <a href="#waitlist-form-section" class="btn btn-primary" style="padding: 14px 28px; font-size: 1rem;">
+            Claim Your Spot on the Waitlist →
+          </a>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-top">
+          <div class="brand-group">
+            <div class="brand-logo" style="font-size: 1.125rem;">
+              <div class="brand-icon-mark" style="width: 24px; height: 24px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </div>
+              <span>smoooth</span>
+            </div>
+            <span style="font-size: 0.8125rem; color: var(--color-ink-muted);">Agent-first infrastructure platform</span>
+          </div>
+
+          <div class="status-indicator-footer">
+            <span class="status-dot"></span>
+            <span>All Control Plane Systems Operational</span>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <div>© 2026 Smoooth. Built for autonomous coding agents.</div>
+          <div style="display: flex; gap: 20px;">
+            <a href="#hero">Privacy</a>
+            <a href="#hero">Terms</a>
+            <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+            <a href="#hero">Documentation</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Interactive JavaScript -->
+  <script src="script.js"></script>
+</body>
+</html>
