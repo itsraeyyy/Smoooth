@@ -20,7 +20,10 @@ const filesToCopy = [
   '_headers',
   'desktop.png',
   'mobile.png',
-  'section_view.png'
+  'section_view.png',
+  'hero_visual_2x.png',
+  'code_ref.png',
+  'phone_ref.png'
 ];
 
 for (const file of filesToCopy) {

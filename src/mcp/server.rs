@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::engine::Orchestrator;
 use crate::error::SmooothError;
-use crate::mcp::tools::{get_available_tools, get_default_capabilities};
+use crate::mcp::tools::{get_available_tools, get_default_capabilities, get_capability_schema_detail};
 use crate::models::{
     CanonicalActionSpec, CanonicalExecutionSpec, Plan, PolicyConstraints, RiskTier,
     ServiceBinding,
@@ -209,39 +209,56 @@ impl McpServer {
 
             "get_capability_schema" => {
                 let cap_id = args.get("capability_id").and_then(|v| v.as_str()).unwrap_or("");
-                let caps = get_default_capabilities();
-                let found = caps.into_iter().find(|c| c.id == cap_id);
-                match found {
-                    Some(c) => Ok(serde_json::to_value(c).unwrap_or_default()),
-                    None => Err(SmooothError::NotFound(format!("Capability '{}' not found", cap_id))),
+                match get_capability_schema_detail(cap_id) {
+                    Some(schema) => Ok(serde_json::to_value(schema).unwrap_or_default()),
+                    None => {
+                        let available: Vec<String> = get_default_capabilities().into_iter().map(|c| c.id).collect();
+                        Err(SmooothError::NotFound(format!(
+                            "Capability '{}' not found. Available registered capabilities: {:?}",
+                            cap_id, available
+                        )))
+                    }
                 }
             }
 
             "create_plan" => {
+                let spec_obj = args.get("spec").and_then(|v| v.as_object());
+
                 let workspace_id = args
                     .get("workspace_id")
+                    .or_else(|| spec_obj.and_then(|s| s.get("workspace_id")))
                     .and_then(|v| v.as_str())
                     .unwrap_or("default")
                     .to_string();
 
                 let env = args
                     .get("environment")
+                    .or_else(|| spec_obj.and_then(|s| s.get("environment")))
                     .and_then(|v| v.as_str())
                     .unwrap_or("development")
                     .to_string();
 
                 let actions: Vec<CanonicalActionSpec> = args
                     .get("actions")
+                    .or_else(|| spec_obj.and_then(|s| s.get("actions")))
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default();
 
+                if actions.is_empty() {
+                    return Err(SmooothError::Validation(
+                        "Plan creation rejected: 'actions' must contain at least one valid action specification".to_string()
+                    ));
+                }
+
                 let dependencies: Vec<crate::models::DependencyEdge> = args
                     .get("dependencies")
+                    .or_else(|| spec_obj.and_then(|s| s.get("dependencies")))
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default();
 
                 let policy_envelope: PolicyConstraints = args
                     .get("policy_envelope")
+                    .or_else(|| spec_obj.and_then(|s| s.get("policy_envelope")))
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or(PolicyConstraints {
                         allow_public_network: false,

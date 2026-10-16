@@ -20,3 +20,14 @@ pub struct Capability {
     pub description: String,
     pub operations: Vec<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilitySchema {
+    pub capability: Capability,
+    pub parameter_schema: serde_json::Value,
+    pub supported_health_checks: Vec<String>,
+    pub supported_protocols: Vec<String>,
+    pub binding_spec: serde_json::Value,
+    pub approval_requirements: Vec<String>,
+    pub limitations: Vec<String>,
+}

@@ -73,6 +73,54 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     let text = discover_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
     assert!(text.contains("cap_docker_container"));
     assert!(text.contains("cap_postgres_db"));
+    assert!(text.contains("cap_redis_cache"));
+
+    // =========================================================================
+    // STEP 3b: Agent inspects capability schemas, required parameters, and boundaries
+    // =========================================================================
+    let schema_docker_req = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(json!(31)),
+        method: "tools/call".to_string(),
+        params: Some(json!({
+            "name": "get_capability_schema",
+            "arguments": { "capability_id": "cap_docker_container" }
+        })),
+    };
+    let schema_docker_resp = mcp.handle_request(schema_docker_req).await.unwrap();
+    let docker_schema_text = schema_docker_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(docker_schema_text.contains("parameter_schema"));
+    assert!(docker_schema_text.contains("supported_health_checks"));
+    assert!(docker_schema_text.contains("approval_requirements"));
+    assert!(docker_schema_text.contains("limitations"));
+
+    let schema_pg_req = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(json!(32)),
+        method: "tools/call".to_string(),
+        params: Some(json!({
+            "name": "get_capability_schema",
+            "arguments": { "capability_id": "cap_postgres_db" }
+        })),
+    };
+    let schema_pg_resp = mcp.handle_request(schema_pg_req).await.unwrap();
+    let pg_schema_text = schema_pg_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(pg_schema_text.contains("database"));
+    assert!(pg_schema_text.contains("DATABASE_URL"));
+
+    // Unknown capability must return NotFound error with available capabilities listed
+    let schema_unknown_req = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(json!(33)),
+        method: "tools/call".to_string(),
+        params: Some(json!({
+            "name": "get_capability_schema",
+            "arguments": { "capability_id": "cap_kubernetes_cluster" }
+        })),
+    };
+    let schema_unknown_resp = mcp.handle_request(schema_unknown_req).await.unwrap();
+    let is_err = schema_unknown_resp.result.unwrap()["isError"].as_bool().unwrap();
+    assert!(is_err, "Unknown capability must return isError: true");
 
     // =========================================================================
     // STEP 4: Agent requests Plan generation for Docker app + PostgreSQL

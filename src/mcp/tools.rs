@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::models::{Capability, SupportLevel};
+use crate::models::{Capability, CapabilitySchema, SupportLevel};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpToolDefinition {
@@ -196,4 +196,181 @@ pub fn get_default_capabilities() -> Vec<Capability> {
             operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
         },
     ]
+}
+
+pub fn get_capability_schema_detail(capability_id: &str) -> Option<CapabilitySchema> {
+    match capability_id {
+        "cap_docker_container" => Some(CapabilitySchema {
+            capability: Capability {
+                id: "cap_docker_container".to_string(),
+                name: "Docker Container Runtime".to_string(),
+                provider: "docker".to_string(),
+                service_type: "compute".to_string(),
+                support_level: SupportLevel::SelfHosted,
+                description: "Ephemeral and persistent container workloads with network isolation.".to_string(),
+                operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+            },
+            parameter_schema: serde_json::json!({
+                "type": "object",
+                "required": ["image"],
+                "properties": {
+                    "image": { "type": "string", "description": "Docker image repository tag (e.g. node:20-alpine, python:3.11-alpine)" },
+                    "cmd": { "type": "array", "items": { "type": "string" }, "description": "Command and arguments passed to container" },
+                    "ports": { "type": "object", "description": "Mapping of container port to host port (use 0 for ephemeral host allocation)" },
+                    "env": { "type": "object", "description": "Static environment variables key-value map" },
+                    "network": { "type": "string", "description": "Docker user-defined bridge network for inter-container DNS service discovery" },
+                    "volumes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["volume_name", "container_path"],
+                            "properties": {
+                                "volume_name": { "type": "string" },
+                                "container_path": { "type": "string" },
+                                "read_only": { "type": "boolean" }
+                            }
+                        }
+                    },
+                    "bindings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["resource"],
+                            "properties": {
+                                "resource": { "type": "string", "description": "Name of dependency resource (e.g. postgres or redis resource name)" },
+                                "env_prefix": { "type": "string", "description": "Environment variable prefix (e.g. 'DATABASE', 'REDIS', 'CACHE')" },
+                                "preferred_endpoint": { "type": "string", "enum": ["internal", "host"], "description": "'internal' uses container DNS name; 'host' uses loopback mapped port" }
+                            }
+                        }
+                    },
+                    "health_check": {
+                        "type": "object",
+                        "required": ["type"],
+                        "properties": {
+                            "type": { "type": "string", "enum": ["http", "tcp", "liveness"] },
+                            "path": { "type": "string", "description": "HTTP health request path (e.g. '/healthz')" },
+                            "port": { "type": "integer", "description": "Port to probe" },
+                            "expected_status": { "type": "integer", "description": "Expected HTTP status code (e.g. 200)" }
+                        }
+                    },
+                    "restart_policy": { "type": "string", "enum": ["no", "on-failure", "always", "unless-stopped"] }
+                }
+            }),
+            supported_health_checks: vec!["http".to_string(), "tcp".to_string(), "liveness".to_string()],
+            supported_protocols: vec!["http".to_string(), "https".to_string(), "tcp".to_string()],
+            binding_spec: serde_json::json!({
+                "supports_injected_bindings": true,
+                "preferred_endpoints": ["internal", "host"],
+                "injected_variables": [
+                    "<PREFIX>_HOST",
+                    "<PREFIX>_PORT",
+                    "<PREFIX>_PASSWORD",
+                    "<PREFIX>_URL",
+                    "<PREFIX>_DATABASE"
+                ],
+                "description": "Orchestrator automatically resolves dependency endpoints and injects them directly into container environment before startup."
+            }),
+            approval_requirements: vec![
+                "Public network exposure requires allow_public_network=true in plan policy envelope".to_string(),
+                "Data destruction requires allow_data_destruction=true in plan policy envelope".to_string(),
+                "Plan hash must strictly match approved hash before execute_plan can proceed".to_string(),
+            ],
+            limitations: vec![
+                "Single-host Docker engine only; multi-node clustering (Swarm/K8s) is not supported".to_string(),
+                "Zero-downtime rolling replacement requires external load balancer; single container replacement performs fast restart handover".to_string(),
+                "Containers on default bridge network cannot resolve sibling containers by name; use 'network' for DNS resolution".to_string(),
+            ],
+        }),
+
+        "cap_postgres_db" => Some(CapabilitySchema {
+            capability: Capability {
+                id: "cap_postgres_db".to_string(),
+                name: "PostgreSQL Database".to_string(),
+                provider: "postgres".to_string(),
+                service_type: "database".to_string(),
+                support_level: SupportLevel::SelfHosted,
+                description: "Relational database provisioning with persistent volume protection and staged credential rotation.".to_string(),
+                operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+            },
+            parameter_schema: serde_json::json!({
+                "type": "object",
+                "required": ["database", "user"],
+                "properties": {
+                    "database": { "type": "string", "description": "PostgreSQL database name" },
+                    "user": { "type": "string", "description": "Database owner username" },
+                    "password": { "type": "string", "description": "Database user password (auto-generated with secure entropy if omitted)" },
+                    "port": { "type": "integer", "description": "Host port binding (omit or 0 for internal container isolation)" },
+                    "network": { "type": "string", "description": "Docker bridge network name for application interconnect" },
+                    "volume_name": { "type": "string", "description": "Named volume for database storage (preserves data across container destroy)" }
+                }
+            }),
+            supported_health_checks: vec!["tcp".to_string(), "active_sql_probe".to_string()],
+            supported_protocols: vec!["postgres".to_string(), "postgresql".to_string()],
+            binding_spec: serde_json::json!({
+                "service_type": "database",
+                "exports": [
+                    "DATABASE_URL",
+                    "<PREFIX>_HOST",
+                    "<PREFIX>_PORT",
+                    "<PREFIX>_USER",
+                    "<PREFIX>_PASSWORD",
+                    "<PREFIX>_DATABASE"
+                ],
+                "description": "Provides standard PostgreSQL connection credentials, auto-generates DATABASE_URL URI format."
+            }),
+            approval_requirements: vec![
+                "Persistent volume deletion blocked unless allow_data_destruction=true".to_string(),
+                "Database destruction operations classified as High Risk Tier".to_string(),
+            ],
+            limitations: vec![
+                "PostgreSQL 16 Alpine containerized engine".to_string(),
+                "Self-hosted adapter does not support read-replica pools or automated failover".to_string(),
+                "Host port publishing disabled by default for zero-trust boundary security".to_string(),
+            ],
+        }),
+
+        "cap_redis_cache" => Some(CapabilitySchema {
+            capability: Capability {
+                id: "cap_redis_cache".to_string(),
+                name: "Redis Key-Value Cache & Store".to_string(),
+                provider: "redis".to_string(),
+                service_type: "cache".to_string(),
+                support_level: SupportLevel::SelfHosted,
+                description: "High-performance Redis in-memory cache and data store with AOF persistence and authentication.".to_string(),
+                operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+            },
+            parameter_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "password": { "type": "string", "description": "Authentication secret passed via --requirepass" },
+                    "port": { "type": "integer", "description": "Port mapping (omit or 0 for dynamic ephemeral port)" },
+                    "network": { "type": "string", "description": "Docker bridge network name for application interconnect" },
+                    "volume_name": { "type": "string", "description": "Named volume for Append-Only File (AOF) persistence at /data" }
+                }
+            }),
+            supported_health_checks: vec!["resp_ping".to_string(), "tcp".to_string()],
+            supported_protocols: vec!["redis".to_string(), "rediss".to_string()],
+            binding_spec: serde_json::json!({
+                "service_type": "cache",
+                "exports": [
+                    "<PREFIX>_URL",
+                    "<PREFIX>_HOST",
+                    "<PREFIX>_PORT",
+                    "<PREFIX>_PASSWORD"
+                ],
+                "description": "Exports Redis connection parameters and URI (redis://:password@host:port/0)."
+            }),
+            approval_requirements: vec![
+                "Persistent cache volume deletion blocked unless allow_data_destruction=true".to_string(),
+                "Public network exposure requires explicit policy approval".to_string(),
+            ],
+            limitations: vec![
+                "Redis 7 Alpine single instance with AOF persistence".to_string(),
+                "Redis Sentinel / Redis Cluster topology not supported in local provider".to_string(),
+                "Cache size constrained by host memory limits".to_string(),
+            ],
+        }),
+
+        _ => None,
+    }
 }
