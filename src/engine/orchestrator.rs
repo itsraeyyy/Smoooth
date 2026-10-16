@@ -508,6 +508,8 @@ impl Orchestrator {
             config.get("host").and_then(|v| v.as_str()).unwrap_or("localhost").to_string()
         } else if preferred_endpoint == Some("host") {
             "127.0.0.1".to_string()
+        } else if preferred_endpoint == Some("internal") {
+            target_res.name.clone()
         } else {
             // Container internal networking: DNS name on docker bridge or container ip
             config.get("host").and_then(|v| v.as_str()).unwrap_or(&target_res.name).to_string()

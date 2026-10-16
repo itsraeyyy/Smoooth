@@ -56,6 +56,10 @@ impl DockerAdapter {
         let client = self.require_client()?;
         ContainerManager::get_host_port(client, name_or_id, container_port).await
     }
+
+    pub fn client(&self) -> Result<&DockerClient> {
+        self.require_client()
+    }
 }
 
 impl Default for DockerAdapter {

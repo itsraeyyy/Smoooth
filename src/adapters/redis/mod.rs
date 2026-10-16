@@ -55,7 +55,7 @@ impl RedisAdapter {
                     let mut buf = [0u8; 128];
                     if let Ok(n) = stream.read(&mut buf).await {
                         let resp = String::from_utf8_lossy(&buf[..n]);
-                        if resp.starts_with("+PONG") {
+                        if resp.starts_with("+PONG") || resp.starts_with("-NOAUTH") {
                             let latency = start.elapsed().as_millis() as u64;
                             return Ok(latency);
                         }
@@ -260,7 +260,24 @@ impl ProviderAdapter for RedisAdapter {
             }
         };
 
-        match Self::verify_redis_connection(&connect_host, connect_port, None, Duration::from_secs(5)).await {
+        // Attempt to extract password from container inspect if present
+        let password = if let Ok(client) = self.docker_adapter.client() {
+            if let Ok(inspect) = client.inner().inspect_container(resource_id, None).await {
+                inspect.config.and_then(|c| c.cmd).and_then(|cmd| {
+                    if let Some(pos) = cmd.iter().position(|arg| arg == "--requirepass") {
+                        cmd.get(pos + 1).cloned()
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        match Self::verify_redis_connection(&connect_host, connect_port, password.as_deref(), Duration::from_secs(5)).await {
             Ok(latency) => Ok(HealthEvidence {
                 is_healthy: true,
                 latency_ms: Some(latency),
