@@ -9,6 +9,8 @@ on:
       - 'styles.css'
       - 'script.js'
       - '_headers'
+      - 'dist/**'
+      - 'package.json'
       - 'scripts/build-landing.js'
       - '.github/workflows/deploy-cloudflare.yml'
   workflow_dispatch:
