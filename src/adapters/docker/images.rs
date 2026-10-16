@@ -20,6 +20,11 @@ impl ImageManager {
             None => image_name.to_string(),
         };
 
+        // If no explicit digest pinned and image is already available locally, use it (IfNotPresent policy)
+        if pinned_digest.is_none() && client.inner().inspect_image(image_name).await.is_ok() {
+            return Ok(());
+        }
+
         let options = CreateImageOptions {
             from_image: full_reference.clone(),
             ..Default::default()

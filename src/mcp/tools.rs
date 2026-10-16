@@ -52,6 +52,19 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
             }),
         },
 
+        McpToolDefinition {
+            name: "get_plan".to_string(),
+            description: "Inspect details, canonical hash, risk tier, cost estimate, and approval state of a plan".to_string(),
+            step: "02 Plan".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["plan_id"],
+                "properties": {
+                    "plan_id": { "type": "string" }
+                }
+            }),
+        },
+
         // 03 Govern
         McpToolDefinition {
             name: "approve_plan".to_string(),
@@ -63,7 +76,8 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
                 "properties": {
                     "plan_id": { "type": "string" },
                     "plan_hash": { "type": "string" },
-                    "approved_by": { "type": "string" }
+                    "approved_by": { "type": "string" },
+                    "ttl_seconds": { "type": "integer" }
                 }
             }),
         },
@@ -138,6 +152,17 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
                 }
             }),
         },
+        McpToolDefinition {
+            name: "list_resources".to_string(),
+            description: "List all deployed infrastructure resources and status in a workspace".to_string(),
+            step: "07 Operate".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "workspace_id": { "type": "string" }
+                }
+            }),
+        },
     ]
 }
 
@@ -159,6 +184,15 @@ pub fn get_default_capabilities() -> Vec<Capability> {
             service_type: "database".to_string(),
             support_level: SupportLevel::SelfHosted,
             description: "Relational database provisioning with persistent volume protection and staged credential rotation.".to_string(),
+            operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+        },
+        Capability {
+            id: "cap_redis_cache".to_string(),
+            name: "Redis Key-Value Cache & Store".to_string(),
+            provider: "redis".to_string(),
+            service_type: "cache".to_string(),
+            support_level: SupportLevel::SelfHosted,
+            description: "High-performance Redis in-memory cache and data store with AOF persistence and authentication.".to_string(),
             operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
         },
     ]

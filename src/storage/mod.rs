@@ -30,6 +30,7 @@ pub trait Storage: Send + Sync {
     // Idempotency
     async fn check_idempotency(&self, key: &IdempotencyKey) -> Result<Option<IdempotencyRecord>>;
     async fn record_idempotency(&self, record: IdempotencyRecord) -> Result<()>;
+    async fn check_or_record_idempotency(&self, record: IdempotencyRecord) -> Result<Option<IdempotencyRecord>>;
 
     // Operations & Fencing Leases
     async fn save_operation(&self, operation: Operation) -> Result<()>;

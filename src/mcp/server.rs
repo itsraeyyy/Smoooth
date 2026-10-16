@@ -235,19 +235,29 @@ impl McpServer {
                     .and_then(|v| serde_json::from_value(v.clone()).ok())
                     .unwrap_or_default();
 
+                let dependencies: Vec<crate::models::DependencyEdge> = args
+                    .get("dependencies")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+
+                let policy_envelope: PolicyConstraints = args
+                    .get("policy_envelope")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or(PolicyConstraints {
+                        allow_public_network: false,
+                        allow_data_destruction: false,
+                        max_monthly_budget_usd: Some(150),
+                    });
+
                 let spec = CanonicalExecutionSpec {
                     schema_version: 1,
                     workspace_id,
                     environment: env,
                     target_id: "local_docker_node".to_string(),
                     actions,
-                    dependencies: vec![],
+                    dependencies,
                     immutable_artifacts: std::collections::HashMap::new(),
-                    policy_envelope: PolicyConstraints {
-                        allow_public_network: false,
-                        allow_data_destruction: false,
-                        max_monthly_budget_usd: Some(150),
-                    },
+                    policy_envelope,
                 };
 
                 let plan_id = format!("plan_{}", uuid::Uuid::new_v4().simple());
@@ -258,10 +268,47 @@ impl McpServer {
                 Ok(serde_json::json!({
                     "plan_id": plan.id,
                     "plan_hash": plan.plan_hash,
+                    "workspace_id": plan.spec.workspace_id,
                     "risk_tier": plan.risk_tier,
                     "estimated_cost_usd": plan.estimated_monthly_cost_usd,
                     "requires_approval": plan.requires_approval(),
                     "actions_count": plan.spec.actions.len()
+                }))
+            }
+
+            "get_plan" => {
+                let plan_id = args
+                    .get("plan_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'plan_id'".to_string()))?;
+
+                let plan = self
+                    .orchestrator
+                    .get_plan(plan_id)
+                    .await?
+                    .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if plan.spec.workspace_id != ws {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Workspace mismatch: plan '{}' belongs to workspace '{}', requested '{}'",
+                            plan_id, plan.spec.workspace_id, ws
+                        )));
+                    }
+                }
+
+                Ok(serde_json::json!({
+                    "plan_id": plan.id,
+                    "plan_hash": plan.plan_hash,
+                    "workspace_id": plan.spec.workspace_id,
+                    "environment": plan.spec.environment,
+                    "risk_tier": plan.risk_tier,
+                    "estimated_cost_usd": plan.estimated_monthly_cost_usd,
+                    "requires_approval": plan.requires_approval(),
+                    "approved_by": plan.approved_by,
+                    "is_approval_valid": plan.is_approval_valid(),
+                    "actions": plan.spec.actions,
+                    "policy_envelope": plan.spec.policy_envelope,
                 }))
             }
 
@@ -281,11 +328,25 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("user_agent");
 
+                let ttl_seconds = args
+                    .get("ttl_seconds")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(3600);
+
                 let mut plan = self
                     .orchestrator
                     .get_plan(plan_id)
                     .await?
                     .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if plan.spec.workspace_id != ws {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Workspace mismatch: plan '{}' belongs to workspace '{}', requested '{}'",
+                            plan_id, plan.spec.workspace_id, ws
+                        )));
+                    }
+                }
 
                 if plan.plan_hash != plan_hash {
                     return Err(SmooothError::PolicyViolation(format!(
@@ -294,14 +355,15 @@ impl McpServer {
                     )));
                 }
 
-                plan.approve(approved_by.to_string());
+                plan.approve_with_ttl(approved_by.to_string(), ttl_seconds);
                 self.orchestrator.save_plan(plan.clone()).await?;
 
                 Ok(serde_json::json!({
                     "success": true,
                     "plan_id": plan.id,
                     "plan_hash": plan.plan_hash,
-                    "approved_by": approved_by
+                    "approved_by": approved_by,
+                    "ttl_seconds": ttl_seconds,
                 }))
             }
 
@@ -322,6 +384,15 @@ impl McpServer {
                     .get_plan(plan_id)
                     .await?
                     .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if plan.spec.workspace_id != ws {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Workspace mismatch: plan '{}' belongs to workspace '{}', requested '{}'",
+                            plan_id, plan.spec.workspace_id, ws
+                        )));
+                    }
+                }
 
                 let op = self.orchestrator.execute_plan(plan, idemp_key).await?;
 
@@ -345,31 +416,97 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SmooothError::Validation("Missing 'target_resource_id'".to_string()))?;
 
-                let binding_id = format!("bind_{}", uuid::Uuid::new_v4().simple());
-                let raw_conn = format!(
-                    "postgresql://app_user:p@ssw0rd999!@{}:5432/production_db",
-                    target_id
-                );
+                let req_ws = args.get("workspace_id").and_then(|v| v.as_str());
 
-                let binding = ServiceBinding::new_with_secret(
-                    binding_id.clone(),
-                    source_id.to_string(),
-                    target_id.to_string(),
-                    "postgres_connection".to_string(),
-                    raw_conn.as_bytes(),
+                // Lookup target resource by ID or name in storage
+                let target_res = match self.orchestrator.get_resource(target_id).await? {
+                    Some(r) => Some(r),
+                    None => {
+                        let ws = req_ws.unwrap_or("default");
+                        let resources = self.orchestrator.list_resources(ws).await;
+                        resources.into_iter().find(|r| r.name == target_id)
+                    }
+                };
+
+                let target_res = target_res.ok_or_else(|| {
+                    SmooothError::NotFound(format!(
+                        "Target resource '{}' not found in workspace",
+                        target_id
+                    ))
+                })?;
+
+                // Cross-workspace isolation enforcement: verify source resource workspace if registered
+                if let Ok(Some(source_res)) = self.orchestrator.get_resource(source_id).await {
+                    if source_res.workspace_id != target_res.workspace_id {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Cross-workspace boundary violation: source resource '{}' (workspace '{}') cannot bind to target resource '{}' (workspace '{}')",
+                            source_id, source_res.workspace_id, target_id, target_res.workspace_id
+                        )));
+                    }
+                }
+
+                if let Some(ws) = req_ws {
+                    if target_res.workspace_id != ws {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Workspace mismatch: target resource '{}' belongs to workspace '{}', requested '{}'",
+                            target_id, target_res.workspace_id, ws
+                        )));
+                    }
+                }
+
+                let preferred_endpoint = args.get("preferred_endpoint").and_then(|v| v.as_str());
+                let ws = req_ws.unwrap_or(&target_res.workspace_id);
+
+                let conn_details = crate::engine::Orchestrator::resolve_connection_for_resource(
+                    self.orchestrator.storage(),
                     &self.secret_store,
-                    vec!["DATABASE_URL".to_string()],
+                    target_id,
+                    preferred_endpoint,
+                    ws,
+                ).await?;
+
+                let binding_id = format!("bind_{}", uuid::Uuid::new_v4().simple());
+                let masked_conn = conn_details.to_uri(true);
+
+                let resolved_ep = if preferred_endpoint == Some("host") {
+                    Some(crate::models::Endpoint::Host {
+                        host: conn_details.host.clone(),
+                        port: conn_details.port,
+                    })
+                } else if target_res.ownership == crate::models::ResourceOwnership::External {
+                    Some(crate::models::Endpoint::External {
+                        host: conn_details.host.clone(),
+                        port: conn_details.port,
+                    })
+                } else {
+                    Some(crate::models::Endpoint::Internal {
+                        host: conn_details.host.clone(),
+                        port: conn_details.port,
+                    })
+                };
+
+                let env_prefix = args.get("env_prefix").and_then(|v| v.as_str());
+                let env_map = conn_details.to_env_map(env_prefix, false);
+
+                let binding = ServiceBinding::new_dynamic(
+                    binding_id,
+                    source_id.to_string(),
+                    target_res.id.clone(),
+                    format!("{}_connection", conn_details.protocol),
+                    target_res.ownership.clone(),
+                    resolved_ep,
+                    conn_details.clone(),
+                    &self.secret_store,
+                    env_map,
                 )?;
 
                 self.orchestrator.save_binding(binding.clone()).await?;
-
-                // Mask connection string before returning to agent
-                let masked_conn = ServiceBinding::mask_connection_string(&raw_conn);
 
                 Ok(serde_json::json!({
                     "binding_id": binding.id,
                     "source_resource_id": source_id,
                     "target_resource_id": target_id,
+                    "protocol": conn_details.protocol,
                     "masked_connection_string": masked_conn,
                     "exposed_env_keys": binding.exposed_env_keys,
                     "rotation_stage": binding.rotation_stage,
@@ -382,6 +519,17 @@ impl McpServer {
                     .get("resource_id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SmooothError::Validation("Missing 'resource_id'".to_string()))?;
+
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if let Ok(Some(res)) = self.orchestrator.get_resource(resource_id).await {
+                        if res.workspace_id != ws {
+                            return Err(SmooothError::PolicyViolation(format!(
+                                "Workspace mismatch: resource '{}' belongs to workspace '{}', requested '{}'",
+                                resource_id, res.workspace_id, ws
+                            )));
+                        }
+                    }
+                }
 
                 let evidence = self.orchestrator.health_check(resource_id).await?;
 
@@ -406,6 +554,15 @@ impl McpServer {
                     .await
                     .ok_or_else(|| SmooothError::NotFound(format!("Operation '{}' not found", op_id)))?;
 
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if op.workspace_id != ws {
+                        return Err(SmooothError::PolicyViolation(format!(
+                            "Workspace mismatch: operation '{}' belongs to workspace '{}', requested '{}'",
+                            op_id, op.workspace_id, ws
+                        )));
+                    }
+                }
+
                 Ok(serde_json::json!({
                     "operation_id": op.id,
                     "status": op.status,
@@ -424,27 +581,56 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SmooothError::Validation("Missing 'resource_id'".to_string()))?;
 
-                let res_opt = self.orchestrator.get_resource(resource_id).await?;
-                match res_opt {
-                    Some(resource) => {
-                        let status = self.orchestrator.inspect_resource(resource_id).await?;
-                        let is_drifted = status != resource.status;
-
-                        Ok(serde_json::json!({
-                            "resource_id": resource_id,
-                            "observed_status": status,
-                            "intended_status": resource.status,
-                            "is_drifted": is_drifted,
-                            "drift_corrected": false,
-                            "message": if is_drifted {
-                                "Drift detected between intended and observed state."
-                            } else {
-                                "Resource state matches intended specification."
-                            }
-                        }))
+                if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
+                    if let Ok(Some(res)) = self.orchestrator.get_resource(resource_id).await {
+                        if res.workspace_id != ws {
+                            return Err(SmooothError::PolicyViolation(format!(
+                                "Workspace mismatch: resource '{}' belongs to workspace '{}', requested '{}'",
+                                resource_id, res.workspace_id, ws
+                            )));
+                        }
                     }
-                    None => Err(SmooothError::NotFound(format!("Resource '{}' not found", resource_id))),
                 }
+
+                let outcome = self.orchestrator.reconcile_resource(resource_id).await?;
+
+                Ok(serde_json::json!({
+                    "resource_id": outcome.resource_id,
+                    "observed_status": outcome.observed_status,
+                    "intended_status": outcome.intended_status,
+                    "is_drifted": outcome.is_drifted,
+                    "drift_corrected": outcome.drift_corrected,
+                    "message": outcome.message
+                }))
+            }
+
+            "list_resources" => {
+                let ws = args
+                    .get("workspace_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default");
+
+                let resources = self.orchestrator.list_resources(ws).await;
+                let list: Vec<serde_json::Value> = resources
+                    .into_iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "id": r.id,
+                            "name": r.name,
+                            "workspace_id": r.workspace_id,
+                            "service_type": r.service_type,
+                            "provider": r.provider,
+                            "status": format!("{:?}", r.status),
+                            "is_persistent": r.is_persistent,
+                        })
+                    })
+                    .collect();
+
+                Ok(serde_json::json!({
+                    "workspace_id": ws,
+                    "resources": list,
+                    "count": list.len(),
+                }))
             }
 
             unknown => Err(SmooothError::Validation(format!("Unknown tool '{}'", unknown))),

@@ -42,4 +42,14 @@ impl NetworkManager {
 
         Ok(response.id)
     }
+
+    /// Remove network if no longer needed
+    pub async fn remove_network(
+        client: &DockerClient,
+        network_name: &str,
+    ) -> Result<()> {
+        let docker = client.inner();
+        let _ = docker.remove_network(network_name).await;
+        Ok(())
+    }
 }

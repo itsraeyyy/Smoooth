@@ -45,14 +45,21 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
 
     // 3. Start disposable test container
     let container_name = "smoooth_it_alpine_test";
+    let _ = ContainerManager::stop_and_remove(&client, container_name).await;
     let spec = ContainerSpec {
         name: container_name.to_string(),
         image: image.to_string(),
+        cmd: Some(vec!["sleep".to_string(), "30".to_string()]),
         env: vec!["TEST_VAR=hello_smoooth".to_string()],
         port_bindings: HashMap::new(),
-        volume_mounts: vec![(vol_name.to_string(), "/data".to_string())],
+        volume_mounts: vec![smoooth::models::VolumeMount::new(vol_name.to_string(), "/data".to_string(), false)],
         network_name: None,
         labels: HashMap::new(),
+        restart_policy: None,
+        memory_bytes: None,
+        cpu_shares: None,
+        nano_cpus: None,
+        health_spec: None,
     };
 
     let container_id = ContainerManager::create_and_start(&client, &spec).await.unwrap();

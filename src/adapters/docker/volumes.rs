@@ -14,6 +14,18 @@ impl VolumeManager {
         workspace_id: &str,
         is_persistent: bool,
     ) -> Result<String> {
+        if volume_name.starts_with('/')
+            || volume_name.starts_with('\\')
+            || volume_name.contains('/')
+            || volume_name.contains('\\')
+            || volume_name.starts_with('.')
+        {
+            return Err(SmooothError::PolicyViolation(format!(
+                "Host path bind mounts are strictly forbidden ('{}'). Only named Docker volumes are permitted.",
+                volume_name
+            )));
+        }
+
         let docker = client.inner();
 
         // 1. Check if volume already exists

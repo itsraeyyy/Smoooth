@@ -34,13 +34,34 @@ enum Commands {
         #[arg(default_value = "default")]
         workspace: String,
     },
-    /// Start the Smoooth HTTP API Server
+    /// Start the Smoooth HTTP API Server & MCP Gateway
+    #[command(alias = "server")]
     Serve {
-        #[arg(short, long, default_value_t = 8080)]
+        #[arg(short, long, default_value = "127.0.0.1")]
+        bind: String,
+        #[arg(short, long, default_value_t = 4040)]
         port: u16,
+        #[arg(short, long)]
+        token: Option<String>,
+        #[arg(long)]
+        token_file: Option<String>,
     },
     /// Start the Smoooth stdio Model Context Protocol (MCP) server for coding agents
     Mcp,
+    /// Review and approve a pending execution plan by its plan ID
+    Approve {
+        plan_id: String,
+        #[arg(default_value = "operator")]
+        approver: String,
+    },
+    /// Inspect operation status, progress, logs, and evidence
+    Ops {
+        operation_id: String,
+    },
+    /// Inspect and reconcile drift or recover crashed resource
+    Reconcile {
+        resource_id: String,
+    },
 }
 
 #[tokio::main]
@@ -48,12 +69,15 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_writer(std::io::stderr).init();
     let cli = Cli::parse();
 
-    let storage = Arc::new(LocalStorage::new_file_backed("smoooth_state.json"));
+    let storage_path = std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
+    let storage = Arc::new(LocalStorage::new_file_backed(&storage_path));
     let mut orchestrator = Orchestrator::new(storage.clone());
     let docker_adapter = Arc::new(DockerAdapter::new());
     let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(docker_adapter.clone()));
+    let redis_adapter = Arc::new(smoooth::adapters::RedisAdapter::new(docker_adapter.clone()));
     orchestrator.register_adapter(docker_adapter);
     orchestrator.register_adapter(postgres_adapter);
+    orchestrator.register_adapter(redis_adapter);
 
     match cli.command {
         Some(Commands::Tools) => {
@@ -196,8 +220,8 @@ async fn main() -> anyhow::Result<()> {
             println!("   Run `smoooth status` to view active resources at any time.\n");
         }
 
-        Some(Commands::Serve { port }) => {
-            smoooth::api::start_server(Arc::new(orchestrator), port).await?;
+        Some(Commands::Serve { bind, port, token, token_file }) => {
+            smoooth::api::start_server(Arc::new(orchestrator), &bind, port, token, token_file).await?;
         }
 
         Some(Commands::Mcp) => {
@@ -205,9 +229,67 @@ async fn main() -> anyhow::Result<()> {
             mcp_server.run_stdio().await?;
         }
 
+        Some(Commands::Approve { plan_id, approver }) => {
+            match orchestrator.get_plan(&plan_id).await? {
+                Some(mut plan) => {
+                    plan.approve_with_ttl(approver.clone(), 3600);
+                    orchestrator.save_plan(plan.clone()).await?;
+                    println!("\n✅ Plan '{}' successfully approved by '{}'.", plan_id, approver);
+                    println!("   Bound canonical hash : {}", plan.plan_hash);
+                    println!("   Approval expires in  : 1 hour\n");
+                }
+                None => {
+                    eprintln!("\n❌ Error: Plan '{}' not found.\n", plan_id);
+                }
+            }
+        }
+
+        Some(Commands::Ops { operation_id }) => {
+            match orchestrator.get_operation(&operation_id).await {
+                Some(op) => {
+                    println!("\n=== Smoooth Operation [{}] ===", op.id);
+                    println!("Status      : {:?}", op.status);
+                    println!("Progress    : {}%", op.progress_percent);
+                    println!("Lease Epoch : {}", op.lease_epoch);
+                    println!("Plan Hash   : {}", op.plan_hash);
+                    if let Some(err) = &op.error_message {
+                        println!("Error       : {}", err);
+                    }
+                    if let Some(ev) = &op.evidence {
+                        println!("Evidence    : {}", serde_json::to_string_pretty(ev).unwrap_or_default());
+                    }
+                    println!("\nLogs ({} entries):", op.logs.len());
+                    for log in &op.logs {
+                        println!("  [{}] {}", log.level, log.message);
+                    }
+                    println!();
+                }
+                None => {
+                    eprintln!("\n❌ Error: Operation '{}' not found.\n", operation_id);
+                }
+            }
+        }
+
+        Some(Commands::Reconcile { resource_id }) => {
+            println!("\n🔍 Running reconciliation for resource '{}'...", resource_id);
+            match orchestrator.reconcile_resource(&resource_id).await {
+                Ok(outcome) => {
+                    println!("Resource ID      : {}", outcome.resource_id);
+                    println!("Observed Status  : {:?}", outcome.observed_status);
+                    println!("Intended Status  : {:?}", outcome.intended_status);
+                    println!("Is Drifted       : {}", outcome.is_drifted);
+                    println!("Drift Corrected  : {}", outcome.drift_corrected);
+                    println!("Outcome Message  : {}\n", outcome.message);
+                }
+                Err(e) => {
+                    eprintln!("❌ Reconciliation failed: {}\n", e);
+                }
+            }
+        }
+
         None => {
-            println!("No subcommand specified. Starting Smoooth API Server on default port 8080...");
-            smoooth::api::start_server(Arc::new(orchestrator), 8080).await?;
+            println!("No subcommand specified. Starting Smoooth API Server & MCP Gateway on 127.0.0.1:4040...");
+            smoooth::api::start_server(Arc::new(orchestrator), "127.0.0.1", 4040, None, None).await?;
         }
     }
 

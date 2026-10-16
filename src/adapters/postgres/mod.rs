@@ -8,7 +8,7 @@ use tokio_postgres::NoTls;
 use crate::adapters::docker::DockerAdapter;
 use crate::adapters::{AdapterGuarantees, HealthEvidence, ProviderAdapter};
 use crate::error::{Result, SmooothError};
-use crate::models::{Capability, Resource, ResourceStatus, SupportLevel};
+use crate::models::{Capability, Resource, ResourceOwnership, ResourceStatus, SupportLevel};
 
 pub struct PostgresAdapter {
     docker_adapter: Arc<DockerAdapter>,
@@ -129,7 +129,7 @@ impl ProviderAdapter for PostgresAdapter {
         let host_port = config
             .get("port")
             .and_then(|v| v.as_u64())
-            .unwrap_or(5432) as u16;
+            .map(|p| p as u16);
 
         let volume_name = config
             .get("volume_name")
@@ -147,14 +147,17 @@ impl ProviderAdapter for PostgresAdapter {
             .and_then(|v| v.as_str())
             .unwrap_or("default");
 
-        // Prepare container configuration for DockerAdapter
+        let mut ports_map = serde_json::Map::new();
+        if let Some(p) = host_port {
+            ports_map.insert("5432".to_string(), serde_json::json!(p));
+        }
+
+        // Prepare container configuration for DockerAdapter (no host port published by default)
         let mut docker_config = serde_json::json!({
             "image": "postgres:16-alpine",
             "workspace_id": workspace_id,
             "network": network_name,
-            "ports": {
-                "5432": host_port
-            },
+            "ports": serde_json::Value::Object(ports_map),
             "env": {
                 "POSTGRES_DB": dbname,
                 "POSTGRES_USER": user,
@@ -181,10 +184,17 @@ impl ProviderAdapter for PostgresAdapter {
             .provision(name, &docker_config, is_persistent)
             .await?;
 
+        let (connect_host, connect_port) = if let Some(p) = host_port {
+            ("127.0.0.1".to_string(), p)
+        } else {
+            let ip = self.docker_adapter.get_container_ip(&container_res.id).await?;
+            (ip, 5432)
+        };
+
         // 2. Active verification: wait for connection and execute simple query
         let latency = match Self::wait_and_verify_connection(
-            "127.0.0.1",
-            host_port,
+            &connect_host,
+            connect_port,
             user,
             password,
             dbname,
@@ -208,8 +218,8 @@ impl ProviderAdapter for PostgresAdapter {
         let mut output_config = config.clone();
         if let Some(obj) = output_config.as_object_mut() {
             obj.insert("container_id".to_string(), serde_json::json!(container_res.id));
-            obj.insert("host".to_string(), serde_json::json!("127.0.0.1"));
-            obj.insert("port".to_string(), serde_json::json!(host_port));
+            obj.insert("host".to_string(), serde_json::json!(&connect_host));
+            obj.insert("port".to_string(), serde_json::json!(connect_port));
             obj.insert("volume_name".to_string(), serde_json::json!(volume_name));
         }
 
@@ -220,6 +230,7 @@ impl ProviderAdapter for PostgresAdapter {
             service_type: "database".to_string(),
             provider: "postgres".to_string(),
             is_persistent: true,
+            ownership: ResourceOwnership::SmooothManaged,
             status: ResourceStatus::Active,
             configuration: output_config,
             created_at: Utc::now(),

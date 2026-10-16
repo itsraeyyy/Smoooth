@@ -5,7 +5,7 @@ use smoooth::adapters::docker::DockerAdapter;
 use smoooth::adapters::postgres::PostgresAdapter;
 use smoooth::engine::Orchestrator;
 use smoooth::mcp::server::{JsonRpcRequest, McpServer};
-use smoooth::storage::LocalStorage;
+use smoooth::storage::{LocalStorage, Storage};
 
 #[tokio::test]
 async fn test_agent_mcp_golden_workflow_end_to_end() {
@@ -201,7 +201,29 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     // =========================================================================
     // STEP 8: Create Service Binding with AES-256-GCM and Zero Secret Leakage
     // =========================================================================
-    let bind_req = JsonRpcRequest {
+    // Register verified target database in workspace
+    let db_pass = "classified_agent_test_pw_999";
+    let _ = storage.save_resource(smoooth::models::Resource {
+        id: "res_app_db_prod".to_string(),
+        name: "app_db".to_string(),
+        workspace_id: "ws-agent-prod".to_string(),
+        service_type: "database".to_string(),
+        provider: "postgres".to_string(),
+        is_persistent: true,
+        ownership: smoooth::models::ResourceOwnership::SmooothManaged,
+        status: smoooth::models::ResourceStatus::Active,
+        configuration: json!({
+            "database": "production_app_db",
+            "user": "prod_user",
+            "password": db_pass,
+            "port": 5432
+        }),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }).await;
+
+    // 8a. Test Cross-Workspace Violation Rejection
+    let rogue_bind_req = JsonRpcRequest {
         jsonrpc: "2.0".to_string(),
         id: Some(json!(9)),
         method: "tools/call".to_string(),
@@ -209,7 +231,25 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
             "name": "create_service_binding",
             "arguments": {
                 "source_resource_id": "app_backend",
-                "target_resource_id": "app_db"
+                "target_resource_id": "app_db",
+                "workspace_id": "ws-other-unauthorized"
+            }
+        })),
+    };
+    let rogue_resp = mcp.handle_request(rogue_bind_req).await.unwrap();
+    assert!(rogue_resp.result.unwrap()["isError"].as_bool().unwrap(), "Cross-workspace binding must be rejected");
+
+    // 8b. Authorized binding within workspace
+    let bind_req = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(json!(10)),
+        method: "tools/call".to_string(),
+        params: Some(json!({
+            "name": "create_service_binding",
+            "arguments": {
+                "source_resource_id": "app_backend",
+                "target_resource_id": "app_db",
+                "workspace_id": "ws-agent-prod"
             }
         })),
     };
@@ -219,7 +259,7 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     ).unwrap();
     assert_eq!(bind_out["encrypted_at_rest"], true);
     let masked_conn = bind_out["masked_connection_string"].as_str().unwrap();
-    assert!(!masked_conn.contains("p@ssw0rd999!"), "Plaintext password must NEVER appear in MCP output");
+    assert!(!masked_conn.contains(db_pass), "Plaintext password must NEVER appear in MCP output");
     assert!(masked_conn.contains("[REDACTED]"), "Masked token must be present");
 
     // =========================================================================
@@ -227,7 +267,7 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     // =========================================================================
     let inspect_op_req = JsonRpcRequest {
         jsonrpc: "2.0".to_string(),
-        id: Some(json!(10)),
+        id: Some(json!(11)),
         method: "tools/call".to_string(),
         params: Some(json!({
             "name": "get_operation",
@@ -236,4 +276,39 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let inspect_op_resp = mcp.handle_request(inspect_op_req).await.unwrap();
     assert!(inspect_op_resp.error.is_none());
+
+    // =========================================================================
+    // STEP 10: Drift Reconciliation & Self-Healing via MCP
+    // =========================================================================
+    // Register a test resource representing an active container
+    let test_app_res = smoooth::models::Resource {
+        id: "container_web_app".to_string(),
+        name: "web_app".to_string(),
+        workspace_id: "ws-agent-prod".to_string(),
+        service_type: "compute".to_string(),
+        provider: "docker".to_string(),
+        is_persistent: false,
+        ownership: smoooth::models::ResourceOwnership::SmooothManaged,
+        status: smoooth::models::ResourceStatus::Active,
+        configuration: json!({ "image": "nginx:alpine", "ports": { "80": 8080 } }),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    let _ = storage.save_resource(test_app_res).await;
+
+    let reconcile_req = JsonRpcRequest {
+        jsonrpc: "2.0".to_string(),
+        id: Some(json!(12)),
+        method: "tools/call".to_string(),
+        params: Some(json!({
+            "name": "reconcile_resource",
+            "arguments": { "resource_id": "container_web_app" }
+        })),
+    };
+    let reconcile_resp = mcp.handle_request(reconcile_req).await.unwrap();
+    assert!(reconcile_resp.error.is_none());
+    let rec_out: serde_json::Value = serde_json::from_str(
+        reconcile_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
+    ).unwrap();
+    assert_eq!(rec_out["resource_id"], "container_web_app");
 }

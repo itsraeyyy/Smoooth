@@ -31,3 +31,13 @@ impl DriftReport {
         self.items.iter().any(|i| i.risk_tier == DriftRiskTier::Destructive)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconciliationOutcome {
+    pub resource_id: String,
+    pub observed_status: crate::models::ResourceStatus,
+    pub intended_status: crate::models::ResourceStatus,
+    pub is_drifted: bool,
+    pub drift_corrected: bool,
+    pub message: String,
+}

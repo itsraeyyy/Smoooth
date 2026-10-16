@@ -20,6 +20,8 @@ pub struct Resource {
     pub service_type: String,
     pub provider: String,
     pub is_persistent: bool,
+    #[serde(default)]
+    pub ownership: crate::models::ResourceOwnership,
     pub status: ResourceStatus,
     pub configuration: serde_json::Value,
     pub created_at: DateTime<Utc>,

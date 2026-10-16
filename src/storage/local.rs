@@ -37,10 +37,27 @@ impl LocalStorage {
     pub fn new_file_backed<P: AsRef<Path>>(path: P) -> Self {
         let path_buf = path.as_ref().to_path_buf();
         let initial_state = if path_buf.exists() {
-            std::fs::read_to_string(&path_buf)
-                .ok()
-                .and_then(|data| serde_json::from_str(&data).ok())
-                .unwrap_or_default()
+            match std::fs::read_to_string(&path_buf) {
+                Ok(data) => match serde_json::from_str(&data) {
+                    Ok(state) => state,
+                    Err(e) => {
+                        eprintln!("[WARN] Primary state snapshot corrupted at {:?}: {}. Checking backup...", path_buf, e);
+                        let bak_path = path_buf.with_extension("bak");
+                        if bak_path.exists() {
+                            std::fs::read_to_string(&bak_path)
+                                .ok()
+                                .and_then(|bak_data| serde_json::from_str(&bak_data).ok())
+                                .unwrap_or_default()
+                        } else {
+                            StateSnapshot::default()
+                        }
+                    }
+                },
+                Err(e) => {
+                    eprintln!("[WARN] Failed to read state file at {:?}: {}", path_buf, e);
+                    StateSnapshot::default()
+                }
+            }
         } else {
             StateSnapshot::default()
         };
@@ -51,13 +68,36 @@ impl LocalStorage {
         }
     }
 
-    async fn persist_snapshot(&self) {
+    async fn persist_snapshot(&self) -> Result<()> {
         if let Some(path) = &self.snapshot_path {
             let state = self.state.read().await;
-            if let Ok(json) = serde_json::to_string_pretty(&*state) {
-                let _ = tokio::fs::write(path, json).await;
+            let json = serde_json::to_string_pretty(&*state)
+                .map_err(|e| crate::error::SmooothError::Storage(format!("JSON serialization failed: {}", e)))?;
+            drop(state);
+
+            let tmp_path = path.with_extension("tmp");
+            let bak_path = path.with_extension("bak");
+
+            // 1. Atomic write to temp file with fsync
+            use tokio::io::AsyncWriteExt;
+            let mut file = tokio::fs::File::create(&tmp_path).await
+                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to create temp snapshot: {}", e)))?;
+            file.write_all(json.as_bytes()).await
+                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to write temp snapshot: {}", e)))?;
+            file.sync_all().await
+                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to sync temp snapshot: {}", e)))?;
+            drop(file);
+
+            // 2. Backup existing snapshot before atomic overwrite
+            if path.exists() {
+                let _ = tokio::fs::copy(path, &bak_path).await;
             }
+
+            // 3. Atomic rename temp file to primary snapshot path
+            tokio::fs::rename(&tmp_path, path).await
+                .map_err(|e| crate::error::SmooothError::Storage(format!("Atomic rename failed for state snapshot: {}", e)))?;
         }
+        Ok(())
     }
 
     fn serialize_idemp_key(key: &IdempotencyKey) -> String {
@@ -71,7 +111,7 @@ impl Storage for LocalStorage {
         let mut state = self.state.write().await;
         state.plans.insert(plan.id.clone(), plan);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
@@ -91,15 +131,33 @@ impl Storage for LocalStorage {
         let mut state = self.state.write().await;
         state.idempotency.insert(key_str, record);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
+    }
+
+    async fn check_or_record_idempotency(&self, record: IdempotencyRecord) -> Result<Option<IdempotencyRecord>> {
+        let key_str = Self::serialize_idemp_key(&record.key);
+        let mut state = self.state.write().await;
+        if let Some(existing) = state.idempotency.get(&key_str) {
+            if existing.request_hash != record.request_hash {
+                return Err(crate::error::SmooothError::IdempotencyConflict(format!(
+                    "Idempotency key '{}' reused with mismatched request hash. Prior: {}, Current: {}",
+                    record.key.client_key, existing.request_hash, record.request_hash
+                )));
+            }
+            return Ok(Some(existing.clone()));
+        }
+        state.idempotency.insert(key_str, record);
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(None)
     }
 
     async fn save_operation(&self, operation: Operation) -> Result<()> {
         let mut state = self.state.write().await;
         state.operations.insert(operation.id.clone(), operation);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
@@ -112,21 +170,33 @@ impl Storage for LocalStorage {
         let mut state = self.state.write().await;
         state.operations.insert(operation.id.clone(), operation);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
     async fn save_resource(&self, resource: Resource) -> Result<()> {
         let mut state = self.state.write().await;
+        // Retain only latest resource with matching name in the same workspace
+        state.resources.retain(|_, r| !(r.name == resource.name && r.workspace_id == resource.workspace_id));
         state.resources.insert(resource.id.clone(), resource);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
     async fn get_resource(&self, id: &str) -> Result<Option<Resource>> {
         let state = self.state.read().await;
-        Ok(state.resources.get(id).cloned())
+        if let Some(r) = state.resources.get(id) {
+            return Ok(Some(r.clone()));
+        }
+        // Fallback to lookup by human-readable resource name (most recently updated)
+        let by_name = state
+            .resources
+            .values()
+            .filter(|r| r.name == id)
+            .max_by_key(|r| r.updated_at)
+            .cloned();
+        Ok(by_name)
     }
 
     async fn list_resources(&self, workspace_id: &str) -> Result<Vec<Resource>> {
@@ -141,9 +211,16 @@ impl Storage for LocalStorage {
 
     async fn delete_resource(&self, id: &str) -> Result<()> {
         let mut state = self.state.write().await;
-        state.resources.remove(id);
+        let key_to_remove = if state.resources.contains_key(id) {
+            Some(id.to_string())
+        } else {
+            state.resources.iter().find(|(_, r)| r.name == id).map(|(k, _)| k.clone())
+        };
+        if let Some(k) = key_to_remove {
+            state.resources.remove(&k);
+        }
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
@@ -151,7 +228,7 @@ impl Storage for LocalStorage {
         let mut state = self.state.write().await;
         state.bindings.insert(binding.id.clone(), binding);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 
@@ -164,7 +241,7 @@ impl Storage for LocalStorage {
         let mut state = self.state.write().await;
         state.audit_events.push(event);
         drop(state);
-        self.persist_snapshot().await;
+        self.persist_snapshot().await?;
         Ok(())
     }
 

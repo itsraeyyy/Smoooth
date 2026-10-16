@@ -1,5 +1,7 @@
 pub mod binding;
 pub mod capability;
+pub mod connection;
+pub mod health;
 pub mod idempotency;
 pub mod operation;
 pub mod plan;
@@ -8,6 +10,8 @@ pub mod resource;
 
 pub use binding::*;
 pub use capability::*;
+pub use connection::*;
+pub use health::*;
 pub use idempotency::*;
 pub use operation::*;
 pub use plan::*;

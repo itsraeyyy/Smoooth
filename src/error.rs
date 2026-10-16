@@ -26,6 +26,9 @@ pub enum SmooothError {
     #[error("Adapter error: {0}")]
     Adapter(String),
 
+    #[error("Storage I/O failure: {0}")]
+    Storage(String),
+
     #[error("Docker daemon unavailable: {0}")]
     DockerUnavailable(String),
 

@@ -18,7 +18,7 @@ use volumes::VolumeManager;
 
 use crate::adapters::{AdapterGuarantees, HealthEvidence, ProviderAdapter};
 use crate::error::{Result, SmooothError};
-use crate::models::{Capability, Resource, ResourceStatus, SupportLevel};
+use crate::models::{Capability, HealthSpec, Resource, ResourceOwnership, ResourceStatus, SupportLevel, VolumeMount};
 
 pub struct DockerAdapter {
     client: Option<DockerClient>,
@@ -40,6 +40,21 @@ impl DockerAdapter {
                 "Docker daemon is not accessible or not running.".to_string(),
             )
         })
+    }
+
+    pub async fn get_container_ip(&self, name_or_id: &str) -> Result<String> {
+        let client = self.require_client()?;
+        ContainerManager::get_container_ip(client, name_or_id).await
+    }
+
+    pub async fn has_host_port_binding(&self, name_or_id: &str) -> Result<bool> {
+        let client = self.require_client()?;
+        ContainerManager::has_host_port_binding(client, name_or_id).await
+    }
+
+    pub async fn get_host_port(&self, name_or_id: &str, container_port: u16) -> Result<u16> {
+        let client = self.require_client()?;
+        ContainerManager::get_host_port(client, name_or_id, container_port).await
     }
 }
 
@@ -147,8 +162,9 @@ impl ProviderAdapter for DockerAdapter {
                     v.get("volume_name").and_then(|s| s.as_str()),
                     v.get("container_path").and_then(|s| s.as_str()),
                 ) {
+                    let read_only = v.get("read_only").and_then(|b| b.as_bool()).unwrap_or(false);
                     VolumeManager::ensure_volume(client, vol_name, workspace_id, is_persistent).await?;
-                    volume_mounts.push((vol_name.to_string(), mount_path.to_string()));
+                    volume_mounts.push(VolumeMount::new(vol_name.to_string(), mount_path.to_string(), read_only));
                 }
             }
         }
@@ -181,17 +197,59 @@ impl ProviderAdapter for DockerAdapter {
             labels.insert("smoooth.worker_id".to_string(), worker.to_string());
         }
 
+        let cmd = config.get("cmd").and_then(|v| {
+            if let Some(arr) = v.as_array() {
+                Some(arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            } else if let Some(s) = v.as_str() {
+                Some(vec!["sh".to_string(), "-c".to_string(), s.to_string()])
+            } else {
+                None
+            }
+        });
+
+        let restart_policy = config
+            .get("restart_policy")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let memory_bytes = config
+            .get("memory_bytes")
+            .and_then(|v| v.as_i64());
+
+        let cpu_shares = config
+            .get("cpu_shares")
+            .and_then(|v| v.as_i64());
+
+        let nano_cpus = config
+            .get("nano_cpus")
+            .and_then(|v| v.as_i64());
+
+        let health_spec: Option<HealthSpec> = config
+            .get("health_check")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
         let container_spec = ContainerSpec {
             name: name.to_string(),
             image: image.to_string(),
+            cmd,
             env,
             port_bindings,
             volume_mounts,
             network_name,
             labels,
+            restart_policy,
+            memory_bytes,
+            cpu_shares,
+            nano_cpus,
+            health_spec,
         };
 
         let container_id = ContainerManager::create_and_start(client, &container_spec).await?;
+
+        let ownership = config
+            .get("ownership")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or(ResourceOwnership::SmooothManaged);
 
         Ok(Resource {
             id: container_id,
@@ -200,6 +258,7 @@ impl ProviderAdapter for DockerAdapter {
             service_type: "container".to_string(),
             provider: "docker".to_string(),
             is_persistent,
+            ownership,
             status: ResourceStatus::Active,
             configuration: config.clone(),
             created_at: Utc::now(),
