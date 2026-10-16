@@ -1,120 +1,244 @@
-# Smoooth v2 MVP — Linux VPS Installation & Operations Guide
+# Smoooth Beta — Linux VPS Installation, Security & Operations Guide
 
-This guide describes how to install, configure, verify, and operate Smoooth on a customer-owned Linux VPS running a local Docker Engine.
-
----
-
-## 1. Supported Distributions & Prerequisites
-
-Smoooth is engineered to run on standard Linux distributions running systemd:
-
-- **Ubuntu**: 20.04, 22.04, 24.04 LTS (Recommended)
-- **Debian**: 11 (Bullseye), 12 (Bookworm)
-- **RHEL / Rocky Linux / AlmaLinux**: 8, 9
-
-### Prerequisites
-- **Docker Engine**: Docker 24.0+ with Docker Compose and local Unix socket at `/var/run/docker.sock`.
-- **System Utilities**: `curl`, `openssl`, `jq`, `tar`.
-- **Hardware Minimum**: 1 vCPU, 1 GB RAM, 10 GB disk space.
+This guide describes how to install, verify, operate, upgrade, and secure Smoooth on a developer-owned Linux VPS running Docker.
 
 ---
 
-## 2. Idempotent Installation
+## 1. Verified Baseline & Platform Support
 
-Smoooth provides an automated installer at `scripts/install.sh`:
+- **Verified Target Baseline**: **Ubuntu 24.04 LTS (x86_64 / AMD64)**
+- **Compatible Distributions**:
+  - Ubuntu 22.04 LTS, 20.04 LTS
+  - Debian 11 (Bullseye), Debian 12 (Bookworm)
+  - RHEL / Rocky Linux / AlmaLinux 9
+- **Experimental Architectures**: `aarch64` (ARM64) is supported for development; container image tags must match host architecture.
+- **Hardware Minimums**: 1 vCPU, 1 GB RAM, 10 GB disk space (>= 1 GB free on `/var`).
+
+---
+
+## 2. Security Model & Privilege Disclosures
+
+### Docker Engine Effective Host-Root Access
+Smoooth manages application containers by communicating with the local Docker daemon socket (`/var/run/docker.sock`) through a dedicated system account (`smoooth`).
+
+> [!WARNING]
+> In Docker's architecture, write access to `/var/run/docker.sock` grants effective root capabilities on the host. Smoooth confines daemon operations through:
+> 1. **Private Loopback Binding**: Binds to `127.0.0.1:4040` by default. Never exposed publicly without explicit opt-in.
+> 2. **Cryptographic Token Authorization**: Every HTTP and MCP operation requires a valid Bearer token. Unknown callers receive zero access.
+> 3. **Server-Side Scopes**: Agents are bound to specific scopes (`read_only`, `plan`, `deploy`, `destructive`, `admin`) and workspace boundaries.
+> 4. **Hashed Token Storage**: Secret tokens are SHA-256 hashed before persistence. Plaintext credentials are never written to disk or logged.
+> 5. **Systemd Sandboxing**: Confinement via `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, and `PrivateTmp=yes`.
+
+---
+
+## 3. Installation
+
+### Quickstart (Automated Installer)
+
+Run the installer as root on your VPS:
 
 ```bash
-# Clone the repository onto your Linux VPS
+# Clone or transfer repository to VPS
 git clone https://github.com/smoooth/smoooth.git /opt/smoooth
 cd /opt/smoooth
 
-# Run the installer with sudo
+# Run idempotent production installer
 sudo bash scripts/install.sh
 ```
 
+*(Target production distribution interface: `curl -fsSL https://get.smoooth.dev | sh` — once release CDN pipeline is published).*
+
 ### What the Installer Does:
-1. **OS & Prerequisite Verification**: Checks Linux distribution, systemd, and Docker Engine.
-2. **Dedicated System Account**: Creates a dedicated system user and group `smoooth` (nologin shell, home at `/var/lib/smoooth`) and adds it to the `docker` group so it can manage containers without running as root.
-3. **Directory Structure & Permissions**:
-   - Binary: `/usr/local/bin/smoooth` (0755, root:root)
-   - Configuration & Secrets: `/etc/smoooth` (0700, smoooth:smoooth)
-   - State & Local Storage: `/var/lib/smoooth` (0750, smoooth:smoooth)
-4. **Cryptographic Token Provisioning**:
-   - Generates a 256-bit secure hex authentication token with `openssl rand -hex 32`.
-   - Saves it to `/etc/smoooth/auth.token` with restrictive `0600` permissions.
-   - Retains existing tokens across updates unless `--rotate-token` is explicitly requested.
-5. **Systemd Service Unit**:
-   - Installs `/etc/systemd/system/smoooth.service` with strict process isolation (`NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`).
-   - Enables and restarts the daemon automatically.
+1. **Preflight Checks**: Verifies CPU architecture (`x86_64`), Linux kernel, free disk space (>= 512MB on `/var`), port 4040 availability, and Docker socket.
+2. **Dedicated User Account**: Provisions system user `smoooth` (nologin shell) and adds it to the `docker` group.
+3. **Directory Confinement**:
+   - Binary: `/usr/local/bin/smoooth` (0755)
+   - Configuration & Master Token: `/etc/smoooth` (0700, `smoooth:smoooth`)
+   - State & Local Storage: `/var/lib/smoooth` (0750, `smoooth:smoooth`)
+4. **Token Generation**: Generates 256-bit cryptographically secure master token at `/etc/smoooth/auth.token` (0600).
+5. **Systemd Confinement**: Configures, enables, and starts `/etc/systemd/system/smoooth.service`.
+6. **Diagnostics**: Automatically executes `smoooth doctor` to verify post-install health.
 
----
+### Manual Installation Path
 
-## 3. Network Security & Management API Boundary
-
-By default, Smoooth enforces a strict zero-unauthenticated-exposure policy:
-
-| Setting | Default Value | Description |
-|---|---|---|
-| Bind Address | `127.0.0.1` | Loopback only. No public ports opened. |
-| Management Port | `4040` | JSON-RPC 2.0 / MCP endpoint. |
-| Authentication | Bearer Token | Verified against `/etc/smoooth/auth.token`. |
-| Unauthenticated Access | Blocked | All requests require valid Bearer token. |
-
-### Remote Access over Authenticated Streamable HTTP
-To connect external AI coding agents running remotely:
-- **Recommended**: Connect via SSH tunnel:
-  ```bash
-  ssh -L 4040:127.0.0.1:4040 user@your-vps-ip
-  ```
-- **Reverse Proxy**: If exposing over public internet, place Smoooth behind a TLS reverse proxy (Caddy / Nginx) with HTTPS, domain certificate, and client IP allowlisting. **Never bind Smoooth directly to `0.0.0.0` without TLS termination and authentication.**
-
----
-
-## 4. Token Rotation & Revocation
-
-To rotate the operator token without disrupting persistent databases or application data:
+If you prefer configuring system components manually:
 
 ```bash
-# Rotate the authentication token and restart service
-sudo bash scripts/install.sh --rotate-token
+# 1. Compile release binary
+cargo build --release
+sudo install -m 0755 target/release/smoooth /usr/local/bin/smoooth
 
-# View the newly generated token
-sudo cat /etc/smoooth/auth.token
+# 2. Provision dedicated account
+sudo groupadd --system smoooth
+sudo useradd --system --gid smoooth --home-dir /var/lib/smoooth --shell /usr/sbin/nologin smoooth
+sudo usermod -aG docker smoooth
+
+# 3. Create directories with strict permissions
+sudo mkdir -p /etc/smoooth /var/lib/smoooth
+sudo chmod 0700 /etc/smoooth && sudo chown smoooth:smoooth /etc/smoooth
+sudo chmod 0750 /var/lib/smoooth && sudo chown smoooth:smoooth /var/lib/smoooth
+
+# 4. Generate master token
+openssl rand -hex 32 | sudo tee /etc/smoooth/auth.token > /dev/null
+sudo chmod 0600 /etc/smoooth/auth.token && sudo chown smoooth:smoooth /etc/smoooth/auth.token
+
+# 5. Run daemon
+sudo -u smoooth /usr/local/bin/smoooth server --bind 127.0.0.1 --port 4040
 ```
 
 ---
 
-## 5. Verification & Service Operations
+## 4. Diagnostics (`smoooth doctor`)
 
-Check daemon status:
+Run the diagnostic utility anytime to audit the environment:
+
 ```bash
-sudo systemctl status smoooth
+smoooth doctor
 ```
 
-Follow live daemon logs:
-```bash
-sudo journalctl -u smoooth -f
+Output:
 ```
-
-Verify local MCP endpoint connectivity:
-```bash
-TOKEN=$(sudo cat /etc/smoooth/auth.token)
-curl -s -X POST http://127.0.0.1:4040/mcp \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_capabilities","arguments":{}}}' | jq .
+======================================================================
+  Smoooth Doctor Diagnostics (v0.1.0)
+======================================================================
+  Overall Status: HEALTHY
+  Checks: 6 passed, 0 warnings, 0 failures
+----------------------------------------------------------------------
+[PASS] Platform: CPU Architecture
+       Verified architecture: x86_64 (AMD64 / x86_64 verified baseline)
+[PASS] Platform: Operating System
+       Ubuntu 24.04 LTS confirmed (Target Beta Baseline).
+[PASS] Container Runtime: Docker Engine Daemon
+       Docker daemon connection active and responsive via local socket.
+[PASS] Security Disclosure: Docker Effective Host-Root Access
+       Access to Docker daemon grants effective host-root permissions.
+[PASS] Networking: Daemon Port Availability
+       Port 4040 is free and available on 127.0.0.1
+[PASS] Storage: Storage Directory Write Access
+       State directory '/var/lib/smoooth' is writable.
+[PASS] Security: Token File Permissions
+       Auth token file permissions verified as 0600 (owner-only).
+======================================================================
 ```
 
 ---
 
-## 6. Safe Uninstall & Data Preservation
+## 5. Agent Access, Pairing & Credential Management
 
-Smoooth provides safe uninstall behavior that protects your application databases and volumes by default:
+Smoooth issues distinct, revocable tokens for every AI coding agent (e.g., Cursor, Claude Code, CI workers).
+
+### Pair an Agent
+```bash
+# Pair an agent with specific scopes bound to workspace 'default'
+smoooth agent pair --name "cursor-agent" --workspace "default" --scopes "read_only,plan,deploy"
+```
+Output:
+```
+======================================================================
+  Agent Paired Successfully
+======================================================================
+  Agent ID:     agent_4d17c76891
+  Name:         cursor-agent
+  Workspace:    default
+  Scopes:       read_only, plan, deploy
+  Expires:      Never
+----------------------------------------------------------------------
+  ONE-TIME TOKEN (Secret):
+  smoooth_ag_a9c8f03e4b1d765432...
+  
+  Copy this token now. It cannot be retrieved again in plaintext.
+======================================================================
+```
+
+### Available Scopes
+- `read_only`: Inspect containers, resources, logs, and drift status.
+- `plan`: Generate canonical execution plans and preview changes.
+- `deploy`: Execute approved deployment plans.
+- `destructive`: Terminate resources or delete persistent volumes.
+- `admin`: Full unrestricted management across all workspaces.
+
+### List Active Agents
+```bash
+smoooth agent list
+```
+
+### Rotate Agent Token
+```bash
+smoooth agent rotate --id agent_4d17c76891
+```
+
+### Revoke Agent Access
+```bash
+smoooth agent revoke --id agent_4d17c76891
+```
+
+---
+
+## 6. Stack Freedom & Resource Modes
+
+Smoooth supports three explicit resource modes:
+
+### 1. Managed Resources
+Smoooth manages provisioning, lifecycle, readiness gating, and persistent storage:
+- **PostgreSQL**: `postgres:16-alpine` with automated DB initialization and `/var/lib/postgresql/data` persistence.
+- **Redis**: `redis:7-alpine` with in-memory caching and optional append-only file persistence.
+- **MongoDB**: `mongo:7-jammy` with root credentials and persistent volume at `/data/db`.
+
+### 2. Connected External Resources
+For databases managed by a cloud provider (e.g. AWS RDS, DigitalOcean Managed DB) or existing infrastructure:
+- Ownership is set to `ResourceOwnership::External`.
+- **CRITICAL GUARANTEE**: Smoooth will **never** stop, overwrite, or delete external resources during plan execution, cleanup, or teardown.
+
+### 3. Custom Workloads & Embedded SQLite
+For containerized applications utilizing embedded databases:
+- **SQLite Pattern**: Mount application state to a persistent container volume (e.g. `app_data:/data`) and configure connection string `sqlite:///data/app.db`.
+- **Concurrency Guidance**: Use SQLite WAL mode (`PRAGMA journal_mode=WAL;`) and a busy timeout (`PRAGMA busy_timeout=5000;`) to avoid lock contention in containerized deployments.
+
+---
+
+## 7. Control Dashboard
+
+The Smoooth Control Dashboard is embedded directly into the daemon binary with zero Node.js runtime overhead:
+
+- **Local URL**: `http://127.0.0.1:4040/dashboard`
+- **Features**:
+  - Overview of running, degraded, stopped containers.
+  - Live status distribution capsule bar and capacity tick indicators.
+  - Applications and resources view with managed vs external distinctions.
+  - Agent pairing, scope inspection, and one-click token revocation.
+  - Real-time audit log stream.
+  - Interactive Smoooth Doctor diagnostic runner.
+
+To access the dashboard from a remote workstation:
+```bash
+ssh -L 4040:127.0.0.1:4040 user@your-vps-ip
+# Open http://localhost:4040/dashboard in your local browser
+```
+
+---
+
+## 8. Safe Upgrade, Rollback & Uninstall
+
+### Upgrading Smoooth
+Smoooth supports atomic upgrades with automated rollback:
 
 ```bash
-# Safely remove systemd service unit and binaries (preserves /var/lib/smoooth and all databases)
+# Pull latest repository changes or build new binary
+git pull
+cargo build --release
+
+# Run upgrade (creates binary backup, restarts service, validates health, rolls back on failure)
+sudo bash scripts/install.sh --upgrade
+```
+
+### Safe Uninstall (Preserves Application Data)
+```bash
+# Removes systemd service and binaries; preserves /var/lib/smoooth and all databases
 sudo bash scripts/install.sh --uninstall
+```
 
-# Complete purge (removes service unit, binaries, AND deletes state/databases)
+### Full Purge (Destructive)
+```bash
+# Removes binaries, service, AND deletes all application state and volumes
 sudo bash scripts/install.sh --uninstall --purge-data
 ```
