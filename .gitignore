@@ -8,7 +8,7 @@ node_modules/
 .next/
 out/
 build/
-dist/
+# dist/ (tracked for zero-build Cloudflare Pages deployment)
 *.tsbuildinfo
 next-env.d.ts
 
