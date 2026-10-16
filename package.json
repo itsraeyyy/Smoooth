@@ -1,0 +1,10 @@
+{
+  "name": "smoooth-landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smoooth - Infrastructure Freedom for AI Agents Landing Page",
+  "scripts": {
+    "build": "node scripts/build-landing.js",
+    "deploy": "node scripts/build-landing.js && npx wrangler pages deploy dist --project-name=smoooth"
+  }
+}
