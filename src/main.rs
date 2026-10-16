@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use smoooth::adapters::docker::DockerAdapter;
+use smoooth::doctor::Doctor;
 use smoooth::engine::Orchestrator;
 use smoooth::mcp::tools::{get_available_tools, get_default_capabilities};
 use smoooth::models::{
-    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan, PolicyConstraints,
-    RiskTier, ServiceBinding,
+    AgentScope, CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan,
+    PolicyConstraints, RiskTier, ServiceBinding,
 };
 use smoooth::storage::LocalStorage;
 
@@ -15,7 +16,7 @@ use smoooth::storage::LocalStorage;
 #[command(name = "smoooth")]
 #[command(author = "Smoooth Contributors")]
 #[command(version = "0.1.0")]
-#[command(about = "Infrastructure freedom, built for AI agents (Local & Production Ready)", long_about = None)]
+#[command(about = "Infrastructure freedom, built for AI agents (Developer Beta)", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -23,6 +24,13 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Run diagnostic environment preflight checks (platform, Docker, disk, ports)
+    Doctor,
+    /// Manage agent pairing, scopes, and revocable credentials
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommands,
+    },
     /// List all registered MCP tools mapped to the 7-step Golden Workflow
     Tools,
     /// List supported infrastructure capabilities & provider guarantees
@@ -34,7 +42,7 @@ enum Commands {
         #[arg(default_value = "default")]
         workspace: String,
     },
-    /// Start the Smoooth HTTP API Server & MCP Gateway
+    /// Start the Smoooth HTTP API Server & Control Plane Dashboard
     #[command(alias = "server")]
     Serve {
         #[arg(short, long, default_value = "127.0.0.1")]
@@ -64,6 +72,41 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+enum AgentCommands {
+    /// Pair a new AI coding agent and issue revocable scoped credentials
+    Pair {
+        /// Name or role description of the agent
+        #[arg(short, long)]
+        name: String,
+        /// Bound workspace isolation boundary (or '*' for global access)
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+        /// Comma-separated scopes: read_only, plan, deploy, destructive, admin
+        #[arg(short, long, default_value = "read_only,plan,deploy")]
+        scopes: String,
+        /// Credential expiration in hours (optional)
+        #[arg(long)]
+        ttl_hours: Option<i64>,
+    },
+    /// List all paired agent identities and their granted scopes
+    List {
+        /// Filter by workspace (optional)
+        #[arg(short, long)]
+        workspace: Option<String>,
+    },
+    /// Revoke an agent's credentials immediately
+    Revoke {
+        /// Agent ID to revoke
+        agent_id: String,
+    },
+    /// Rotate an agent's token secret
+    Rotate {
+        /// Agent ID to rotate
+        agent_id: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_writer(std::io::stderr).init();
@@ -75,11 +118,104 @@ async fn main() -> anyhow::Result<()> {
     let docker_adapter = Arc::new(DockerAdapter::new());
     let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(docker_adapter.clone()));
     let redis_adapter = Arc::new(smoooth::adapters::RedisAdapter::new(docker_adapter.clone()));
+    let mongo_adapter = Arc::new(smoooth::adapters::MongoAdapter::new(docker_adapter.clone()));
     orchestrator.register_adapter(docker_adapter);
     orchestrator.register_adapter(postgres_adapter);
     orchestrator.register_adapter(redis_adapter);
+    orchestrator.register_adapter(mongo_adapter);
 
     match cli.command {
+        Some(Commands::Doctor) => {
+            println!("\n🔍 Running Smoooth Beta Environment Diagnostics...\n");
+            let report = Doctor::run_diagnostics(&storage_path, "127.0.0.1", 4040).await;
+            
+            println!("Target Environment: {} / {} (Smoooth {})", report.os, report.arch, report.version);
+            println!("Diagnostic Status : {}\n", report.overall_status.to_uppercase());
+
+            for check in &report.checks {
+                let badge = match check.status.as_str() {
+                    "pass" => "✅ PASS",
+                    "warn" => "⚠️ WARN",
+                    _ => "❌ FAIL",
+                };
+                println!("  [{}] {}: {}", badge, check.name, check.message);
+                if let Some(rec) = &check.recommendation {
+                    println!("         ↳ Action: {}", rec);
+                }
+            }
+
+            println!("\nSummary: {} passed, {} warnings, {} failures.\n", 
+                report.passed_count, report.warning_count, report.failure_count);
+
+            if report.failure_count > 0 {
+                std::process::exit(1);
+            }
+        }
+
+        Some(Commands::Agent { command }) => match command {
+            AgentCommands::Pair { name, workspace, scopes, ttl_hours } => {
+                let parsed_scopes = AgentScope::parse_csv(&scopes);
+                if parsed_scopes.is_empty() {
+                    eprintln!("❌ Error: At least one valid scope required (e.g. read_only, plan, deploy, destructive, admin)");
+                    std::process::exit(1);
+                }
+
+                let (agent, raw_token) = orchestrator.pair_agent(&name, &workspace, parsed_scopes, ttl_hours).await?;
+                println!("\n============================================================");
+                println!("  ✅ AI Coding Agent Paired Successfully!");
+                println!("============================================================");
+                println!("  • Agent ID        : {}", agent.agent_id);
+                println!("  • Name            : {}", agent.name);
+                println!("  • Workspace Bound : {}", agent.workspace_id);
+                println!("  • Granted Scopes  : {:?}", agent.scopes);
+                if let Some(exp) = agent.expires_at {
+                    println!("  • Expires At      : {}", exp);
+                }
+                if agent.is_overprivileged() {
+                    println!("  ⚠️ WARNING        : Agent possesses elevated administrative or destructive scopes.");
+                }
+                println!("\n  🔑 Plaintext Bearer Token (STORE SECURELY - DISPLAYED ONCE):");
+                println!("     {}", raw_token);
+                println!("\n  Provide this token in your agent's MCP environment configuration:");
+                println!("     SMOOOTH_AUTH_TOKEN=\"{}\"", raw_token);
+                println!("============================================================\n");
+            }
+
+            AgentCommands::List { workspace } => {
+                let agents = orchestrator.list_agents(workspace.as_deref()).await?;
+                println!("\n=== Paired AI Coding Agents ({} registered) ===\n", agents.len());
+                if agents.is_empty() {
+                    println!("No agents paired yet. Run `smoooth agent pair --name <agent-name>` to issue credentials.\n");
+                } else {
+                    for a in agents {
+                        let status = if a.revoked { "REVOKED" } else { "ACTIVE" };
+                        let over = if a.is_overprivileged() { " [⚠️ ELEVATED]" } else { "" };
+                        println!("• {} [{}] - Status: {}{}", a.name, a.agent_id, status, over);
+                        println!("  Workspace : {}", a.workspace_id);
+                        println!("  Scopes    : {:?}", a.scopes);
+                        println!("  Prefix    : {}...", a.token_prefix);
+                        println!("  Last Used : {}\n", a.last_used_at.map(|t| t.to_rfc3339()).unwrap_or_else(|| "Never".to_string()));
+                    }
+                }
+            }
+
+            AgentCommands::Revoke { agent_id } => {
+                orchestrator.revoke_agent(&agent_id).await?;
+                println!("\n✅ Agent '{}' credentials successfully REVOKED.", agent_id);
+                println!("   All subsequent requests with this token will be rejected immediately.\n");
+            }
+
+            AgentCommands::Rotate { agent_id } => {
+                let new_token = orchestrator.rotate_agent_token(&agent_id).await?;
+                println!("\n============================================================");
+                println!("  ✅ Agent Token Rotated Successfully: {}", agent_id);
+                println!("============================================================");
+                println!("  🔑 New Plaintext Bearer Token (DISPLAYED ONCE):");
+                println!("     {}", new_token);
+                println!("============================================================\n");
+            }
+        },
+
         Some(Commands::Tools) => {
             println!("\n=== Smoooth MCP Tool Interface (7-Step Golden Workflow) ===\n");
             for tool in get_available_tools() {
@@ -125,7 +261,7 @@ async fn main() -> anyhow::Result<()> {
             // Step 01: Discover
             println!("🔍 [01 Discover] Agent queries available capabilities...");
             let capabilities = get_default_capabilities();
-            println!("   ↳ Found {} discoverable capabilities (Docker & PostgreSQL).", capabilities.len());
+            println!("   ↳ Found {} discoverable capabilities (Docker, PostgreSQL, Redis, MongoDB).", capabilities.len());
 
             // Step 02: Plan
             println!("\n📐 [02 Plan] Agent drafts CanonicalExecutionSpec...");
@@ -288,7 +424,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         None => {
-            println!("No subcommand specified. Starting Smoooth API Server & MCP Gateway on 127.0.0.1:4040...");
+            println!("No subcommand specified. Starting Smoooth API Server & Control Plane Dashboard on 127.0.0.1:4040...");
             smoooth::api::start_server(Arc::new(orchestrator), "127.0.0.1", 4040, None, None).await?;
         }
     }

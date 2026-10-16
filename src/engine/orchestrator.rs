@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::adapters::ProviderAdapter;
 use crate::error::{Result, SmooothError};
 use crate::models::{
-    BindingRequirement, ConnectionDetails, IdempotencyKey, IdempotencyRecord, Operation,
+    AgentIdentity, AgentScope, BindingRequirement, ConnectionDetails, IdempotencyKey, IdempotencyRecord, Operation,
     OperationLogEntry, OperationStatus, Plan, ReconciliationOutcome, Resource, ResourceOwnership,
     ResourceStatus, RiskTier, ServiceBinding,
 };
@@ -27,6 +27,7 @@ impl Orchestrator {
             storage,
             adapters: HashMap::new(),
             secret_store: Arc::new(crate::security::SecretStore::default_local()),
+
         }
     }
 
@@ -46,6 +47,126 @@ impl Orchestrator {
     pub fn register_adapter(&mut self, adapter: Arc<dyn ProviderAdapter>) {
         self.adapters.insert(adapter.provider_name().to_string(), adapter);
     }
+
+    // Agent Identity & Authorization Management
+    pub async fn pair_agent(
+        &self,
+        name: &str,
+        workspace_id: &str,
+        scopes: Vec<AgentScope>,
+        ttl_hours: Option<i64>,
+    ) -> Result<(AgentIdentity, String)> {
+        use sha2::{Digest, Sha256};
+        let mut bytes = [0u8; 32];
+        getrandom::getrandom(&mut bytes)
+            .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e)))?;
+        let raw_token = format!("smoooth_ag_{}", hex::encode(bytes));
+        let token_hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
+        let token_prefix = raw_token[..14.min(raw_token.len())].to_string();
+
+        let agent_id = format!("agent_{}", Uuid::new_v4().simple());
+        let expires_at = ttl_hours.map(|h| Utc::now() + Duration::hours(h));
+
+        let identity = AgentIdentity {
+            agent_id: agent_id.clone(),
+            name: name.to_string(),
+            token_hash,
+            token_prefix,
+            scopes,
+            workspace_id: workspace_id.to_string(),
+            created_at: Utc::now(),
+            expires_at,
+            revoked: false,
+            revoked_at: None,
+            last_used_at: None,
+        };
+
+        self.storage.save_agent(identity.clone()).await?;
+
+        // Record security audit event
+        let _ = self.storage.record_audit(AuditEvent {
+            id: 0,
+            workspace_id: workspace_id.to_string(),
+            actor: "operator".to_string(),
+            action: "agent_paired".to_string(),
+            target_resource_id: Some(agent_id),
+            plan_hash: None,
+            outcome: "success".to_string(),
+            redacted_evidence: Some(serde_json::json!({
+                "name": name,
+                "scopes": identity.scopes.iter().map(|s| s.as_str()).collect::<Vec<_>>()
+            })),
+            timestamp: Utc::now(),
+        }).await;
+
+        Ok((identity, raw_token))
+    }
+
+    pub async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>> {
+        self.storage.list_agents(workspace_id).await
+    }
+
+    pub async fn revoke_agent(&self, agent_id: &str) -> Result<()> {
+        self.storage.revoke_agent(agent_id).await?;
+        let _ = self.storage.record_audit(AuditEvent {
+            id: 0,
+            workspace_id: "*".to_string(),
+            actor: "operator".to_string(),
+            action: "agent_revoked".to_string(),
+            target_resource_id: Some(agent_id.to_string()),
+            plan_hash: None,
+            outcome: "success".to_string(),
+            redacted_evidence: None,
+            timestamp: Utc::now(),
+        }).await;
+        Ok(())
+    }
+
+    pub async fn rotate_agent_token(&self, agent_id: &str) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let agent = self.storage.get_agent(agent_id).await?
+            .ok_or_else(|| SmooothError::NotFound(format!("Agent '{}' not found", agent_id)))?;
+
+        let mut bytes = [0u8; 32];
+        getrandom::getrandom(&mut bytes)
+            .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e)))?;
+        let raw_token = format!("smoooth_ag_{}", hex::encode(bytes));
+        let token_hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
+        let token_prefix = raw_token[..14.min(raw_token.len())].to_string();
+
+        let mut updated = agent;
+        updated.token_hash = token_hash;
+        updated.token_prefix = token_prefix;
+        self.storage.save_agent(updated).await?;
+
+        let _ = self.storage.record_audit(AuditEvent {
+            id: 0,
+            workspace_id: "*".to_string(),
+            actor: "operator".to_string(),
+            action: "agent_token_rotated".to_string(),
+            target_resource_id: Some(agent_id.to_string()),
+            plan_hash: None,
+            outcome: "success".to_string(),
+            redacted_evidence: None,
+            timestamp: Utc::now(),
+        }).await;
+
+        Ok(raw_token)
+    }
+
+    pub async fn authenticate_agent(&self, raw_token: &str) -> Result<Option<AgentIdentity>> {
+        use sha2::{Digest, Sha256};
+        let token_hash = hex::encode(Sha256::digest(raw_token.trim().as_bytes()));
+        if let Some(mut agent) = self.storage.get_agent_by_token_hash(&token_hash).await? {
+            if agent.is_active() {
+                agent.last_used_at = Some(Utc::now());
+                let _ = self.storage.save_agent(agent.clone()).await;
+                return Ok(Some(agent));
+            }
+        }
+        Ok(None)
+    }
+
 
     async fn init_operation(
         &self,
@@ -515,23 +636,30 @@ impl Orchestrator {
             config.get("host").and_then(|v| v.as_str()).unwrap_or(&target_res.name).to_string()
         };
 
+        let default_port: u16 = match protocol.as_str() {
+            "redis" => 6379,
+            "mongodb" => 27017,
+            _ => 5432,
+        };
+
         let port: u16 = if *ownership == ResourceOwnership::External {
-            config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(5432)
+            config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
         } else if preferred_endpoint == Some("host") {
             // Check mapped host port
             if let Some(ports) = config.get("ports").and_then(|p| p.as_object()) {
-                ports.values().next().and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(5432)
+                ports.values().next().and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
             } else {
-                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(5432)
+                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
             }
         } else {
             // Internal container port
             if let Some(ports) = config.get("ports").and_then(|p| p.as_object()) {
-                ports.keys().next().and_then(|k| k.parse::<u16>().ok()).unwrap_or(5432)
+                ports.keys().next().and_then(|k| k.parse::<u16>().ok()).unwrap_or(default_port)
             } else {
-                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(5432)
+                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
             }
         };
+
 
         // Security boundary validation for external endpoints
         if *ownership == ResourceOwnership::External {

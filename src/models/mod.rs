@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod binding;
 pub mod capability;
 pub mod connection;
@@ -8,6 +9,7 @@ pub mod plan;
 pub mod reconciliation;
 pub mod resource;
 
+pub use agent::*;
 pub use binding::*;
 pub use capability::*;
 pub use connection::*;
@@ -17,3 +19,4 @@ pub use operation::*;
 pub use plan::*;
 pub use reconciliation::*;
 pub use resource::*;
+

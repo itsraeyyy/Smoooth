@@ -6,12 +6,14 @@ use tokio::sync::RwLock;
 
 use crate::error::Result;
 use crate::models::{
-    IdempotencyKey, IdempotencyRecord, Operation, Plan, Resource, ServiceBinding,
+    AgentIdentity, IdempotencyKey, IdempotencyRecord, Operation, Plan, Resource, ServiceBinding,
 };
 use crate::storage::{AuditEvent, Storage};
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 struct StateSnapshot {
+    #[serde(default)]
+    agents: HashMap<String, AgentIdentity>,
     plans: HashMap<String, Plan>,
     idempotency: HashMap<String, IdempotencyRecord>, // key serialized as string for json compatibility
     operations: HashMap<String, Operation>,
@@ -19,6 +21,7 @@ struct StateSnapshot {
     bindings: HashMap<String, ServiceBinding>,
     audit_events: Vec<AuditEvent>,
 }
+
 
 #[derive(Clone)]
 pub struct LocalStorage {
@@ -107,6 +110,52 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
+    async fn save_agent(&self, agent: AgentIdentity) -> Result<()> {
+        let mut state = self.state.write().await;
+        state.agents.insert(agent.agent_id.clone(), agent);
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(())
+    }
+
+    async fn get_agent(&self, id: &str) -> Result<Option<AgentIdentity>> {
+        let state = self.state.read().await;
+        Ok(state.agents.get(id).cloned())
+    }
+
+    async fn get_agent_by_token_hash(&self, token_hash: &str) -> Result<Option<AgentIdentity>> {
+        let state = self.state.read().await;
+        Ok(state.agents.values().find(|a| a.token_hash == token_hash).cloned())
+    }
+
+    async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>> {
+        let state = self.state.read().await;
+        let list: Vec<AgentIdentity> = state
+            .agents
+            .values()
+            .filter(|a| {
+                if let Some(ws) = workspace_id {
+                    a.workspace_id == "*" || a.workspace_id == ws
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect();
+        Ok(list)
+    }
+
+    async fn revoke_agent(&self, id: &str) -> Result<()> {
+        let mut state = self.state.write().await;
+        if let Some(agent) = state.agents.get_mut(id) {
+            agent.revoked = true;
+            agent.revoked_at = Some(chrono::Utc::now());
+        }
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(())
+    }
+
     async fn save_plan(&self, plan: Plan) -> Result<()> {
         let mut state = self.state.write().await;
         state.plans.insert(plan.id.clone(), plan);
@@ -247,11 +296,14 @@ impl Storage for LocalStorage {
 
     async fn list_audit_events(&self, workspace_id: &str) -> Result<Vec<AuditEvent>> {
         let state = self.state.read().await;
-        Ok(state
+        let mut list: Vec<AuditEvent> = state
             .audit_events
             .iter()
-            .filter(|e| e.workspace_id == workspace_id)
+            .filter(|e| workspace_id == "*" || workspace_id.is_empty() || e.workspace_id == workspace_id)
             .cloned()
-            .collect())
+            .collect();
+        list.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        Ok(list)
     }
 }
+

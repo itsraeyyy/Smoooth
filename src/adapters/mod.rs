@@ -4,12 +4,15 @@ use crate::error::Result;
 use crate::models::{Capability, Resource, ResourceStatus};
 
 pub mod docker;
+pub mod mongo;
 pub mod postgres;
 pub mod redis;
 
 pub use docker::DockerAdapter;
+pub use mongo::MongoAdapter;
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthEvidence {

@@ -195,8 +195,27 @@ pub fn get_default_capabilities() -> Vec<Capability> {
             description: "High-performance Redis in-memory cache and data store with AOF persistence and authentication.".to_string(),
             operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
         },
+        Capability {
+            id: "cap_mongo_db".to_string(),
+            name: "MongoDB Document Database".to_string(),
+            provider: "mongodb".to_string(),
+            service_type: "database".to_string(),
+            support_level: SupportLevel::SelfHosted,
+            description: "High-performance MongoDB document database with persistent storage, authentication, and endpoint generation.".to_string(),
+            operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+        },
+        Capability {
+            id: "cap_sqlite_embedded".to_string(),
+            name: "SQLite Embedded Database Volume".to_string(),
+            provider: "docker".to_string(),
+            service_type: "storage".to_string(),
+            support_level: SupportLevel::SelfHosted,
+            description: "Zero-dependency embedded SQLite database via persistent volume mount with WAL mode concurrency guidance.".to_string(),
+            operations: vec!["provision".to_string(), "inspect".to_string(), "reconcile".to_string(), "destroy".to_string()],
+        },
     ]
 }
+
 
 pub fn get_capability_schema_detail(capability_id: &str) -> Option<CapabilitySchema> {
     match capability_id {
@@ -371,6 +390,90 @@ pub fn get_capability_schema_detail(capability_id: &str) -> Option<CapabilitySch
             ],
         }),
 
+        "cap_mongo_db" => Some(CapabilitySchema {
+            capability: Capability {
+                id: "cap_mongo_db".to_string(),
+                name: "MongoDB Document Database".to_string(),
+                provider: "mongodb".to_string(),
+                service_type: "database".to_string(),
+                support_level: SupportLevel::SelfHosted,
+                description: "High-performance MongoDB document database with persistent storage, authentication, and endpoint generation.".to_string(),
+                operations: vec!["provision".to_string(), "inspect".to_string(), "health_check".to_string(), "reconcile".to_string(), "destroy".to_string()],
+            },
+            parameter_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "image": { "type": "string", "default": "mongo:7-jammy", "description": "MongoDB Docker image" },
+                    "user": { "type": "string", "default": "smoooth_user", "description": "Root username" },
+                    "password": { "type": "string", "description": "Root password (auto-generated if omitted)" },
+                    "database": { "type": "string", "default": "appdb", "description": "Default database name" },
+                    "port": { "type": "integer", "description": "Port mapping (default 27017)" }
+                }
+            }),
+            supported_health_checks: vec!["tcp".to_string()],
+            supported_protocols: vec!["mongodb".to_string()],
+            binding_spec: serde_json::json!({
+                "service_type": "database",
+                "exports": [
+                    "<PREFIX>_URL",
+                    "<PREFIX>_HOST",
+                    "<PREFIX>_PORT",
+                    "<PREFIX>_USER",
+                    "<PREFIX>_PASSWORD",
+                    "<PREFIX>_DATABASE"
+                ],
+                "description": "Exports MongoDB connection URI (mongodb://user:pass@host:27017/db?authSource=admin)."
+            }),
+            approval_requirements: vec![
+                "Persistent document database volume deletion blocked unless allow_data_destruction=true".to_string(),
+                "Database destruction operations classified as High Risk Tier".to_string(),
+            ],
+            limitations: vec![
+                "MongoDB 7 Jammy single replica set or standalone node".to_string(),
+                "Sharded cluster topology not supported in local provider".to_string(),
+            ],
+        }),
+
+        "cap_sqlite_embedded" => Some(CapabilitySchema {
+            capability: Capability {
+                id: "cap_sqlite_embedded".to_string(),
+                name: "SQLite Embedded Database Volume".to_string(),
+                provider: "docker".to_string(),
+                service_type: "storage".to_string(),
+                support_level: SupportLevel::SelfHosted,
+                description: "Zero-dependency embedded SQLite database via persistent volume mount with WAL mode concurrency guidance.".to_string(),
+                operations: vec!["provision".to_string(), "inspect".to_string(), "reconcile".to_string(), "destroy".to_string()],
+            },
+            parameter_schema: serde_json::json!({
+                "type": "object",
+                "required": ["volume_name", "container_path"],
+                "properties": {
+                    "volume_name": { "type": "string", "description": "Name of host Docker volume preserving SQLite DB files across container restarts" },
+                    "container_path": { "type": "string", "description": "Target container directory where SQLite file resides (e.g. /data or /app/data)" },
+                    "sqlite_filename": { "type": "string", "default": "app.db", "description": "Database filename inside mount path" }
+                }
+            }),
+            supported_health_checks: vec!["file_exists".to_string(), "liveness".to_string()],
+            supported_protocols: vec!["sqlite".to_string(), "file".to_string()],
+            binding_spec: serde_json::json!({
+                "service_type": "storage",
+                "exports": [
+                    "<PREFIX>_PATH",
+                    "<PREFIX>_URL"
+                ],
+                "description": "Exports path to SQLite database file within container environment."
+            }),
+            approval_requirements: vec![
+                "Volume deletion requires allow_data_destruction=true".to_string(),
+            ],
+            limitations: vec![
+                "Single-writer locking: multiple writer processes require WAL (Write-Ahead Logging) mode and busy_timeout configuration".to_string(),
+                "Network filesystem (NFS/CIFS) mounting discouraged due to POSIX advisory lock reliability issues".to_string(),
+                "Application containers must share volume mount if multiple processes read from the database".to_string(),
+            ],
+        }),
+
         _ => None,
     }
 }
+

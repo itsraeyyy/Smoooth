@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::error::Result;
 use crate::models::{
-    IdempotencyKey, IdempotencyRecord, Operation, Plan, Resource, ServiceBinding,
+    AgentIdentity, IdempotencyKey, IdempotencyRecord, Operation, Plan, Resource, ServiceBinding,
 };
 
 pub mod local;
@@ -23,6 +23,13 @@ pub struct AuditEvent {
 
 #[async_trait]
 pub trait Storage: Send + Sync {
+    // Agents & Access Security
+    async fn save_agent(&self, agent: AgentIdentity) -> Result<()>;
+    async fn get_agent(&self, id: &str) -> Result<Option<AgentIdentity>>;
+    async fn get_agent_by_token_hash(&self, token_hash: &str) -> Result<Option<AgentIdentity>>;
+    async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>>;
+    async fn revoke_agent(&self, id: &str) -> Result<()>;
+
     // Plans
     async fn save_plan(&self, plan: Plan) -> Result<()>;
     async fn get_plan(&self, id: &str) -> Result<Option<Plan>>;
@@ -51,3 +58,4 @@ pub trait Storage: Send + Sync {
     async fn record_audit(&self, event: AuditEvent) -> Result<()>;
     async fn list_audit_events(&self, workspace_id: &str) -> Result<Vec<AuditEvent>>;
 }
+

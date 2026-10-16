@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Smoooth v2 MVP — Production Installer for Linux VPS
-# Idempotent installation, dedicated service account, secure token management,
-# and restrictive systemd service unit.
+# Smoooth v2 Beta — Production Installer & Lifecycle Script for Linux VPS
+# Idempotent installation, dedicated service account, Docker host-root security
+# disclosures, preflight diagnostics, safe upgrade/rollback, and systemd confinement.
+# Target Baseline: Ubuntu 24.04 LTS (x86_64)
 # ==============================================================================
 
 set -euo pipefail
@@ -28,6 +29,10 @@ ENABLE_REMOTE=false
 # ------------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --upgrade)
+      ACTION="upgrade"
+      shift
+      ;;
     --rotate-token)
       ROTATE_TOKEN=true
       shift
@@ -49,10 +54,13 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help|-h)
+      echo "Smoooth v${SMOOOTH_VERSION} Beta Installer & Lifecycle Manager"
+      echo ""
       echo "Usage: sudo $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --rotate-token   Generate a new cryptographically secure auth token"
+      echo "  --upgrade        Safely upgrade daemon binary with automated rollback on failure"
+      echo "  --rotate-token   Generate a new cryptographically secure 256-bit auth token"
       echo "  --show-token     Display token summary upon completion"
       echo "  --enable-remote  Explicit opt-in to bind to 0.0.0.0 (requires TLS reverse proxy)"
       echo "  --uninstall      Safely uninstall systemd service and binaries (preserves application data)"
@@ -68,7 +76,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ------------------------------------------------------------------------------
-# 1. Root & OS Verification
+# 1. Root & Privilege Verification
 # ------------------------------------------------------------------------------
 if [[ $EUID -ne 0 ]]; then
   echo "[ERROR] This installer must be executed as root (e.g. via sudo)." >&2
@@ -103,6 +111,76 @@ if [[ "${ACTION}" == "uninstall" ]]; then
   exit 0
 fi
 
+# ------------------------------------------------------------------------------
+# Safe Upgrade & Rollback Handler
+# ------------------------------------------------------------------------------
+if [[ "${ACTION}" == "upgrade" ]]; then
+  echo "[INFO] Starting safe Smoooth daemon upgrade..."
+  if [[ ! -f "${SMOOOTH_BIN}" ]]; then
+    echo "[ERROR] No existing installation found at ${SMOOOTH_BIN}. Run normal installation first." >&2
+    exit 1
+  fi
+
+  BACKUP_BIN="${SMOOOTH_BIN}.bak.$(date +%s)"
+  echo "[INFO] Creating binary rollback backup at ${BACKUP_BIN}..."
+  cp "${SMOOOTH_BIN}" "${BACKUP_BIN}"
+
+  NEW_BIN=""
+  if [[ -f "./target/release/smoooth" ]]; then
+    NEW_BIN="./target/release/smoooth"
+  elif [[ -f "./smoooth" ]]; then
+    NEW_BIN="./smoooth"
+  fi
+
+  if [[ -z "${NEW_BIN}" ]]; then
+    echo "[ERROR] No new 'smoooth' binary found in release target or current directory." >&2
+    exit 1
+  fi
+
+  echo "[INFO] Installing new binary from ${NEW_BIN}..."
+  install -m 0755 "${NEW_BIN}" "${SMOOOTH_BIN}"
+
+  echo "[INFO] Restarting Smoooth service..."
+  systemctl restart smoooth.service || true
+  sleep 2
+
+  if systemctl is-active --quiet smoooth.service; then
+    echo "[INFO] Smoooth service is ACTIVE after upgrade."
+    echo "[INFO] Running post-upgrade diagnostics with 'smoooth doctor'..."
+    "${SMOOOTH_BIN}" doctor || true
+    echo "=============================================================================="
+    echo " Smoooth upgraded successfully to v${SMOOOTH_VERSION}!"
+    echo " Rollback binary preserved at: ${BACKUP_BIN}"
+    echo "=============================================================================="
+    exit 0
+  else
+    echo "[ERROR] Service failed to start with new binary! Initiating automatic rollback..." >&2
+    cp "${BACKUP_BIN}" "${SMOOOTH_BIN}"
+    systemctl restart smoooth.service
+    echo "[WARN] Service safely restored from rollback backup."
+    exit 1
+  fi
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Preflight Architecture & OS Verification
+# ------------------------------------------------------------------------------
+echo "[INFO] Running preflight system checks..."
+
+# Architecture check: official baseline is x86_64
+ARCH=$(uname -m)
+if [[ "${ARCH}" != "x86_64" ]]; then
+  if [[ "${ARCH}" == "aarch64" ]]; then
+    echo "[WARN] Architecture is aarch64 (ARM64). Experimental mode; official verified target is x86_64."
+  else
+    echo "[ERROR] Unsupported CPU architecture: '${ARCH}'. Smoooth Beta requires x86_64." >&2
+    exit 1
+  fi
+else
+  echo "[INFO] Architecture verified: ${ARCH} (x86_64 verified baseline)."
+fi
+
+# Operating System verification
 if [[ ! -f /etc/os-release ]]; then
   echo "[ERROR] Unsupported operating system: /etc/os-release not found." >&2
   exit 1
@@ -112,11 +190,18 @@ source /etc/os-release
 echo "[INFO] Detected OS: ${PRETTY_NAME:-$ID} (Version: ${VERSION_ID:-unknown})"
 
 case "${ID:-}" in
-  ubuntu|debian|centos|rhel|rocky|almalinux)
-    echo "[INFO] Supported Linux distribution confirmed."
+  ubuntu)
+    if [[ "${VERSION_ID:-}" == "24.04"* ]]; then
+      echo "[INFO] Verified target operating system: Ubuntu 24.04 LTS confirmed."
+    else
+      echo "[INFO] Compatible Ubuntu release detected (${VERSION_ID:-})."
+    fi
+    ;;
+  debian|centos|rhel|rocky|almalinux)
+    echo "[INFO] Compatible Linux distribution confirmed (${ID:-})."
     ;;
   *)
-    echo "[WARN] Operating system '${ID:-}' is not officially verified, but continuing standard systemd setup..."
+    echo "[WARN] Operating system '${ID:-}' is not officially verified, continuing standard systemd setup..."
     ;;
 esac
 
@@ -126,12 +211,32 @@ if ! command -v systemctl >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------------------------
-# 2. Prerequisites Verification
+# 3. Disk Space & Port Preflight Checks
+# ------------------------------------------------------------------------------
+FREE_KB=$(df -k /var 2>/dev/null | awk 'NR==2 {print $4}' || echo "")
+if [[ -n "${FREE_KB}" && "${FREE_KB}" =~ ^[0-9]+$ ]]; then
+  if [[ "${FREE_KB}" -lt 524288 ]]; then
+    echo "[ERROR] Insufficient disk space on /var ($((FREE_KB / 1024))MB available). Smoooth requires at least 512MB free space." >&2
+    exit 1
+  else
+    echo "[INFO] Available disk space on /var: $((FREE_KB / 1024))MB (healthy)."
+  fi
+fi
+
+# Port 4040 conflict check
+if command -v ss >/dev/null 2>&1; then
+  if ss -tulpn | grep -q ":4040\b"; then
+    echo "[WARN] Port 4040 is currently in use. Existing Smoooth service will be restarted on update."
+  fi
+fi
+
+# ------------------------------------------------------------------------------
+# 4. Prerequisites Verification & Installation
 # ------------------------------------------------------------------------------
 for cmd in curl openssl jq; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "[WARN] Required prerequisite tool '$cmd' is not installed."
-    echo "[INFO] Attempting to install missing packages..."
+    echo "[INFO] Attempting to install missing package '$cmd'..."
     if command -v apt-get >/dev/null 2>&1; then
       apt-get update -y && apt-get install -y "$cmd"
     elif command -v dnf >/dev/null 2>&1; then
@@ -148,7 +253,7 @@ done
 # Verify Docker Engine availability
 if ! command -v docker >/dev/null 2>&1; then
   echo "[WARN] Docker CLI not found. Smoooth requires Docker Engine to provision containers and databases."
-  echo "[INFO] Install Docker on Ubuntu/Debian: curl -fsSL https://get.docker.com | sh"
+  echo "[INFO] Install Docker on Ubuntu: curl -fsSL https://get.docker.com | sh"
 else
   DOCKER_VER=$(docker --version)
   echo "[INFO] ${DOCKER_VER} detected."
@@ -159,7 +264,24 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 3. Dedicated Service Account & Group Provisioning
+# 5. Security Disclosure: Docker Effective Host-Root Access
+# ------------------------------------------------------------------------------
+echo "=============================================================================="
+echo " SECURITY NOTICE: DOCKER ENGINE ACCESS & PRIVILEGE CONFINEMENT"
+echo " Smoooth orchestrates containers via the local Docker daemon socket"
+echo " (/var/run/docker.sock) using a dedicated '${SMOOOTH_USER}' system service account."
+echo " In Docker's architecture, socket access is effectively root-equivalent on the"
+echo " host. To protect your server, Smoooth enforces:"
+echo "   1. Private loopback binding (127.0.0.1:4040) by default"
+echo "   2. Cryptographic token authorization for all HTTP, MCP, and CLI operations"
+echo "   3. Systemd sandbox confinement (NoNewPrivileges=yes, ProtectSystem=strict)"
+echo "   4. Server-side capability and scope enforcement"
+echo " Do not expose port 4040 or /var/run/docker.sock to public interfaces without"
+echo " a TLS reverse proxy and strict network ACLs."
+echo "=============================================================================="
+
+# ------------------------------------------------------------------------------
+# 6. Dedicated Service Account & Group Provisioning
 # ------------------------------------------------------------------------------
 echo "[INFO] Provisioning dedicated system account '${SMOOOTH_USER}'..."
 
@@ -186,7 +308,7 @@ if getent group docker >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------------------------
-# 4. Directory Structure & Permissions (Strict Principle of Least Privilege)
+# 7. Directory Structure & Permissions (Strict Least Privilege)
 # ------------------------------------------------------------------------------
 echo "[INFO] Configuring secure directory layout..."
 
@@ -199,7 +321,7 @@ chmod 0750 "${STATE_DIR}"
 chown "${SMOOOTH_USER}:${SMOOOTH_GROUP}" "${STATE_DIR}"
 
 # ------------------------------------------------------------------------------
-# 5. Cryptographic Token Generation & Storage
+# 8. Cryptographic Token Generation & Storage
 # ------------------------------------------------------------------------------
 if [[ ! -f "${TOKEN_FILE}" ]] || [[ "${ROTATE_TOKEN}" == "true" ]]; then
   echo "[INFO] Generating cryptographically secure 256-bit authentication token..."
@@ -207,15 +329,14 @@ if [[ ! -f "${TOKEN_FILE}" ]] || [[ "${ROTATE_TOKEN}" == "true" ]]; then
   echo "${TOKEN}" > "${TOKEN_FILE}"
   chmod 0600 "${TOKEN_FILE}"
   chown "${SMOOOTH_USER}:${SMOOOTH_GROUP}" "${TOKEN_FILE}"
-  echo "[INFO] Auth token securely stored in ${TOKEN_FILE} (permissions: 0600)."
+  echo "[INFO] Master auth token securely stored in ${TOKEN_FILE} (permissions: 0600)."
 else
-  echo "[INFO] Existing auth token retained at ${TOKEN_FILE}."
+  echo "[INFO] Existing master auth token retained at ${TOKEN_FILE}."
 fi
 
 # ------------------------------------------------------------------------------
-# 6. Binary Installation (Idempotent)
+# 9. Binary Installation (Idempotent)
 # ------------------------------------------------------------------------------
-# If local binary exists in build directory, install it; otherwise check current dir
 if [[ -f "./target/release/smoooth" ]]; then
   echo "[INFO] Installing release binary from ./target/release/smoooth..."
   install -m 0755 ./target/release/smoooth "${SMOOOTH_BIN}"
@@ -229,11 +350,11 @@ elif command -v "${SMOOOTH_BIN}" >/dev/null 2>&1; then
   echo "[INFO] Binary already installed at ${SMOOOTH_BIN}."
 else
   echo "[WARN] No pre-built 'smoooth' binary found in current path."
-  echo "[INFO] You can compile via: cargo build --release && sudo install -m 0755 target/release/smoooth ${SMOOOTH_BIN}"
+  echo "[INFO] Compile via: cargo build --release && sudo install -m 0755 target/release/smoooth ${SMOOOTH_BIN}"
 fi
 
 # ------------------------------------------------------------------------------
-# 7. Systemd Service Unit (Hardened & Private by Default)
+# 10. Systemd Service Unit (Hardened Confinement & Private by Default)
 # ------------------------------------------------------------------------------
 if [[ "${ENABLE_REMOTE}" == "true" ]]; then
   BIND_ADDR="0.0.0.0"
@@ -260,7 +381,7 @@ Environment=SMOOOTH_PORT=4040
 Environment=SMOOOTH_TOKEN_FILE=${TOKEN_FILE}
 Environment=SMOOOTH_STORAGE_PATH=${STATE_DIR}/smoooth_state.json
 
-# Private management API by default; remote access requires explicit opt-in
+# Private loopback management API by default; remote access requires explicit opt-in
 ExecStart=${SMOOOTH_BIN} server --bind ${BIND_ADDR} --port 4040
 
 Restart=on-failure
@@ -281,7 +402,7 @@ EOF
 chmod 0644 "${SYSTEMD_SERVICE_FILE}"
 
 # ------------------------------------------------------------------------------
-# 8. Reload & Enable Systemd Service
+# 11. Reload & Enable Systemd Service
 # ------------------------------------------------------------------------------
 echo "[INFO] Reloading systemd daemon..."
 systemctl daemon-reload
@@ -299,10 +420,20 @@ if [[ -f "${SMOOOTH_BIN}" ]]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 9. Summary & Security Guidance
+# 12. Post-Install Diagnostics Check
 # ------------------------------------------------------------------------------
+if [[ -f "${SMOOOTH_BIN}" ]] && command -v "${SMOOOTH_BIN}" >/dev/null 2>&1; then
+  echo ""
+  echo "[INFO] Executing post-install preflight check via 'smoooth doctor'..."
+  "${SMOOOTH_BIN}" doctor || true
+fi
+
+# ------------------------------------------------------------------------------
+# 13. Summary & Security Guidance
+# ------------------------------------------------------------------------------
+echo ""
 echo "=============================================================================="
-echo " Smoooth v2 MVP successfully installed!"
+echo " Smoooth v${SMOOOTH_VERSION} Beta successfully installed!"
 echo "=============================================================================="
 echo " - Daemon Binary:      ${SMOOOTH_BIN}"
 echo " - Config & Tokens:    ${CONFIG_DIR} (mode 0700, ${SMOOOTH_USER})"
@@ -310,16 +441,20 @@ echo " - State & Storage:    ${STATE_DIR} (mode 0750, ${SMOOOTH_USER})"
 echo " - Systemd Service:    ${SYSTEMD_SERVICE_FILE}"
 echo " - Network Boundary:   Private 127.0.0.1:4040 (Zero unauthenticated exposure)"
 echo ""
-echo " Management & Verification Commands:"
-echo "   systemctl status smoooth"
-echo "   journalctl -u smoooth -f"
+echo " Operator Quickstart:"
+echo "   smoooth doctor                  # Verify host diagnostics & security"
+echo "   smoooth agent pair --name agent # Pair an AI coding agent with scoped token"
+echo "   smoooth agent list              # View active agent credentials"
+echo "   systemctl status smoooth        # Service status"
+echo "   journalctl -u smoooth -f        # Live audit log"
 echo ""
 if [[ "${SHOW_TOKEN}" == "true" ]]; then
-  echo " Operator Auth Token:"
+  echo " Master Operator Token:"
   cat "${TOKEN_FILE}"
   echo ""
 else
-  echo " Token File: ${TOKEN_FILE}"
-  echo " (To view token: sudo cat ${TOKEN_FILE} or rerun with --show-token)"
+  echo " Master Token File: ${TOKEN_FILE}"
+  echo " (To view master token: sudo cat ${TOKEN_FILE} or rerun with --show-token)"
 fi
+echo " Control Dashboard: http://127.0.0.1:4040/dashboard (Local access)"
 echo "=============================================================================="
