@@ -45,6 +45,7 @@ pub trait Storage: Send + Sync {
     // Operations & Fencing Leases
     async fn save_operation(&self, operation: Operation) -> Result<()>;
     async fn get_operation(&self, id: &str) -> Result<Option<Operation>>;
+    async fn list_operations(&self, workspace_id: Option<&str>) -> Result<Vec<Operation>>;
     async fn update_operation(&self, operation: Operation) -> Result<()>;
 
     // Resources

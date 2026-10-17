@@ -28,3 +28,4 @@ desktop.ini
 # Scratch and local tokens
 scratch/
 *.token
+release-dist/

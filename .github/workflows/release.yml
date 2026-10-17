@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Package Linux x86_64 Release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Release Binary
+        run: |
+          cargo build --release --locked
+          strip target/release/smoooth
+
+      - name: Package Distributable Release Bundle
+        id: package
+        run: |
+          # Determine release version and commit
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${TAG#v}"
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "Packaging version: ${VERSION} (commit: ${COMMIT})"
+
+          # Clean staging directory strictly containing runtime essentials
+          RELEASE_DIR="smoooth-v${VERSION}-linux-x86_64"
+          rm -rf "${RELEASE_DIR}" "${RELEASE_DIR}.tar.gz"
+          mkdir -p "${RELEASE_DIR}"
+
+          # Copy runtime components
+          cp target/release/smoooth "${RELEASE_DIR}/smoooth"
+          chmod +x "${RELEASE_DIR}/smoooth"
+
+          cp scripts/install.sh "${RELEASE_DIR}/install.sh"
+          chmod +x "${RELEASE_DIR}/install.sh"
+
+          echo "${VERSION}" > "${RELEASE_DIR}/VERSION"
+          echo "${COMMIT}" > "${RELEASE_DIR}/COMMIT"
+          cp README.md "${RELEASE_DIR}/README.md"
+          cp RELEASE_NOTES.md "${RELEASE_DIR}/RELEASE_NOTES.md"
+
+          # Verify staging contains no build caches, temporary files, or web assets
+          echo "Release contents:"
+          ls -la "${RELEASE_DIR}"
+
+          # Create compressed archive
+          tar -czvf "${RELEASE_DIR}.tar.gz" "${RELEASE_DIR}"
+
+          # Compute SHA256 checksum
+          sha256sum "${RELEASE_DIR}.tar.gz" > SHA256SUMS
+
+          # Verify self-test
+          sha256sum -c SHA256SUMS
+
+          echo "TARBALL=${RELEASE_DIR}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.package.outputs.TAG }}
+          name: "Smoooth ${{ steps.package.outputs.TAG }} — Linux Beta"
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: true
+          files: |
+            ${{ steps.package.outputs.TARBALL }}
+            SHA256SUMS
+            RELEASE_NOTES.md

@@ -983,6 +983,10 @@ impl Orchestrator {
         self.storage.get_operation(id).await.ok().flatten()
     }
 
+    pub async fn list_operations(&self, workspace_id: Option<&str>) -> Vec<Operation> {
+        self.storage.list_operations(workspace_id).await.unwrap_or_default()
+    }
+
     pub async fn save_plan(&self, plan: Plan) -> Result<()> {
         self.storage.save_plan(plan).await
     }

@@ -235,6 +235,25 @@ impl Storage for LocalStorage {
         Ok(state.operations.get(id).cloned())
     }
 
+    async fn list_operations(&self, workspace_id: Option<&str>) -> Result<Vec<Operation>> {
+        let state = self.state.read().await;
+        let mut list: Vec<Operation> = state
+            .operations
+            .values()
+            .filter(|op| {
+                if let Some(ws) = workspace_id {
+                    op.workspace_id == "*" || op.workspace_id == ws
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect();
+        // Sort descending by created_at (most recent operations first)
+        list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(list)
+    }
+
     async fn update_operation(&self, operation: Operation) -> Result<()> {
         let mut state = self.state.write().await;
         state.operations.insert(operation.id.clone(), operation);

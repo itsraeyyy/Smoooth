@@ -11,6 +11,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; img-src 'self' data:;">
   <title>Smoooth — Control Plane Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -500,6 +501,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <input type="password" id="auth-token" placeholder="Bearer Token" autocomplete="off" />
       </div>
       <button class="btn btn-sm" onclick="saveAuthToken()">Set Token</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAuthToken()" title="Clear saved token">Clear</button>
       <button class="btn btn-sm btn-primary" onclick="refreshCurrentTab()">↻ Refresh</button>
     </div>
   </header>
@@ -509,6 +511,9 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     <nav class="sidebar">
       <button class="active" onclick="switchTab('overview')">
         <span>📊</span> <span>Overview</span>
+      </button>
+      <button onclick="switchTab('onboarding')">
+        <span>🚀</span> <span>Agent Quickstart</span>
       </button>
       <button onclick="switchTab('resources')">
         <span>📦</span> <span>Applications & Resources</span>
@@ -832,6 +837,71 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         </div>
       </div>
 
+      <!-- ============================================================== -->
+      <!-- SECTION 0: AGENT ONBOARDING & QUICKSTART                       -->
+      <!-- ============================================================== -->
+      <div id="tab-onboarding" class="tab-pane" style="display: none;">
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🚀 First-Run Agent Setup & Workflow Generator</div>
+              <div class="card-subtitle">Connect Claude Code, Cursor, Windsurf, or custom MCP agents to your infrastructure in under 60 seconds</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <div class="form-group">
+                <label>1. Select Your Deployment Goal</label>
+                <select id="quickstart-goal" onchange="updateQuickstartInstructions()">
+                  <option value="existing-repo">Deploy an existing application repository (Next.js, Node, Python, Rust, Go)</option>
+                  <option value="new-ai-app">Build and deploy a new application with an AI coding agent</option>
+                  <option value="provision-db">Provision managed database / service (PostgreSQL, Redis, MongoDB, SQLite)</option>
+                  <option value="inspect-stack">Inspect existing infrastructure & detect drift (Read-Only safeguard)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>2. Select Your AI Coding Agent</label>
+                <select id="quickstart-agent" onchange="updateQuickstartInstructions()">
+                  <option value="claude-code">Claude Code (Anthropic CLI)</option>
+                  <option value="cursor">Cursor IDE (.cursor/mcp.json)</option>
+                  <option value="windsurf">Windsurf IDE (mcp_config.json)</option>
+                  <option value="custom-mcp">Custom MCP Client (HTTP / SSE)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>3. Server Host & Port</label>
+                <input type="text" id="quickstart-host" value="http://127.0.0.1:4040" oninput="updateQuickstartInstructions()" />
+              </div>
+            </div>
+
+            <div>
+              <div style="background: var(--bg-surface); border: 1px solid var(--border-quiet); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 12px; font-weight: 600; color: var(--accent-blue); margin-bottom: 6px;">Recommended Permission Envelope:</div>
+                <div id="quickstart-scope-advice" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+                  For general deployment, pair with <code>read_only,plan,deploy</code>. Destructive actions require explicit <code>destructive</code> scope or operator approval.
+                </div>
+                <div style="margin-top: 14px;">
+                  <button class="btn btn-sm btn-primary" onclick="openPairModal()">+ Pair Agent Now</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-quiet);">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">A. Agent Configuration (Copy & Paste into Agent Settings)</div>
+            <div class="code-box" id="quickstart-config-box" style="user-select: all;"></div>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">B. Kickoff Prompt (Send this to your AI Coding Agent)</div>
+            <div class="code-box" id="quickstart-prompt-box" style="user-select: all; color: var(--text-primary); background: #0f141c;"></div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -866,7 +936,33 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Operation Details & Logs Modal -->
+  <div class="modal-backdrop" id="op-modal">
+    <div class="modal-card" style="max-width: 720px;">
+      <div class="card-header" style="margin-bottom: 12px;">
+        <div>
+          <div class="card-title" id="op-modal-title">Operation Details & Step History</div>
+          <div class="card-subtitle" id="op-modal-subtitle">Durable execution trace, step history, and active logs</div>
+        </div>
+        <button class="btn btn-sm" onclick="closeOpModal()">✕</button>
+      </div>
+      <div id="op-modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <!-- Populated via viewOpLogs(id) -->
+      </div>
+    </div>
+  </div>
+
   <script>
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     // Token & API Helper
     function getAuthToken() {
       return localStorage.getItem('smoooth_auth_token') || sessionStorage.getItem('smoooth_auth_token') || '';
@@ -878,6 +974,13 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         alert('Authentication token saved.');
         refreshCurrentTab();
       }
+    }
+    function clearAuthToken() {
+      localStorage.removeItem('smoooth_auth_token');
+      sessionStorage.removeItem('smoooth_auth_token');
+      document.getElementById('auth-token').value = '';
+      alert('Authentication token cleared from browser.');
+      refreshCurrentTab();
     }
     async function apiFetch(endpoint, options = {}) {
       const token = getAuthToken();
@@ -891,7 +994,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
       activeTab = tabId;
       document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
       document.querySelectorAll('nav.sidebar button').forEach(el => el.classList.remove('active'));
-      const activeBtn = Array.from(document.querySelectorAll('nav.sidebar button')).find(b => b.getAttribute('onclick').includes(tabId));
+      const activeBtn = Array.from(document.querySelectorAll('nav.sidebar button')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId));
       if (activeBtn) activeBtn.classList.add('active');
       const target = document.getElementById(`tab-${tabId}`);
       if (target) target.style.display = 'block';
@@ -900,10 +1003,56 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 
     function refreshCurrentTab() {
       if (activeTab === 'overview') loadOverview();
+      else if (activeTab === 'onboarding') updateQuickstartInstructions();
       else if (activeTab === 'resources') loadResources();
       else if (activeTab === 'agents') loadAgents();
       else if (activeTab === 'operations') loadOperations();
       else if (activeTab === 'settings') runDoctor();
+    }
+
+    function updateQuickstartInstructions() {
+      const goalEl = document.getElementById('quickstart-goal');
+      const agentEl = document.getElementById('quickstart-agent');
+      const hostEl = document.getElementById('quickstart-host');
+      if (!goalEl || !agentEl) return;
+      const goal = goalEl.value;
+      const agent = agentEl.value;
+      const host = (hostEl && hostEl.value.trim()) || 'http://127.0.0.1:4040';
+      
+      let recommendedScopes = 'read_only,plan,deploy';
+      let scopeAdvice = 'Standard deployment permissions (<code>read_only,plan,deploy</code>) granted.';
+      if (goal === 'inspect-stack') {
+        recommendedScopes = 'read_only';
+        scopeAdvice = 'Read-only safety envelope: Agent can inspect resources, health, and logs but cannot mutate or delete infrastructure.';
+      } else if (goal === 'provision-db') {
+        recommendedScopes = 'read_only,plan,deploy';
+        scopeAdvice = 'Database deployment: Agent can provision PostgreSQL, Redis, MongoDB, or SQLite with persistent volume protection.';
+      }
+      document.getElementById('quickstart-scope-advice').innerHTML = scopeAdvice;
+
+      let configText = '';
+      if (agent === 'claude-code') {
+        configText = `# 1. Pair agent on Smoooth server (run in server terminal):\nsmoooth agent pair --name claude-code --scopes ${recommendedScopes}\n\n# 2. Add Smoooth MCP to Claude Code:\nclaude mcp add --transport sse smoooth ${host}/sse -H "Authorization: Bearer <ISSUED_TOKEN>"`;
+      } else if (agent === 'cursor') {
+        configText = `// Add to .cursor/mcp.json or Cursor Settings > MCP:\n{\n  "mcpServers": {\n    "smoooth": {\n      "url": "${host}/sse",\n      "headers": {\n        "Authorization": "Bearer <ISSUED_TOKEN>"\n      }\n    }\n  }\n}`;
+      } else if (agent === 'windsurf') {
+        configText = `// Add to ~/.codeium/windsurf/mcp_config.json:\n{\n  "mcpServers": {\n    "smoooth": {\n      "serverUrl": "${host}/sse",\n      "headers": {\n        "Authorization": "Bearer <ISSUED_TOKEN>"\n      }\n    }\n  }\n}`;
+      } else {
+        configText = `# Generic MCP SSE / HTTP Configuration:\nEndpoint: ${host}/sse\nHTTP POST: ${host}/mcp\nHeader: Authorization: Bearer <ISSUED_TOKEN>`;
+      }
+      document.getElementById('quickstart-config-box').textContent = configText;
+
+      let promptText = '';
+      if (goal === 'existing-repo') {
+        promptText = `I have paired Smoooth to operate on our Linux VPS. Please inspect this repository, detect the application stack, check our existing infrastructure via Smoooth's list_capabilities tool, and generate a validated deployment plan. Do not execute destructive actions without asking me first.`;
+      } else if (goal === 'new-ai-app') {
+        promptText = `We are building a new application with Smoooth infrastructure management. Start by proposing a clean architecture with a persistent database service. Generate an execution plan via Smoooth and present it for approval before provisioning.`;
+      } else if (goal === 'provision-db') {
+        promptText = `Please provision a PostgreSQL database (with persistent volume protection) and a Redis cache using Smoooth's create_plan tool. Provide the connection binding details for our application once health checks pass.`;
+      } else {
+        promptText = `Please inspect our existing infrastructure using Smoooth's list_resources and verify_connection tools. Check the health and drift status of all services without modifying any running containers or databases.`;
+      }
+      document.getElementById('quickstart-prompt-box').textContent = promptText;
     }
 
     // Load Overview Data
@@ -1129,35 +1278,106 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         const res = await apiFetch('/api/operations');
         const tbody = document.getElementById('operations-table-body');
         if (!res.ok) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-red); padding: 24px;">Unauthorized.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-red); padding: 24px;">Unauthorized: please configure Bearer token.</td></tr>`;
           return;
         }
         const data = await res.json();
         const items = data.operations || [];
         if (items.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">No operation history recorded yet.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">No operation history recorded yet. Agent deployments will appear here automatically.</td></tr>`;
           return;
         }
-        tbody.innerHTML = items.map(op => `
-          <tr>
-            <td style="font-family: 'JetBrains Mono', monospace; font-weight: 500;">${op.id}</td>
-            <td>${op.workspace_id}</td>
-            <td><span class="badge ${op.status === 'Completed' ? 'badge-green' : op.status === 'Running' ? 'badge-blue' : 'badge-red'}">${op.status}</span></td>
-            <td>${op.progress_percent}%</td>
-            <td>${op.lease_epoch}</td>
-            <td style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">${(op.plan_hash || '').substring(0, 16)}...</td>
-            <td>
-              <button class="btn btn-sm" onclick="viewOpLogs('${op.id}')">Logs</button>
-            </td>
-          </tr>
-        `).join('');
+        tbody.innerHTML = items.map(op => {
+          const st = (op.status || '').toLowerCase();
+          const badgeClass = st === 'succeeded' ? 'badge-green' : st === 'running' ? 'badge-blue' : st === 'failed' ? 'badge-red' : 'badge-amber';
+          const timeAgo = op.created_at ? new Date(op.created_at).toLocaleTimeString() : '-';
+          return `
+            <tr>
+              <td>
+                <div style="font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--text-primary);">${escapeHtml(op.id)}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">${timeAgo}</div>
+              </td>
+              <td>${escapeHtml(op.workspace_id)}</td>
+              <td><span class="badge ${badgeClass}">${escapeHtml((op.status || '').toUpperCase())}</span></td>
+              <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">${op.progress_percent || 0}%</span>
+                </div>
+              </td>
+              <td style="font-family: 'JetBrains Mono', monospace;">${op.lease_epoch}</td>
+              <td style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">${escapeHtml((op.plan_hash || '').substring(0, 16))}...</td>
+              <td>
+                <button class="btn btn-sm btn-primary" onclick="viewOpLogs('${escapeHtml(op.id)}')">View Details & Steps</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
       } catch (e) {
         console.error('Error loading operations:', e);
       }
     }
 
-    function viewOpLogs(id) {
-      alert(`Operation logs for '${id}' are recorded in durable storage.`);
+    async function viewOpLogs(id) {
+      const modal = document.getElementById('op-modal');
+      const body = document.getElementById('op-modal-body');
+      body.innerHTML = '<p style="color: var(--text-muted); padding: 20px; text-align: center;">Loading operation history...</p>';
+      modal.classList.add('open');
+      try {
+        const res = await apiFetch(`/api/operations/${id}`);
+        if (!res.ok) {
+          body.innerHTML = `<p style="color: var(--accent-red); padding: 20px;">Failed to load operation ${escapeHtml(id)} (${res.status}).</p>`;
+          return;
+        }
+        const op = await res.json();
+        const st = (op.status || '').toLowerCase();
+        const statusClass = st === 'succeeded' ? 'badge-green' : st === 'running' ? 'badge-blue' : st === 'failed' ? 'badge-red' : 'badge-amber';
+        let html = `
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+            <span class="badge ${statusClass}">${escapeHtml((op.status || '').toUpperCase())}</span>
+            <span class="badge badge-grey">Progress: ${op.progress_percent || 0}%</span>
+            <span class="badge badge-grey">Workspace: ${escapeHtml(op.workspace_id)}</span>
+            <span class="badge badge-purple">Lease Epoch: ${op.lease_epoch}</span>
+            <span class="badge badge-blue">Plan: ${escapeHtml((op.plan_hash || '').substring(0, 12))}...</span>
+          </div>
+        `;
+        if (op.error_message) {
+          html += `
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 16px;">
+              <div style="font-weight: 600; color: #f87171; font-size: 13px; margin-bottom: 4px;">Failure Reason:</div>
+              <div style="font-size: 12px; color: #fca5a5;">${escapeHtml(op.error_message)}</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Recommended Action: Inspect step logs below, verify container configurations, and check database readiness.</div>
+            </div>
+          `;
+        }
+        html += `
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Execution Steps & Real-Time Logs (${(op.logs || []).length} steps):</div>
+          <div class="code-box" style="max-height: 280px; font-size: 11px;">
+        `;
+        if (!op.logs || op.logs.length === 0) {
+          html += '<div style="color: var(--text-muted);">No step logs recorded.</div>';
+        } else {
+          op.logs.forEach(l => {
+            const timeStr = new Date(l.timestamp).toLocaleTimeString();
+            const lvlColor = l.level === 'WARN' ? 'var(--accent-amber)' : l.level === 'ERROR' ? 'var(--accent-red)' : 'var(--accent-blue)';
+            html += `<div style="margin-bottom: 2px;"><span style="color: var(--text-muted);">${timeStr}</span> <span style="color: ${lvlColor}; font-weight: 600;">[${escapeHtml(l.level)}]</span> ${escapeHtml(l.message)}</div>`;
+          });
+        }
+        html += `</div>`;
+        if (op.evidence) {
+          html += `
+            <div style="margin-top: 14px;">
+              <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Verified Evidence:</div>
+              <pre class="code-box" style="max-height: 120px; font-size: 11px;">${escapeHtml(JSON.stringify(op.evidence, null, 2))}</pre>
+            </div>
+          `;
+        }
+        body.innerHTML = html;
+      } catch (err) {
+        body.innerHTML = `<p style="color: var(--accent-red);">Error loading operation: ${escapeHtml(err.toString())}</p>`;
+      }
+    }
+    function closeOpModal() {
+      document.getElementById('op-modal').classList.remove('open');
     }
 
     // Run Doctor

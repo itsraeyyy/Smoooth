@@ -1,70 +1,150 @@
 # Smoooth 🚀
 
 > **Infrastructure freedom, built for AI agents.**  
-> *Supabase-level convenience across the software stack, with the freedom to choose the technologies that fit the product.*
+> *Deploy and operate applications on infrastructure you control.*
 
-Based on the [Smoooth v2 MVP PRD](Smoooth_PRD_v2.md).
+Smoooth allows AI coding agents (Claude Code, Cursor, Windsurf, OpenDevin, and custom MCP clients) to provision, connect, configure, and monitor stateful applications and databases on developer-owned Linux VPS infrastructure using Docker.
 
 ---
 
-## 📁 Architecture Overview
+## 🏗️ Architecture
 
 ```text
 Smoooth/
-├── Cargo.toml                              # Cargo manifest and dependencies
 ├── src/
-│   ├── lib.rs                              # Library root
-│   ├── main.rs                             # CLI entrypoint
-│   ├── error.rs                            # Unified error types
-│   ├── models/                             # Domain models
-│   │   ├── capability.rs                   # Capabilities & support levels
-│   │   ├── resource.rs                     # Infrastructure resources
-│   │   ├── plan.rs                         # Execution plans & cryptographic hashes
-│   │   ├── operation.rs                    # Durable operations & distributed leases
-│   │   └── binding.rs                      # First-class service connections & secrets
-│   ├── engine/                             # Core orchestration & lifecycle engine
-│   │   └── orchestrator.rs                 # Plan execution pipeline & reconciliation
-│   ├── adapters/                           # Extensible provider adapters
-│   │   └── docker.rs                       # Docker runtime adapter
+│   ├── main.rs                             # CLI entrypoint (server, doctor, agent, mcp, inspect)
+│   ├── api.rs                              # HTTP REST API & SSE endpoints (Axum)
+│   ├── dashboard/                          # Embedded administrative web UI (CSP, offline fonts)
+│   ├── engine/                             # Core orchestration & execution engine
+│   │   ├── orchestrator.rs                 # 2-phase transactional execution pipeline
+│   │   ├── planner.rs                      # Execution plan generation & validation
+│   │   ├── dag.rs                          # Dependency graph resolution & topological sort
+│   │   └── health.rs                       # Health checking & verification probes
+│   ├── adapters/                           # Resource adapters
+│   │   ├── docker.rs                       # Docker container lifecycle & network management
+│   │   ├── postgres.rs                     # PostgreSQL database & volume provisioning
+│   │   ├── redis.rs                        # Redis caching & persistent storage
+│   │   ├── mongodb.rs                      # MongoDB persistent database adapter
+│   │   └── sqlite.rs                       # Embedded SQLite with WAL persistence
+│   ├── security/                           # Scoped access & credential authority
+│   │   ├── agent.rs                        # Agent pairing, rotation, and revocation
+│   │   ├── scopes.rs                       # Server-side scope enforcement (read_only, plan, deploy, admin)
+│   │   └── audit.rs                        # Append-only audit logger
+│   ├── storage/                            # Atomic state persistence
+│   │   └── local.rs                        # File-backed local state with sync guarantees
 │   └── mcp/                                # Model Context Protocol (MCP) server
-│       └── tools.rs                        # Complete workflow tool definitions
-├── Smoooth_PRD_v2.md                       # Smoooth v2 MVP PRD (Official Canonical Spec)
+│       └── tools.rs                        # Workflow tool definitions for AI agents
+├── scripts/
+│   └── install.sh                          # Idempotent Linux installer & lifecycle manager
+├── docs/                                   # Beta documentation & operational guides
+└── tests/                                  # Automated unit, integration, and security tests
 ```
 
 ---
 
-## 🛠️ Prerequisites
+## ⚡ Quickstart (Linux VPS)
 
-To build and run this Rust project, Rust and Cargo must be installed on your system.
+### 1. Requirements
+- **OS**: Ubuntu 24.04 LTS (x86_64) or Debian 12
+- **Runtime**: Docker Engine >= 24.0
+- **Privilege**: Root access (via `sudo`)
 
-### Installing Rust via `rustup` on Windows:
+### 2. Installation
+Unpack the verified release archive and run the installer:
 
-1. **Option A (winget)**:
-   ```powershell
-   winget install Rustlang.Rustup
-   ```
+```bash
+# Extract release bundle
+tar -xzf smoooth-v0.1.0-linux-x86_64.tar.gz
+cd smoooth-v0.1.0-linux-x86_64
 
-2. **Option B (Official Installer)**:
-   Download and run `rustup-init.exe` from [rustup.rs](https://rustup.rs).
+# Verify cryptographic SHA-256 integrity
+sha256sum -c SHA256SUMS
 
-After installation, ensure `%USERPROFILE%\.cargo\bin` is added to your environment `PATH` and reopen your terminal.
+# Run idempotent installer
+sudo ./install.sh --show-token
+```
+
+### 3. Verify Health
+```bash
+smoooth doctor
+systemctl status smoooth.service
+```
 
 ---
 
-## 🚀 Running the Project
+## 🔒 Security Model
 
-Once Rust is installed:
+1. **Private by Default**: Binds to `127.0.0.1:4040`. Zero unauthenticated network exposure.
+2. **Cryptographic Tokens**: Every API and MCP request requires a 256-bit Bearer token.
+3. **Dedicated Service Account**: Runs under unprivileged user `smoooth:smoooth`.
+4. **Systemd Sandboxing**: Confined via `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`.
+5. **Role-Based Scopes**:
+   - `read_only`: System inspection and status monitoring.
+   - `plan`: Dry-run planning and specification validation.
+   - `deploy`: Deployment execution and service binding.
+   - `admin`: Credential management and daemon administration.
 
-```powershell
-# Build the project
-cargo build
+---
 
-# Run the CLI demo
-cargo run
+## 🤖 Agent Setup
 
-# List registered MCP tools
-cargo run -- tools
-
-# List supported infrastructure capabilities
-cargo run -- capabilities
+### Pair an Agent
+```bash
+smoooth agent pair --name "my-agent" --workspace "default" --scopes "read_only,plan,deploy"
 ```
+
+### Configure Claude Code CLI
+```bash
+claude mcp add --transport sse smoooth http://127.0.0.1:4040/sse \
+  --header "Authorization: Bearer <AGENT_TOKEN>"
+```
+
+### Configure Cursor (`.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "smoooth": {
+      "url": "http://127.0.0.1:4040/sse",
+      "headers": {
+        "Authorization": "Bearer <AGENT_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+---
+
+## 📊 Control Dashboard
+
+Access the embedded dashboard via local browser or SSH tunnel:
+
+```bash
+# Remote access via SSH tunnel:
+ssh -L 4040:127.0.0.1:4040 user@your-vps-ip
+
+# Open in browser:
+http://127.0.0.1:4040/dashboard
+```
+
+Features:
+- Live container and database status overview.
+- Full step-by-step operation history and error inspection modal (`/api/operations`).
+- Interactive Agent Quickstart configuration generator.
+- One-click token clearance and agent credential management.
+- Real-time audit log stream.
+
+---
+
+## 📄 Documentation
+
+- [Beta Readiness & Distribution Specification](docs/beta_readiness.md)
+- [Agent Onboarding & Deployment Scenarios Guide](docs/onboarding_guide.md)
+- [Linux Installation & Operations Guide](docs/installation.md)
+- [External Agent Integration Guide](docs/agent_integration.md)
+
+---
+
+## 📜 License
+
+Apache-2.0 / MIT © Smoooth Project Contributors.

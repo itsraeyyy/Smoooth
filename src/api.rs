@@ -503,10 +503,16 @@ async fn approve_plan_handler(
 }
 
 /// List Operations Handler
-async fn list_operations_handler(State(_state): State<AppState>) -> impl IntoResponse {
-    // For beta dashboard, return summary operations list
+async fn list_operations_handler(
+    State(state): State<AppState>,
+    Query(query): Query<StatusQuery>,
+) -> impl IntoResponse {
+    let ops = state
+        .orchestrator
+        .list_operations(query.workspace.as_deref())
+        .await;
     Json(serde_json::json!({
-        "operations": []
+        "operations": ops
     }))
 }
 
