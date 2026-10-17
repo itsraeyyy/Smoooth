@@ -132,20 +132,68 @@ impl Storage for LocalStorage {
     }
 
     async fn get_agent(&self, id: &str) -> Result<Option<AgentIdentity>> {
-        let state = self.state.read().await;
-        Ok(state.agents.get(id).cloned())
+        {
+            let state = self.state.read().await;
+            if let Some(agent) = state.agents.get(id) {
+                return Ok(Some(agent.clone()));
+            }
+        }
+        if let Some(path) = &self.snapshot_path {
+            if path.exists() {
+                if let Ok(data) = tokio::fs::read_to_string(path).await {
+                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
+                        let mut state = self.state.write().await;
+                        for (k, v) in disk_snapshot.agents {
+                            state.agents.insert(k, v);
+                        }
+                        return Ok(state.agents.get(id).cloned());
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     async fn get_agent_by_token_hash(&self, token_hash: &str) -> Result<Option<AgentIdentity>> {
-        let state = self.state.read().await;
-        Ok(state
-            .agents
-            .values()
-            .find(|a| a.token_hash == token_hash)
-            .cloned())
+        {
+            let state = self.state.read().await;
+            if let Some(agent) = state.agents.values().find(|a| a.token_hash == token_hash) {
+                return Ok(Some(agent.clone()));
+            }
+        }
+        if let Some(path) = &self.snapshot_path {
+            if path.exists() {
+                if let Ok(data) = tokio::fs::read_to_string(path).await {
+                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
+                        let mut state = self.state.write().await;
+                        for (k, v) in disk_snapshot.agents {
+                            state.agents.insert(k, v);
+                        }
+                        return Ok(state
+                            .agents
+                            .values()
+                            .find(|a| a.token_hash == token_hash)
+                            .cloned());
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>> {
+        if let Some(path) = &self.snapshot_path {
+            if path.exists() {
+                if let Ok(data) = tokio::fs::read_to_string(path).await {
+                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
+                        let mut state = self.state.write().await;
+                        for (k, v) in disk_snapshot.agents {
+                            state.agents.insert(k, v);
+                        }
+                    }
+                }
+            }
+        }
         let state = self.state.read().await;
         let list: Vec<AgentIdentity> = state
             .agents

@@ -119,6 +119,7 @@ impl ProviderAdapter for RedisAdapter {
     ) -> Result<Resource> {
         let password = config
             .get("password")
+            .or_else(|| config.get("require_pass"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 

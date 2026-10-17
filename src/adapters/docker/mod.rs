@@ -197,6 +197,12 @@ impl ProviderAdapter for DockerAdapter {
                 }
             }
         }
+        if port_bindings.is_empty() {
+            if let Some(h_port) = config.get("port").and_then(|v| v.as_u64()) {
+                let c_port = if image.contains("nginx") || image.contains("http") { 80 } else { h_port as u16 };
+                port_bindings.insert(c_port, h_port as u16);
+            }
+        }
 
         // 5. Configure environment variables
         let mut env = Vec::new();
