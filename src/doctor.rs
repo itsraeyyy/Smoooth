@@ -37,7 +37,10 @@ impl Doctor {
                 category: "Platform".to_string(),
                 name: "CPU Architecture".to_string(),
                 status: "pass".to_string(),
-                message: format!("Verified architecture: {} (AMD64 / x86_64 verified baseline)", arch),
+                message: format!(
+                    "Verified architecture: {} (AMD64 / x86_64 verified baseline)",
+                    arch
+                ),
                 recommendation: None,
             });
         } else if arch == "aarch64" {
@@ -45,8 +48,13 @@ impl Doctor {
                 category: "Platform".to_string(),
                 name: "CPU Architecture".to_string(),
                 status: "warn".to_string(),
-                message: format!("Architecture {} (ARM64) is experimental; official baseline is x86_64", arch),
-                recommendation: Some("Verify Docker images specify multi-arch or linux/arm64 tags.".to_string()),
+                message: format!(
+                    "Architecture {} (ARM64) is experimental; official baseline is x86_64",
+                    arch
+                ),
+                recommendation: Some(
+                    "Verify Docker images specify multi-arch or linux/arm64 tags.".to_string(),
+                ),
             });
         } else {
             checks.push(DoctorCheck {
@@ -54,7 +62,10 @@ impl Doctor {
                 name: "CPU Architecture".to_string(),
                 status: "fail".to_string(),
                 message: format!("Unsupported CPU architecture: {}", arch),
-                recommendation: Some("Smoooth requires x86_64 (or aarch64 experimental) host Linux environment.".to_string()),
+                recommendation: Some(
+                    "Smoooth requires x86_64 (or aarch64 experimental) host Linux environment."
+                        .to_string(),
+                ),
             });
         }
 
@@ -74,7 +85,7 @@ impl Doctor {
                     category: "Platform".to_string(),
                     name: "Operating System".to_string(),
                     status: "pass".to_string(),
-                    message: format!("Compatible Debian-family Linux detected."),
+                    message: "Compatible Debian-family Linux detected.".to_string(),
                     recommendation: None,
                 });
             } else {
@@ -82,8 +93,10 @@ impl Doctor {
                     category: "Platform".to_string(),
                     name: "Operating System".to_string(),
                     status: "warn".to_string(),
-                    message: format!("Linux distribution detected. Official verified target is Ubuntu 24.04."),
-                    recommendation: Some("Ensure standard systemd and Docker packages are installed.".to_string()),
+                    message: "Linux distribution detected. Official verified target is Ubuntu 24.04.".to_string(),
+                    recommendation: Some(
+                        "Ensure standard systemd and Docker packages are installed.".to_string(),
+                    ),
                 });
             }
         } else {
@@ -91,8 +104,14 @@ impl Doctor {
                 category: "Platform".to_string(),
                 name: "Operating System".to_string(),
                 status: "warn".to_string(),
-                message: format!("Host OS is '{}'. Production target is Linux VPS (Ubuntu 24.04).", os),
-                recommendation: Some("Local development mode active. Production deployments require Linux VPS.".to_string()),
+                message: format!(
+                    "Host OS is '{}'. Production target is Linux VPS (Ubuntu 24.04).",
+                    os
+                ),
+                recommendation: Some(
+                    "Local development mode active. Production deployments require Linux VPS."
+                        .to_string(),
+                ),
             });
         }
 
@@ -105,7 +124,8 @@ impl Doctor {
                         category: "Container Runtime".to_string(),
                         name: "Docker Engine Daemon".to_string(),
                         status: "pass".to_string(),
-                        message: "Docker daemon connection active and responsive via local socket.".to_string(),
+                        message: "Docker daemon connection active and responsive via local socket."
+                            .to_string(),
                         recommendation: None,
                     });
                     checks.push(DoctorCheck {
@@ -132,7 +152,9 @@ impl Doctor {
                     name: "Docker Engine Connection".to_string(),
                     status: "fail".to_string(),
                     message: format!("Could not initialize Docker client: {}", e),
-                    recommendation: Some("Verify Docker socket is available at /var/run/docker.sock".to_string()),
+                    recommendation: Some(
+                        "Verify Docker socket is available at /var/run/docker.sock".to_string(),
+                    ),
                 });
             }
         }
@@ -156,8 +178,14 @@ impl Doctor {
                     category: "Networking".to_string(),
                     name: "Daemon Port Availability".to_string(),
                     status: "warn".to_string(),
-                    message: format!("Port {} on {} is currently bound (active daemon or conflicting service).", port, bind_addr),
-                    recommendation: Some(format!("Check running services with: `ss -tlpn | grep {}` or `smoooth status`", port)),
+                    message: format!(
+                        "Port {} on {} is currently bound (active daemon or conflicting service).",
+                        port, bind_addr
+                    ),
+                    recommendation: Some(format!(
+                        "Check running services with: `ss -tlpn | grep {}` or `smoooth status`",
+                        port
+                    )),
                 });
             }
         }
@@ -165,7 +193,11 @@ impl Doctor {
         // 5. Storage & Persistence Check
         let state_path = Path::new(storage_path);
         let parent_dir = state_path.parent().unwrap_or(Path::new("."));
-        let parent_path = if parent_dir.as_os_str().is_empty() { Path::new(".") } else { parent_dir };
+        let parent_path = if parent_dir.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            parent_dir
+        };
 
         if let Ok(metadata) = std::fs::metadata(parent_path) {
             if metadata.permissions().readonly() {
@@ -209,7 +241,9 @@ impl Doctor {
                                 category: "Security".to_string(),
                                 name: "Token File Permissions".to_string(),
                                 status: "pass".to_string(),
-                                message: "Auth token file permissions verified as 0600 (owner-only).".to_string(),
+                                message:
+                                    "Auth token file permissions verified as 0600 (owner-only)."
+                                        .to_string(),
                                 recommendation: None,
                             });
                         } else {
@@ -217,8 +251,14 @@ impl Doctor {
                                 category: "Security".to_string(),
                                 name: "Token File Permissions".to_string(),
                                 status: "fail".to_string(),
-                                message: format!("Auth token file mode is 0{:o}; expected 0600.", mode),
-                                recommendation: Some("Secure token file: `sudo chmod 0600 /etc/smoooth/auth.token`".to_string()),
+                                message: format!(
+                                    "Auth token file mode is 0{:o}; expected 0600.",
+                                    mode
+                                ),
+                                recommendation: Some(
+                                    "Secure token file: `sudo chmod 0600 /etc/smoooth/auth.token`"
+                                        .to_string(),
+                                ),
                             });
                         }
                     }

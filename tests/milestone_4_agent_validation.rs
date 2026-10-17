@@ -1,16 +1,16 @@
+use chrono::Utc;
+use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-use chrono::Utc;
-use serde_json::json;
 
 use smoooth::adapters::docker::DockerAdapter;
 use smoooth::adapters::postgres::PostgresAdapter;
 use smoooth::engine::Orchestrator;
 use smoooth::mcp::server::{JsonRpcRequest, McpServer};
 use smoooth::models::{
-    CanonicalActionSpec, CanonicalExecutionSpec, IdempotencyKey, IdempotencyRecord,
-    Plan, PolicyConstraints, Resource, ResourceStatus, RiskTier, ServiceBinding,
+    CanonicalActionSpec, CanonicalExecutionSpec, IdempotencyKey, IdempotencyRecord, Plan,
+    PolicyConstraints, Resource, ResourceStatus, RiskTier, ServiceBinding,
 };
 use smoooth::storage::{LocalStorage, Storage};
 
@@ -46,8 +46,13 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         })),
     };
     let resp = mcp.handle_request(req).await.unwrap();
-    assert!(!resp.result.as_ref().unwrap()["isError"].as_bool().unwrap_or(true));
-    let caps_text = resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(!resp.result.as_ref().unwrap()["isError"]
+        .as_bool()
+        .unwrap_or(true));
+    let caps_text = resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(caps_text.contains("cap_docker_container"));
     assert!(caps_text.contains("cap_postgres_db"));
     println!(">>> Capabilities discovered: Docker & PostgreSQL available.");
@@ -99,8 +104,11 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let plan_resp = mcp.handle_request(plan_req).await.unwrap();
     let plan_data: serde_json::Value = serde_json::from_str(
-        plan_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        plan_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     let plan_id = plan_data["plan_id"].as_str().unwrap().to_string();
     let plan_hash = plan_data["plan_hash"].as_str().unwrap().to_string();
     assert!(plan_data["requires_approval"].as_bool().unwrap());
@@ -119,8 +127,11 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let get_plan_resp = mcp.handle_request(get_plan_req).await.unwrap();
     let plan_details: serde_json::Value = serde_json::from_str(
-        get_plan_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        get_plan_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(plan_details["plan_hash"], plan_hash);
     assert_eq!(plan_details["risk_tier"], "moderate");
     println!(">>> Plan details verified. Risk tier: moderate, requires approval: true.");
@@ -143,8 +154,11 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let approve_resp = mcp.handle_request(approve_req).await.unwrap();
     let approve_res: serde_json::Value = serde_json::from_str(
-        approve_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        approve_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert!(approve_res["success"].as_bool().unwrap());
     println!(">>> Plan approved by '{}'.", approve_res["approved_by"]);
 
@@ -164,8 +178,11 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let exec_resp = mcp.handle_request(exec_req).await.unwrap();
     let exec_data: serde_json::Value = serde_json::from_str(
-        exec_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        exec_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     let op_id = exec_data["operation_id"].as_str().unwrap().to_string();
     assert_eq!(exec_data["lease_epoch"], 1);
     println!(">>> Plan execution initiated. Operation ID: {}", op_id);
@@ -227,13 +244,22 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let bind_resp = mcp.handle_request(bind_req).await.unwrap();
     let bind_data: serde_json::Value = serde_json::from_str(
-        bind_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        bind_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     let masked = bind_data["masked_connection_string"].as_str().unwrap();
-    assert!(masked.contains("***") || masked.contains("[REDACTED]"), "Raw password must be masked");
+    assert!(
+        masked.contains("***") || masked.contains("[REDACTED]"),
+        "Raw password must be masked"
+    );
     assert!(!masked.contains(db_pass), "Plaintext secret must not leak");
     assert!(bind_data["encrypted_at_rest"].as_bool().unwrap());
-    println!(">>> ServiceBinding created: {} (AES-256-GCM encrypted).", masked);
+    println!(
+        ">>> ServiceBinding created: {} (AES-256-GCM encrypted).",
+        masked
+    );
 
     // Step 8 & 9: Agent verifies HTTP health and connection evidence
     println!("\n[Agent Journey 8-9/12] Verifying health and active probe evidence...");
@@ -249,24 +275,43 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         })),
     };
     let verify_resp = mcp.handle_request(verify_req).await.unwrap();
-    let is_verify_err = verify_resp.result.as_ref()
+    let is_verify_err = verify_resp
+        .result
+        .as_ref()
         .and_then(|r| r.get("isError"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
     if is_verify_err {
-        let err_text = verify_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let err_text = verify_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         println!(">>> Host environment Docker probe response: {}", err_text);
-        assert!(err_text.contains("Docker") || err_text.contains("failed") || err_text.contains("Error"));
+        assert!(
+            err_text.contains("Docker")
+                || err_text.contains("failed")
+                || err_text.contains("Error")
+        );
     } else {
         let verify_data: serde_json::Value = serde_json::from_str(
-            verify_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-        ).unwrap();
+            verify_resp.result.unwrap()["content"][0]["text"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
         eprintln!("DEBUG VERIFY_DATA: {}", verify_data);
         if verify_data.get("is_healthy").and_then(|v| v.as_bool()) == Some(true) {
-            println!(">>> Active probe verified: is_healthy = true, latency = {:?}ms", verify_data.get("latency_ms"));
+            println!(
+                ">>> Active probe verified: is_healthy = true, latency = {:?}ms",
+                verify_data.get("latency_ms")
+            );
         } else {
-            let msg = verify_data.get("evidence").or_else(|| verify_data.get("message")).and_then(|v| v.as_str()).unwrap_or("");
+            let msg = verify_data
+                .get("evidence")
+                .or_else(|| verify_data.get("message"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             eprintln!("DEBUG MSG: {}", msg);
             assert_eq!(verify_data["is_healthy"], false);
         }
@@ -286,18 +331,26 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         })),
     };
     let rec_resp = mcp.handle_request(rec_req).await.unwrap();
-    let is_rec_err = rec_resp.result.as_ref()
+    let is_rec_err = rec_resp
+        .result
+        .as_ref()
         .and_then(|r| r.get("isError"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
     if is_rec_err {
-        let err_text = rec_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let err_text = rec_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         println!(">>> Host environment reconciliation response: {}", err_text);
     } else {
         let rec_data: serde_json::Value = serde_json::from_str(
-            rec_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-        ).unwrap();
+            rec_resp.result.unwrap()["content"][0]["text"]
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
         println!(">>> Reconciliation result: {}", rec_data["message"]);
     }
 
@@ -316,10 +369,16 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     let list_resp = mcp.handle_request(list_req).await.unwrap();
     let list_data: serde_json::Value = serde_json::from_str(
-        list_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        list_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(list_data["workspace_id"], workspace);
-    println!(">>> Final deployed state confirmed. Workspace: {}", workspace);
+    println!(
+        ">>> Final deployed state confirmed. Workspace: {}",
+        workspace
+    );
 
     // =========================================================================
     // SECTION 2: The 8 Realistic Failure Scenarios
@@ -359,7 +418,9 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     );
     // Approve with -10 second TTL (already expired)
     exp_plan.approve_with_ttl("operator".to_string(), -10);
-    let exp_res = orch_ref.execute_plan(exp_plan, "idemp_exp_key".to_string()).await;
+    let exp_res = orch_ref
+        .execute_plan(exp_plan, "idemp_exp_key".to_string())
+        .await;
     assert!(exp_res.is_err(), "Expired approval must be rejected");
     let err_msg = exp_res.err().unwrap().to_string();
     assert!(err_msg.contains("expired") || err_msg.contains("Approval has expired"));
@@ -395,9 +456,12 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         Some(10.0),
     );
     // Bind approval to a dummy hash
-    tampered_plan.approved_plan_hash = Some("sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string());
+    tampered_plan.approved_plan_hash =
+        Some("sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string());
     tampered_plan.approved_by = Some("operator".to_string());
-    let tamper_res = orch_ref.execute_plan(tampered_plan, "idemp_tamper_key".to_string()).await;
+    let tamper_res = orch_ref
+        .execute_plan(tampered_plan, "idemp_tamper_key".to_string())
+        .await;
     assert!(tamper_res.is_err(), "Tampered plan must be rejected");
     let tamper_err = tamper_res.err().unwrap().to_string();
     assert!(tamper_err.contains("Plan hash mismatch") || tamper_err.contains("PolicyViolation"));
@@ -434,14 +498,23 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     );
     let mut approved_dest_plan = destructive_plan;
     approved_dest_plan.approve("operator".to_string());
-    let dest_res = orch_ref.execute_plan(approved_dest_plan, "idemp_dest_key".to_string()).await.unwrap();
+    let dest_res = orch_ref
+        .execute_plan(approved_dest_plan, "idemp_dest_key".to_string())
+        .await
+        .unwrap();
     // Verify operation failed due to data safety guard
     let _op_status = orch_ref.get_operation(&dest_res.id).await.unwrap();
     // Wait momentarily for async task
     sleep(Duration::from_millis(50)).await;
     let final_dest_op = orch_ref.get_operation(&dest_res.id).await.unwrap();
-    assert_eq!(final_dest_op.status, smoooth::models::OperationStatus::Failed);
-    assert!(final_dest_op.error_message.unwrap().contains("Data safety guard blocked deletion of persistent resource"));
+    assert_eq!(
+        final_dest_op.status,
+        smoooth::models::OperationStatus::Failed
+    );
+    assert!(final_dest_op
+        .error_message
+        .unwrap()
+        .contains("Data safety guard blocked deletion of persistent resource"));
     println!(">>> Destructive deletion correctly blocked by data safety guard.");
 
     // Failure Scenario 4: Cross-Workspace Boundary Violation
@@ -477,10 +550,18 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         })),
     };
     let cross_resp = mcp.handle_request(cross_ws_req).await.unwrap();
-    assert!(cross_resp.result.as_ref().unwrap()["isError"].as_bool().unwrap());
-    let cross_err = cross_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(cross_resp.result.as_ref().unwrap()["isError"]
+        .as_bool()
+        .unwrap());
+    let cross_err = cross_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(cross_err.contains("Workspace mismatch") || cross_err.contains("boundary violation"));
-    println!(">>> Cross-workspace boundary violation rejected: {}", cross_err);
+    println!(
+        ">>> Cross-workspace boundary violation rejected: {}",
+        cross_err
+    );
 
     // Failure Scenario 5: Idempotency Key Reuse with Mismatched Request Hash
     println!("\n[Scenario 5/8] Idempotency Key Reuse Mismatch Rejection...");
@@ -489,12 +570,15 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
         operation_type: "execute_plan".to_string(),
         client_key: "shared_client_idemp_key_123".to_string(),
     };
-    storage.record_idempotency(IdempotencyRecord {
-        key: idemp_key.clone(),
-        request_hash: "hash_original_AAA".to_string(),
-        operation_id: "op_original_001".to_string(),
-        created_at: Utc::now(),
-    }).await.unwrap();
+    storage
+        .record_idempotency(IdempotencyRecord {
+            key: idemp_key.clone(),
+            request_hash: "hash_original_AAA".to_string(),
+            operation_id: "op_original_001".to_string(),
+            created_at: Utc::now(),
+        })
+        .await
+        .unwrap();
 
     let conflict_record = IdempotencyRecord {
         key: idemp_key,
@@ -505,7 +589,9 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     let idemp_res = storage.check_or_record_idempotency(conflict_record).await;
     assert!(idemp_res.is_err(), "Idempotency conflict must return error");
     let idemp_err = idemp_res.err().unwrap().to_string();
-    assert!(idemp_err.contains("IdempotencyConflict") || idemp_err.contains("mismatched request hash"));
+    assert!(
+        idemp_err.contains("IdempotencyConflict") || idemp_err.contains("mismatched request hash")
+    );
     println!(">>> Idempotency payload mismatch rejected: {}", idemp_err);
 
     // Failure Scenario 6: Stale Worker Lease Preemption
@@ -539,7 +625,10 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     );
     lease_plan.approved_plan_hash = Some(lease_plan.plan_hash.clone());
 
-    let mut lease_op = orch_ref.execute_plan_sync(lease_plan, "idemp_lease_test".to_string()).await.unwrap();
+    let mut lease_op = orch_ref
+        .execute_plan_sync(lease_plan, "idemp_lease_test".to_string())
+        .await
+        .unwrap();
     // Simulate new worker preemption: increment lease epoch in durable storage
     lease_op.lease_epoch += 1;
     storage.save_operation(lease_op.clone()).await.unwrap();
@@ -547,7 +636,10 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     // Verify stale execution is preempted
     let current_op = storage.get_operation(&lease_op.id).await.unwrap().unwrap();
     assert_eq!(current_op.lease_epoch, 2);
-    println!(">>> Worker lease preemption verified (fencing epoch incremented to {}).", current_op.lease_epoch);
+    println!(
+        ">>> Worker lease preemption verified (fencing epoch incremented to {}).",
+        current_op.lease_epoch
+    );
 
     // Failure Scenario 7: Bounded Recovery Halts Infinite Crash Loops
     println!("\n[Scenario 7/8] Bounded Recovery Stopping Infinite Crash Loops...");
@@ -569,15 +661,24 @@ async fn test_milestone_4_agent_journey_and_all_failure_scenarios() {
     };
     storage.save_resource(looping_res.clone()).await.unwrap();
 
-    let bounded_outcome = orch_ref.reconcile_resource("looping_broken_app").await.unwrap();
+    let bounded_outcome = orch_ref
+        .reconcile_resource("looping_broken_app")
+        .await
+        .unwrap();
     assert_eq!(bounded_outcome.intended_status, ResourceStatus::Degraded);
     assert!(!bounded_outcome.drift_corrected);
-    assert!(bounded_outcome.message.contains("Bounded recovery limit reached"));
-    println!(">>> Infinite crash loop prevented: {}", bounded_outcome.message);
+    assert!(bounded_outcome
+        .message
+        .contains("Bounded recovery limit reached"));
+    println!(
+        ">>> Infinite crash loop prevented: {}",
+        bounded_outcome.message
+    );
 
     // Failure Scenario 8: Secret Redaction Verification Across Output Surfaces
     println!("\n[Scenario 8/8] Secret Redaction Across Serialized Output Surfaces...");
-    let secret_raw = "postgresql://agent_user:super_secret_password_never_leak_12345@10.0.1.5:5432/appdb";
+    let secret_raw =
+        "postgresql://agent_user:super_secret_password_never_leak_12345@10.0.1.5:5432/appdb";
     let masked_conn = ServiceBinding::mask_connection_string(secret_raw);
     assert!(!masked_conn.contains("super_secret_password_never_leak_12345"));
     assert!(masked_conn.contains("[REDACTED]") || masked_conn.contains("***"));

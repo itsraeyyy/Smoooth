@@ -117,8 +117,16 @@ async fn test_plan_approval_binding_and_expiry() {
         },
     };
 
-    let mut plan = Plan::new("plan-approval-test".to_string(), spec.clone(), RiskTier::High, None);
-    assert!(!plan.is_approval_valid(), "Unapproved high risk plan must not be valid");
+    let mut plan = Plan::new(
+        "plan-approval-test".to_string(),
+        spec.clone(),
+        RiskTier::High,
+        None,
+    );
+    assert!(
+        !plan.is_approval_valid(),
+        "Unapproved high risk plan must not be valid"
+    );
 
     // Approve with standard 1 hour TTL
     plan.approve("lead_architect".to_string());
@@ -127,17 +135,31 @@ async fn test_plan_approval_binding_and_expiry() {
     // Test 1: Modified target environment invalidates approval
     let mut modified_env_plan = plan.clone();
     modified_env_plan.spec.environment = "staging".to_string();
-    assert!(!modified_env_plan.is_approval_valid(), "Approval must not be valid if environment changed");
+    assert!(
+        !modified_env_plan.is_approval_valid(),
+        "Approval must not be valid if environment changed"
+    );
 
     // Test 2: Modified workspace invalidates approval
     let mut modified_ws_plan = plan.clone();
     modified_ws_plan.spec.workspace_id = "ws-other".to_string();
-    assert!(!modified_ws_plan.is_approval_valid(), "Approval must not be valid if workspace changed");
+    assert!(
+        !modified_ws_plan.is_approval_valid(),
+        "Approval must not be valid if workspace changed"
+    );
 
     // Test 3: Expired approval is rejected
-    let mut expired_plan = Plan::new("plan-expired-test".to_string(), spec.clone(), RiskTier::High, None);
+    let mut expired_plan = Plan::new(
+        "plan-expired-test".to_string(),
+        spec.clone(),
+        RiskTier::High,
+        None,
+    );
     expired_plan.approve_with_ttl("lead_architect".to_string(), -10); // Expired 10 seconds ago
-    assert!(!expired_plan.is_approval_valid(), "Expired approval must be rejected");
+    assert!(
+        !expired_plan.is_approval_valid(),
+        "Expired approval must be rejected"
+    );
     assert_eq!(
         expired_plan.approval_rejection_reason(),
         Some("Approval has expired")
@@ -148,7 +170,10 @@ async fn test_plan_approval_binding_and_expiry() {
 async fn test_secret_leak_scanner_across_serialized_surfaces() {
     let secret_password = "super_classified_pg_password_999!";
     let secret_store = smoooth::security::SecretStore::default_local();
-    let raw_conn = format!("postgresql://app_user:{}@smoooth-postgres:5432/app_db", secret_password);
+    let raw_conn = format!(
+        "postgresql://app_user:{}@smoooth-postgres:5432/app_db",
+        secret_password
+    );
 
     // Create binding with encrypted credentials
     let binding = ServiceBinding::new_with_secret(
@@ -159,7 +184,8 @@ async fn test_secret_leak_scanner_across_serialized_surfaces() {
         raw_conn.as_bytes(),
         &secret_store,
         vec!["DATABASE_URL".to_string()],
-    ).unwrap();
+    )
+    .unwrap();
 
     // 1. Scan JSON serialization of ServiceBinding
     let serialized_binding = serde_json::to_string(&binding).unwrap();
@@ -201,13 +227,26 @@ impl smoooth::adapters::ProviderAdapter for MockCrashAdapter {
     fn supported_capabilities(&self) -> Vec<smoooth::models::Capability> {
         vec![]
     }
-    async fn provision(&self, _name: &str, _config: &serde_json::Value, _is_persistent: bool) -> smoooth::error::Result<smoooth::models::Resource> {
-        Err(smoooth::error::SmooothError::ExecutionFailed("Simulated container crash".to_string()))
+    async fn provision(
+        &self,
+        _name: &str,
+        _config: &serde_json::Value,
+        _is_persistent: bool,
+    ) -> smoooth::error::Result<smoooth::models::Resource> {
+        Err(smoooth::error::SmooothError::ExecutionFailed(
+            "Simulated container crash".to_string(),
+        ))
     }
-    async fn inspect(&self, _resource_id: &str) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+    async fn inspect(
+        &self,
+        _resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
         Ok(smoooth::models::ResourceStatus::Stopped)
     }
-    async fn health_check(&self, _resource_id: &str) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
+    async fn health_check(
+        &self,
+        _resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
         Ok(smoooth::adapters::HealthEvidence {
             is_healthy: false,
             latency_ms: None,
@@ -215,10 +254,18 @@ impl smoooth::adapters::ProviderAdapter for MockCrashAdapter {
             details: serde_json::json!({}),
         })
     }
-    async fn reconcile(&self, _resource_id: &str, _intended_config: &serde_json::Value) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+    async fn reconcile(
+        &self,
+        _resource_id: &str,
+        _intended_config: &serde_json::Value,
+    ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
         Ok(smoooth::models::ResourceStatus::Stopped)
     }
-    async fn destroy(&self, _resource_id: &str, _preserve_persistent_data: bool) -> smoooth::error::Result<()> {
+    async fn destroy(
+        &self,
+        _resource_id: &str,
+        _preserve_persistent_data: bool,
+    ) -> smoooth::error::Result<()> {
         Ok(())
     }
 }
@@ -251,8 +298,14 @@ async fn test_bounded_reconciliation_stops_infinite_loops() {
 
     // Reconcile resource should refuse to restart and mark Degraded
     let outcome = orchestrator.reconcile_resource(resource_id).await.unwrap();
-    assert!(!outcome.drift_corrected, "Must NOT attempt further restart when bound is hit");
-    assert_eq!(outcome.intended_status, smoooth::models::ResourceStatus::Degraded);
+    assert!(
+        !outcome.drift_corrected,
+        "Must NOT attempt further restart when bound is hit"
+    );
+    assert_eq!(
+        outcome.intended_status,
+        smoooth::models::ResourceStatus::Degraded
+    );
     assert!(outcome.message.contains("Bounded recovery limit reached"));
 
     // Verify stored resource status was transitioned to Degraded
@@ -289,12 +342,23 @@ async fn test_data_safety_guard_blocks_destructive_deletion() {
         },
     };
 
-    let mut plan = Plan::new("plan-delete-safety".to_string(), spec, RiskTier::Critical, None);
+    let mut plan = Plan::new(
+        "plan-delete-safety".to_string(),
+        spec,
+        RiskTier::Critical,
+        None,
+    );
     plan.approve("admin".to_string());
 
-    let op = orchestrator.execute_plan_sync(plan, "key-safety-01".to_string()).await.unwrap();
+    let op = orchestrator
+        .execute_plan_sync(plan, "key-safety-01".to_string())
+        .await
+        .unwrap();
     assert_eq!(op.status, smoooth::models::OperationStatus::Failed);
-    assert!(op.error_message.unwrap().contains("Data safety guard blocked deletion of persistent resource"));
+    assert!(op
+        .error_message
+        .unwrap()
+        .contains("Data safety guard blocked deletion of persistent resource"));
 }
 
 #[tokio::test]
@@ -380,10 +444,16 @@ impl smoooth::adapters::ProviderAdapter for MockPreemptionAdapter {
             updated_at: chrono::Utc::now(),
         })
     }
-    async fn inspect(&self, _resource_id: &str) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+    async fn inspect(
+        &self,
+        _resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
         Ok(smoooth::models::ResourceStatus::Active)
     }
-    async fn health_check(&self, resource_id: &str) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
+    async fn health_check(
+        &self,
+        resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
         Ok(smoooth::adapters::HealthEvidence {
             is_healthy: true,
             latency_ms: Some(1),
@@ -391,10 +461,18 @@ impl smoooth::adapters::ProviderAdapter for MockPreemptionAdapter {
             details: serde_json::json!({}),
         })
     }
-    async fn reconcile(&self, _resource_id: &str, _intended_config: &serde_json::Value) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+    async fn reconcile(
+        &self,
+        _resource_id: &str,
+        _intended_config: &serde_json::Value,
+    ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
         Ok(smoooth::models::ResourceStatus::Active)
     }
-    async fn destroy(&self, _resource_id: &str, _preserve_persistent_data: bool) -> smoooth::error::Result<()> {
+    async fn destroy(
+        &self,
+        _resource_id: &str,
+        _preserve_persistent_data: bool,
+    ) -> smoooth::error::Result<()> {
         Ok(())
     }
 }
@@ -446,14 +524,18 @@ async fn test_stale_worker_lease_preemption_halts_mutations() {
     // Worker executes plan synchronously.
     // res_step1 succeeds, but while executing, lease is bumped in storage to epoch 5.
     // Before executing res_step2, stale worker check fires and halts execution!
-    let res_op = orchestrator.execute_plan_sync(plan, "fencing-key-01".to_string()).await.unwrap();
+    let res_op = orchestrator
+        .execute_plan_sync(plan, "fencing-key-01".to_string())
+        .await
+        .unwrap();
     assert_eq!(res_op.status, smoooth::models::OperationStatus::Failed);
     assert!(res_op.error_message.unwrap().contains("Worker lease lost"));
 }
 
 #[tokio::test]
 async fn test_crash_consistent_atomic_snapshot_persistence() {
-    let temp_dir = std::env::temp_dir().join(format!("smoooth_test_{}", uuid::Uuid::new_v4().simple()));
+    let temp_dir =
+        std::env::temp_dir().join(format!("smoooth_test_{}", uuid::Uuid::new_v4().simple()));
     let _ = std::fs::create_dir_all(&temp_dir);
     let state_file = temp_dir.join("state.json");
 
@@ -481,13 +563,20 @@ async fn test_crash_consistent_atomic_snapshot_persistence() {
 
     // 2. Simulate daemon restart: new instance loads existing file
     let storage_restarted = LocalStorage::new_file_backed(&state_file);
-    let loaded = storage_restarted.get_resource("res-durable-01").await.unwrap().unwrap();
+    let loaded = storage_restarted
+        .get_resource("res-durable-01")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(loaded.name, "durable_app");
 
     // 3. Mutate to generate backup (.bak)
     let mut updated_resource = resource.clone();
     updated_resource.status = smoooth::models::ResourceStatus::Degraded;
-    storage_restarted.save_resource(updated_resource).await.unwrap();
+    storage_restarted
+        .save_resource(updated_resource)
+        .await
+        .unwrap();
     assert!(state_file.with_extension("bak").exists());
 
     // 4. Simulate corruption of primary file: write garbage to state.json
@@ -495,7 +584,11 @@ async fn test_crash_consistent_atomic_snapshot_persistence() {
 
     // 5. Restart must automatically fall back to .bak file and recover intact state
     let storage_recovered = LocalStorage::new_file_backed(&state_file);
-    let recovered = storage_recovered.get_resource("res-durable-01").await.unwrap().unwrap();
+    let recovered = storage_recovered
+        .get_resource("res-durable-01")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(recovered.id, "res-durable-01");
 
     // Cleanup
@@ -527,9 +620,18 @@ fn test_dag_topological_sort_resolves_out_of_order_actions() {
             make_action("db"),
         ],
         dependencies: vec![
-            DependencyEdge { from: "frontend".to_string(), to: "api".to_string() },
-            DependencyEdge { from: "worker".to_string(), to: "api".to_string() },
-            DependencyEdge { from: "api".to_string(), to: "db".to_string() },
+            DependencyEdge {
+                from: "frontend".to_string(),
+                to: "api".to_string(),
+            },
+            DependencyEdge {
+                from: "worker".to_string(),
+                to: "api".to_string(),
+            },
+            DependencyEdge {
+                from: "api".to_string(),
+                to: "db".to_string(),
+            },
         ],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
@@ -566,8 +668,14 @@ fn test_dag_cycle_rejection_and_error_reporting() {
         target_id: "node-1".to_string(),
         actions: vec![make_action("service_a"), make_action("service_b")],
         dependencies: vec![
-            DependencyEdge { from: "service_a".to_string(), to: "service_b".to_string() },
-            DependencyEdge { from: "service_b".to_string(), to: "service_a".to_string() },
+            DependencyEdge {
+                from: "service_a".to_string(),
+                to: "service_b".to_string(),
+            },
+            DependencyEdge {
+                from: "service_b".to_string(),
+                to: "service_a".to_string(),
+            },
         ],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
@@ -602,7 +710,10 @@ fn test_dag_missing_and_self_dependency_validation() {
         environment: "dev".to_string(),
         target_id: "node-1".to_string(),
         actions: vec![make_action("api")],
-        dependencies: vec![DependencyEdge { from: "api".to_string(), to: "ghost_database".to_string() }],
+        dependencies: vec![DependencyEdge {
+            from: "api".to_string(),
+            to: "ghost_database".to_string(),
+        }],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
             allow_public_network: false,
@@ -620,7 +731,10 @@ fn test_dag_missing_and_self_dependency_validation() {
         environment: "dev".to_string(),
         target_id: "node-1".to_string(),
         actions: vec![make_action("api")],
-        dependencies: vec![DependencyEdge { from: "api".to_string(), to: "api".to_string() }],
+        dependencies: vec![DependencyEdge {
+            from: "api".to_string(),
+            to: "api".to_string(),
+        }],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
             allow_public_network: false,
@@ -641,7 +755,9 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
     struct FailingAdapter;
     #[async_trait::async_trait]
     impl smoooth::adapters::ProviderAdapter for FailingAdapter {
-        fn provider_name(&self) -> &str { "mock_failing" }
+        fn provider_name(&self) -> &str {
+            "mock_failing"
+        }
         fn guarantees(&self) -> smoooth::adapters::AdapterGuarantees {
             smoooth::adapters::AdapterGuarantees {
                 provider_name: "mock_failing".to_string(),
@@ -652,8 +768,15 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
                 is_experimental: true,
             }
         }
-        fn supported_capabilities(&self) -> Vec<smoooth::models::Capability> { vec![] }
-        async fn provision(&self, name: &str, config: &serde_json::Value, is_persistent: bool) -> smoooth::error::Result<smoooth::models::Resource> {
+        fn supported_capabilities(&self) -> Vec<smoooth::models::Capability> {
+            vec![]
+        }
+        async fn provision(
+            &self,
+            name: &str,
+            config: &serde_json::Value,
+            is_persistent: bool,
+        ) -> smoooth::error::Result<smoooth::models::Resource> {
             Ok(smoooth::models::Resource {
                 id: format!("res_{}", name),
                 name: name.to_string(),
@@ -668,10 +791,16 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
                 updated_at: chrono::Utc::now(),
             })
         }
-        async fn inspect(&self, _id: &str) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+        async fn inspect(
+            &self,
+            _id: &str,
+        ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
             Ok(smoooth::models::ResourceStatus::Active)
         }
-        async fn health_check(&self, id: &str) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
+        async fn health_check(
+            &self,
+            id: &str,
+        ) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
             if id.contains("failing_db") {
                 Ok(smoooth::adapters::HealthEvidence {
                     is_healthy: false,
@@ -688,7 +817,11 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
                 })
             }
         }
-        async fn reconcile(&self, _id: &str, _c: &serde_json::Value) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+        async fn reconcile(
+            &self,
+            _id: &str,
+            _c: &serde_json::Value,
+        ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
             Ok(smoooth::models::ResourceStatus::Active)
         }
         async fn destroy(&self, _id: &str, _p: bool) -> smoooth::error::Result<()> {
@@ -723,9 +856,10 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
                 exposes_network_publicly: false,
             },
         ],
-        dependencies: vec![
-            DependencyEdge { from: "dependent_app".to_string(), to: "failing_db".to_string() },
-        ],
+        dependencies: vec![DependencyEdge {
+            from: "dependent_app".to_string(),
+            to: "failing_db".to_string(),
+        }],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
             allow_public_network: false,
@@ -735,14 +869,23 @@ async fn test_prerequisite_failure_halts_execution_and_protects_dependent() {
     };
 
     let plan = Plan::new("plan-prereq-fail".to_string(), spec, RiskTier::Low, None);
-    let op = orchestrator.execute_plan_sync(plan, "key-fail-001".to_string()).await.unwrap();
+    let op = orchestrator
+        .execute_plan_sync(plan, "key-fail-001".to_string())
+        .await
+        .unwrap();
 
     assert_eq!(op.status, smoooth::models::OperationStatus::Failed);
-    assert!(op.error_message.unwrap().contains("Health probe failed for failing_db"));
+    assert!(op
+        .error_message
+        .unwrap()
+        .contains("Health probe failed for failing_db"));
 
     // Critical assertion: dependent_app MUST NOT exist in storage!
     let dep_res = storage.get_resource("res_dependent_app").await.unwrap();
-    assert!(dep_res.is_none(), "Dependent resource must NEVER be created when prerequisite fails!");
+    assert!(
+        dep_res.is_none(),
+        "Dependent resource must NEVER be created when prerequisite fails!"
+    );
 }
 
 #[test]
@@ -772,4 +915,3 @@ fn test_health_spec_and_container_options_serde() {
     let json_live = serde_json::to_value(&liveness_spec).unwrap();
     assert_eq!(json_live["type"], "liveness");
 }
-

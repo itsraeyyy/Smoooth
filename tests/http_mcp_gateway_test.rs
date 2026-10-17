@@ -57,9 +57,7 @@ async fn http_request(
         .expect("Failed to read HTTP response bytes");
 
     let resp_str = String::from_utf8_lossy(&response_bytes).to_string();
-    let (header_part, body_part) = resp_str
-        .split_once("\r\n\r\n")
-        .unwrap_or((&resp_str, ""));
+    let (header_part, body_part) = resp_str.split_once("\r\n\r\n").unwrap_or((&resp_str, ""));
 
     let mut lines = header_part.lines();
     let status_line = lines.next().unwrap_or("");
@@ -84,7 +82,9 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
     let storage = Arc::new(LocalStorage::new_in_memory());
     let mut orchestrator = Orchestrator::new(storage.clone());
     let docker_adapter = Arc::new(DockerAdapter::new());
-    let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(docker_adapter.clone()));
+    let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(
+        docker_adapter.clone(),
+    ));
     orchestrator.register_adapter(docker_adapter);
     orchestrator.register_adapter(postgres_adapter);
     let orch_ref = Arc::new(orchestrator);
@@ -99,9 +99,7 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
     let server_addr = listener.local_addr().expect("Failed to get local addr");
 
     tokio::spawn(async move {
-        axum::serve(listener, app)
-            .await
-            .expect("Server failed");
+        axum::serve(listener, app).await.expect("Server failed");
     });
 
     // Give server a moment to spin up
@@ -133,21 +131,17 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
         );
 
         // Wrong token
-        let (status_bad_tok, _, _) = http_request(
-            server_addr,
-            "GET",
-            path,
-            Some("wrong_bearer_token"),
-            None,
-        )
-        .await;
+        let (status_bad_tok, _, _) =
+            http_request(server_addr, "GET", path, Some("wrong_bearer_token"), None).await;
         assert_eq!(
             status_bad_tok, 401,
             "Request to {} with invalid token must return 401 Unauthorized",
             path
         );
     }
-    println!(">>> Auth gate successfully rejected unauthenticated and invalid token requests with 401.");
+    println!(
+        ">>> Auth gate successfully rejected unauthenticated and invalid token requests with 401."
+    );
 
     // -------------------------------------------------------------------------
     // 3. Verify Remote MCP JSON-RPC over HTTP (`POST /mcp`)
@@ -210,7 +204,10 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
     assert!(tool_names.contains(&"create_service_binding"));
     assert!(tool_names.contains(&"verify_connection"));
     assert!(tool_names.contains(&"reconcile_resource"));
-    println!(">>> MCP tools/list verified: {} tools discoverable.", tools.len());
+    println!(
+        ">>> MCP tools/list verified: {} tools discoverable.",
+        tools.len()
+    );
 
     // 3c. Call list_capabilities
     let cap_call = serde_json::json!({
@@ -339,7 +336,9 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
     .await;
     assert_eq!(status, 200);
     let approve_resp: serde_json::Value = serde_json::from_str(&body).unwrap();
-    let approve_text = approve_resp["result"]["content"][0]["text"].as_str().unwrap();
+    let approve_text = approve_resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
     assert!(approve_text.contains("\"success\": true"));
     println!(">>> MCP approve_plan succeeded bound to exact canonical hash.");
 
@@ -394,7 +393,10 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
         "Must receive endpoint announcement with sessionId, got: {}",
         endpoint_msg
     );
-    println!(">>> SSE connection established. Registered Session ID: {}", session_id);
+    println!(
+        ">>> SSE connection established. Registered Session ID: {}",
+        session_id
+    );
 
     // Send JSON-RPC ping to /sse/message?sessionId=...
     let ping_payload = serde_json::json!({
@@ -414,7 +416,10 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
         Some(&ping_payload),
     )
     .await;
-    assert_eq!(msg_status, 202, "POST /sse/message must return 202 Accepted");
+    assert_eq!(
+        msg_status, 202,
+        "POST /sse/message must return 202 Accepted"
+    );
     assert!(msg_body.contains("\"status\":\"accepted\""));
 
     // Verify response delivered down the SSE stream
@@ -424,7 +429,10 @@ async fn test_authenticated_http_gateway_and_remote_mcp_workflow() {
         sse_reader.read_line(&mut sse_line).await.unwrap();
         if sse_line.starts_with("data: {") && sse_line.contains("\"id\":99") {
             received_sse_message = true;
-            println!(">>> Received JSON-RPC response over SSE stream: {}", sse_line.trim());
+            println!(
+                ">>> Received JSON-RPC response over SSE stream: {}",
+                sse_line.trim()
+            );
             break;
         }
     }

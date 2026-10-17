@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use bollard::volume::{CreateVolumeOptions, RemoveVolumeOptions};
+use std::collections::HashMap;
 
 use crate::adapters::docker::client::DockerClient;
 use crate::error::{Result, SmooothError};
@@ -39,7 +39,11 @@ impl VolumeManager {
         labels.insert("smoooth.workspace".to_string(), workspace_id.to_string());
         labels.insert(
             "smoooth.persistent".to_string(),
-            if is_persistent { "true".to_string() } else { "false".to_string() },
+            if is_persistent {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            },
         );
 
         let options = CreateVolumeOptions {
@@ -48,10 +52,12 @@ impl VolumeManager {
             ..Default::default()
         };
 
-        let created = docker
-            .create_volume(options)
-            .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to create volume '{}': {}", volume_name, e)))?;
+        let created = docker.create_volume(options).await.map_err(|e| {
+            SmooothError::ContainerFailed(format!(
+                "Failed to create volume '{}': {}",
+                volume_name, e
+            ))
+        })?;
 
         Ok(created.name)
     }
@@ -65,7 +71,11 @@ impl VolumeManager {
         let docker = client.inner();
 
         if let Ok(vol) = docker.inspect_volume(volume_name).await {
-            let is_persistent = vol.labels.get("smoooth.persistent").map(|v| v == "true").unwrap_or(false);
+            let is_persistent = vol
+                .labels
+                .get("smoooth.persistent")
+                .map(|v| v == "true")
+                .unwrap_or(false);
             if is_persistent && !force_destroy_persistent {
                 return Err(SmooothError::PolicyViolation(format!(
                     "Volume '{}' is tagged persistent. Routine deletion blocked.",
@@ -77,7 +87,12 @@ impl VolumeManager {
         docker
             .remove_volume(volume_name, None::<RemoveVolumeOptions>)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to remove volume '{}': {}", volume_name, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to remove volume '{}': {}",
+                    volume_name, e
+                ))
+            })?;
 
         Ok(())
     }

@@ -35,7 +35,8 @@ impl RedisAdapter {
                 // If password is required, authenticate via RESP AUTH
                 if let Some(pass) = password {
                     if !pass.is_empty() {
-                        let auth_cmd = format!("*2\r\n$4\r\nAUTH\r\n${}\r\n{}\r\n", pass.len(), pass);
+                        let auth_cmd =
+                            format!("*2\r\n$4\r\nAUTH\r\n${}\r\n{}\r\n", pass.len(), pass);
                         if stream.write_all(auth_cmd.as_bytes()).await.is_ok() {
                             let mut buf = [0u8; 128];
                             if let Ok(n) = stream.read(&mut buf).await {
@@ -68,7 +69,9 @@ impl RedisAdapter {
 
         Err(SmooothError::Timeout(format!(
             "Redis at {}:{} did not respond with +PONG within {}s",
-            host, port, timeout_duration.as_secs()
+            host,
+            port,
+            timeout_duration.as_secs()
         )))
     }
 }
@@ -145,7 +148,11 @@ impl ProviderAdapter for RedisAdapter {
             ports_map.insert("6379".to_string(), serde_json::json!(p));
         }
 
-        let mut cmd = vec!["redis-server".to_string(), "--appendonly".to_string(), "yes".to_string()];
+        let mut cmd = vec![
+            "redis-server".to_string(),
+            "--appendonly".to_string(),
+            "yes".to_string(),
+        ];
         if let Some(ref pass) = password {
             if !pass.is_empty() {
                 cmd.push("--requirepass".to_string());
@@ -182,13 +189,19 @@ impl ProviderAdapter for RedisAdapter {
 
         let (connect_host, connect_port) = if let Some(p) = host_port {
             if p == 0 {
-                let dynamic_port = self.docker_adapter.get_host_port(&container_res.id, 6379).await?;
+                let dynamic_port = self
+                    .docker_adapter
+                    .get_host_port(&container_res.id, 6379)
+                    .await?;
                 ("127.0.0.1".to_string(), dynamic_port)
             } else {
                 ("127.0.0.1".to_string(), p)
             }
         } else {
-            let ip = self.docker_adapter.get_container_ip(&container_res.id).await?;
+            let ip = self
+                .docker_adapter
+                .get_container_ip(&container_res.id)
+                .await?;
             (ip, 6379)
         };
 
@@ -203,7 +216,8 @@ impl ProviderAdapter for RedisAdapter {
 
         tracing::info!(
             "Redis resource '{}' verified healthy (latency: {}ms)",
-            name, latency
+            name,
+            latency
         );
 
         let mut ports_info = serde_json::Map::new();
@@ -247,18 +261,22 @@ impl ProviderAdapter for RedisAdapter {
             return Ok(HealthEvidence {
                 is_healthy: false,
                 latency_ms: None,
-                message: format!("Redis container '{}' is not running (status: {:?})", resource_id, status),
+                message: format!(
+                    "Redis container '{}' is not running (status: {:?})",
+                    resource_id, status
+                ),
                 details: serde_json::json!({ "container_status": format!("{:?}", status) }),
             });
         }
 
-        let (connect_host, connect_port) = match self.docker_adapter.get_host_port(resource_id, 6379).await {
-            Ok(p) => ("127.0.0.1".to_string(), p),
-            Err(_) => {
-                let ip = self.docker_adapter.get_container_ip(resource_id).await?;
-                (ip, 6379)
-            }
-        };
+        let (connect_host, connect_port) =
+            match self.docker_adapter.get_host_port(resource_id, 6379).await {
+                Ok(p) => ("127.0.0.1".to_string(), p),
+                Err(_) => {
+                    let ip = self.docker_adapter.get_container_ip(resource_id).await?;
+                    (ip, 6379)
+                }
+            };
 
         // Attempt to extract password from container inspect if present
         let password = if let Ok(client) = self.docker_adapter.client() {
@@ -277,7 +295,14 @@ impl ProviderAdapter for RedisAdapter {
             None
         };
 
-        match Self::verify_redis_connection(&connect_host, connect_port, password.as_deref(), Duration::from_secs(5)).await {
+        match Self::verify_redis_connection(
+            &connect_host,
+            connect_port,
+            password.as_deref(),
+            Duration::from_secs(5),
+        )
+        .await
+        {
             Ok(latency) => Ok(HealthEvidence {
                 is_healthy: true,
                 latency_ms: Some(latency),
@@ -298,11 +323,19 @@ impl ProviderAdapter for RedisAdapter {
         }
     }
 
-    async fn reconcile(&self, resource_id: &str, intended_config: &serde_json::Value) -> Result<ResourceStatus> {
-        self.docker_adapter.reconcile(resource_id, intended_config).await
+    async fn reconcile(
+        &self,
+        resource_id: &str,
+        intended_config: &serde_json::Value,
+    ) -> Result<ResourceStatus> {
+        self.docker_adapter
+            .reconcile(resource_id, intended_config)
+            .await
     }
 
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()> {
-        self.docker_adapter.destroy(resource_id, preserve_persistent_data).await
+        self.docker_adapter
+            .destroy(resource_id, preserve_persistent_data)
+            .await
     }
 }

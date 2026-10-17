@@ -1,12 +1,14 @@
-use std::collections::HashMap;
-use std::sync::Arc;
 use smoooth::adapters::docker::client::DockerClient;
 use smoooth::adapters::docker::containers::ContainerManager;
 use smoooth::adapters::docker::DockerAdapter;
 use smoooth::engine::Orchestrator;
-use smoooth::models::plan::{CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan, PolicyConstraints, RiskTier};
+use smoooth::models::plan::{
+    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan, PolicyConstraints, RiskTier,
+};
 use smoooth::models::ResourceStatus;
 use smoooth::storage::LocalStorage;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_live_docker_dag_and_health_probes() {
@@ -16,12 +18,18 @@ async fn test_live_docker_dag_and_health_probes() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
             Err(e) => {
-                println!("Docker daemon not reachable: {}. Skipping live integration test.", e);
+                println!(
+                    "Docker daemon not reachable: {}. Skipping live integration test.",
+                    e
+                );
                 return;
             }
         },
         Err(e) => {
-            println!("Docker client initialization failed: {}. Skipping live integration test.", e);
+            println!(
+                "Docker client initialization failed: {}. Skipping live integration test.",
+                e
+            );
             return;
         }
     };
@@ -98,12 +106,10 @@ async fn test_live_docker_dag_and_health_probes() {
             },
         ],
         // worker depends on http
-        dependencies: vec![
-            DependencyEdge {
-                from: worker_name.to_string(),
-                to: http_name.to_string(),
-            }
-        ],
+        dependencies: vec![DependencyEdge {
+            from: worker_name.to_string(),
+            to: http_name.to_string(),
+        }],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
             allow_public_network: false,
@@ -112,9 +118,20 @@ async fn test_live_docker_dag_and_health_probes() {
         },
     };
 
-    let plan_success = Plan::new("plan-dag-success".to_string(), spec_success, RiskTier::Low, None);
-    let op_res = orchestrator.execute_plan_sync(plan_success, "idemp-dag-001".to_string()).await;
-    assert!(op_res.is_ok(), "Plan execution must succeed: {:?}", op_res.err());
+    let plan_success = Plan::new(
+        "plan-dag-success".to_string(),
+        spec_success,
+        RiskTier::Low,
+        None,
+    );
+    let op_res = orchestrator
+        .execute_plan_sync(plan_success, "idemp-dag-001".to_string())
+        .await;
+    assert!(
+        op_res.is_ok(),
+        "Plan execution must succeed: {:?}",
+        op_res.err()
+    );
     let op = op_res.unwrap();
     assert_eq!(op.status, smoooth::models::OperationStatus::Succeeded);
 
@@ -122,12 +139,19 @@ async fn test_live_docker_dag_and_health_probes() {
     let http_status = ContainerManager::inspect(&client, http_name).await.unwrap();
     assert_eq!(http_status, ResourceStatus::Active);
 
-    let worker_status = ContainerManager::inspect(&client, worker_name).await.unwrap();
+    let worker_status = ContainerManager::inspect(&client, worker_name)
+        .await
+        .unwrap();
     assert_eq!(worker_status, ResourceStatus::Active);
 
     // Verify worker has no published ports, while http has loopback-only port
-    let worker_has_ports = ContainerManager::has_host_port_binding(&client, worker_name).await.unwrap();
-    assert!(!worker_has_ports, "Worker must NOT have any host port bindings");
+    let worker_has_ports = ContainerManager::has_host_port_binding(&client, worker_name)
+        .await
+        .unwrap();
+    assert!(
+        !worker_has_ports,
+        "Worker must NOT have any host port bindings"
+    );
 
     println!(">>> Scenario 1 PASSED: Out-of-order DAG resolved and verified with live HTTP health probe.");
 
@@ -181,12 +205,10 @@ async fn test_live_docker_dag_and_health_probes() {
                 exposes_network_publicly: false,
             },
         ],
-        dependencies: vec![
-            DependencyEdge {
-                from: fail_worker_name.to_string(),
-                to: fail_http_name.to_string(),
-            }
-        ],
+        dependencies: vec![DependencyEdge {
+            from: fail_worker_name.to_string(),
+            to: fail_http_name.to_string(),
+        }],
         immutable_artifacts: HashMap::new(),
         policy_envelope: PolicyConstraints {
             allow_public_network: false,
@@ -196,21 +218,35 @@ async fn test_live_docker_dag_and_health_probes() {
     };
 
     let plan_fail = Plan::new("plan-dag-fail".to_string(), spec_fail, RiskTier::Low, None);
-    let op_fail = orchestrator.execute_plan_sync(plan_fail, "idemp-dag-002".to_string()).await.unwrap();
+    let op_fail = orchestrator
+        .execute_plan_sync(plan_fail, "idemp-dag-002".to_string())
+        .await
+        .unwrap();
     assert_eq!(op_fail.status, smoooth::models::OperationStatus::Failed);
     assert!(
-        op_fail.error_message.unwrap().contains("Health probe failed for smoooth_it_fail_http"),
+        op_fail
+            .error_message
+            .unwrap()
+            .contains("Health probe failed for smoooth_it_fail_http"),
         "Failure must clearly identify prerequisite health failure"
     );
 
     // CRITICAL SECURITY ASSERTION: fail_worker_name must NEVER exist in Docker!
-    let fail_worker_inspect = ContainerManager::inspect(&client, fail_worker_name).await.unwrap();
+    let fail_worker_inspect = ContainerManager::inspect(&client, fail_worker_name)
+        .await
+        .unwrap();
     assert_eq!(
         fail_worker_inspect,
         ResourceStatus::Terminated,
         "CRITICAL: Dependent worker container was provisioned despite prerequisite health check failure!"
     );
-    let raw_docker_inspect = client.inner().inspect_container(fail_worker_name, None::<bollard::container::InspectContainerOptions>).await;
+    let raw_docker_inspect = client
+        .inner()
+        .inspect_container(
+            fail_worker_name,
+            None::<bollard::container::InspectContainerOptions>,
+        )
+        .await;
     assert!(
         raw_docker_inspect.is_err(),
         "Docker engine must confirm dependent worker container does not exist"

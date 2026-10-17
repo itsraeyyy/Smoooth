@@ -5,12 +5,12 @@ use uuid::Uuid;
 
 use crate::adapters::ProviderAdapter;
 use crate::error::{Result, SmooothError};
-use crate::models::{
-    AgentIdentity, AgentScope, BindingRequirement, ConnectionDetails, IdempotencyKey, IdempotencyRecord, Operation,
-    OperationLogEntry, OperationStatus, Plan, ReconciliationOutcome, Resource, ResourceOwnership,
-    ResourceStatus, RiskTier, ServiceBinding,
-};
 use crate::models::plan::CanonicalActionSpec;
+use crate::models::{
+    AgentIdentity, AgentScope, BindingRequirement, ConnectionDetails, IdempotencyKey,
+    IdempotencyRecord, Operation, OperationLogEntry, OperationStatus, Plan, ReconciliationOutcome,
+    Resource, ResourceOwnership, ResourceStatus, RiskTier, ServiceBinding,
+};
 use crate::storage::{AuditEvent, Storage};
 
 pub struct Orchestrator {
@@ -27,7 +27,6 @@ impl Orchestrator {
             storage,
             adapters: HashMap::new(),
             secret_store: Arc::new(crate::security::SecretStore::default_local()),
-
         }
     }
 
@@ -45,7 +44,8 @@ impl Orchestrator {
     }
 
     pub fn register_adapter(&mut self, adapter: Arc<dyn ProviderAdapter>) {
-        self.adapters.insert(adapter.provider_name().to_string(), adapter);
+        self.adapters
+            .insert(adapter.provider_name().to_string(), adapter);
     }
 
     // Agent Identity & Authorization Management
@@ -58,8 +58,9 @@ impl Orchestrator {
     ) -> Result<(AgentIdentity, String)> {
         use sha2::{Digest, Sha256};
         let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes)
-            .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e)))?;
+        getrandom::getrandom(&mut bytes).map_err(|e| {
+            SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e))
+        })?;
         let raw_token = format!("smoooth_ag_{}", hex::encode(bytes));
         let token_hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
         let token_prefix = raw_token[..14.min(raw_token.len())].to_string();
@@ -84,20 +85,23 @@ impl Orchestrator {
         self.storage.save_agent(identity.clone()).await?;
 
         // Record security audit event
-        let _ = self.storage.record_audit(AuditEvent {
-            id: 0,
-            workspace_id: workspace_id.to_string(),
-            actor: "operator".to_string(),
-            action: "agent_paired".to_string(),
-            target_resource_id: Some(agent_id),
-            plan_hash: None,
-            outcome: "success".to_string(),
-            redacted_evidence: Some(serde_json::json!({
-                "name": name,
-                "scopes": identity.scopes.iter().map(|s| s.as_str()).collect::<Vec<_>>()
-            })),
-            timestamp: Utc::now(),
-        }).await;
+        let _ = self
+            .storage
+            .record_audit(AuditEvent {
+                id: 0,
+                workspace_id: workspace_id.to_string(),
+                actor: "operator".to_string(),
+                action: "agent_paired".to_string(),
+                target_resource_id: Some(agent_id),
+                plan_hash: None,
+                outcome: "success".to_string(),
+                redacted_evidence: Some(serde_json::json!({
+                    "name": name,
+                    "scopes": identity.scopes.iter().map(|s| s.as_str()).collect::<Vec<_>>()
+                })),
+                timestamp: Utc::now(),
+            })
+            .await;
 
         Ok((identity, raw_token))
     }
@@ -108,28 +112,35 @@ impl Orchestrator {
 
     pub async fn revoke_agent(&self, agent_id: &str) -> Result<()> {
         self.storage.revoke_agent(agent_id).await?;
-        let _ = self.storage.record_audit(AuditEvent {
-            id: 0,
-            workspace_id: "*".to_string(),
-            actor: "operator".to_string(),
-            action: "agent_revoked".to_string(),
-            target_resource_id: Some(agent_id.to_string()),
-            plan_hash: None,
-            outcome: "success".to_string(),
-            redacted_evidence: None,
-            timestamp: Utc::now(),
-        }).await;
+        let _ = self
+            .storage
+            .record_audit(AuditEvent {
+                id: 0,
+                workspace_id: "*".to_string(),
+                actor: "operator".to_string(),
+                action: "agent_revoked".to_string(),
+                target_resource_id: Some(agent_id.to_string()),
+                plan_hash: None,
+                outcome: "success".to_string(),
+                redacted_evidence: None,
+                timestamp: Utc::now(),
+            })
+            .await;
         Ok(())
     }
 
     pub async fn rotate_agent_token(&self, agent_id: &str) -> Result<String> {
         use sha2::{Digest, Sha256};
-        let agent = self.storage.get_agent(agent_id).await?
+        let agent = self
+            .storage
+            .get_agent(agent_id)
+            .await?
             .ok_or_else(|| SmooothError::NotFound(format!("Agent '{}' not found", agent_id)))?;
 
         let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes)
-            .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e)))?;
+        getrandom::getrandom(&mut bytes).map_err(|e| {
+            SmooothError::Internal(anyhow::anyhow!("Failed to generate random token: {}", e))
+        })?;
         let raw_token = format!("smoooth_ag_{}", hex::encode(bytes));
         let token_hash = hex::encode(Sha256::digest(raw_token.as_bytes()));
         let token_prefix = raw_token[..14.min(raw_token.len())].to_string();
@@ -139,17 +150,20 @@ impl Orchestrator {
         updated.token_prefix = token_prefix;
         self.storage.save_agent(updated).await?;
 
-        let _ = self.storage.record_audit(AuditEvent {
-            id: 0,
-            workspace_id: "*".to_string(),
-            actor: "operator".to_string(),
-            action: "agent_token_rotated".to_string(),
-            target_resource_id: Some(agent_id.to_string()),
-            plan_hash: None,
-            outcome: "success".to_string(),
-            redacted_evidence: None,
-            timestamp: Utc::now(),
-        }).await;
+        let _ = self
+            .storage
+            .record_audit(AuditEvent {
+                id: 0,
+                workspace_id: "*".to_string(),
+                actor: "operator".to_string(),
+                action: "agent_token_rotated".to_string(),
+                target_resource_id: Some(agent_id.to_string()),
+                plan_hash: None,
+                outcome: "success".to_string(),
+                redacted_evidence: None,
+                timestamp: Utc::now(),
+            })
+            .await;
 
         Ok(raw_token)
     }
@@ -166,7 +180,6 @@ impl Orchestrator {
         }
         Ok(None)
     }
-
 
     async fn init_operation(
         &self,
@@ -193,8 +206,16 @@ impl Orchestrator {
             created_at: Utc::now(),
         };
 
-        if let Some(existing_record) = self.storage.check_or_record_idempotency(placeholder_record).await? {
-            if let Some(existing_op) = self.storage.get_operation(&existing_record.operation_id).await? {
+        if let Some(existing_record) = self
+            .storage
+            .check_or_record_idempotency(placeholder_record)
+            .await?
+        {
+            if let Some(existing_op) = self
+                .storage
+                .get_operation(&existing_record.operation_id)
+                .await?
+            {
                 return Ok((existing_op, false));
             }
         }
@@ -256,7 +277,10 @@ impl Orchestrator {
                 timestamp: Utc::now(),
                 message: format!(
                     "Worker {} acquired lease [epoch: {}] for plan {} [hash: {}]",
-                    self.worker_id, initial_epoch, plan.id, &plan.plan_hash[..8]
+                    self.worker_id,
+                    initial_epoch,
+                    plan.id,
+                    &plan.plan_hash[..8]
                 ),
                 level: "INFO".to_string(),
             }],
@@ -300,7 +324,10 @@ impl Orchestrator {
 
             let mut prerequisites: HashMap<String, Vec<String>> = HashMap::new();
             for edge in &plan.spec.dependencies {
-                prerequisites.entry(edge.from.clone()).or_default().push(edge.to.clone());
+                prerequisites
+                    .entry(edge.from.clone())
+                    .or_default()
+                    .push(edge.to.clone());
             }
 
             for action in ordered_actions {
@@ -313,7 +340,14 @@ impl Orchestrator {
                                 req, action.resource_name
                             );
                             tracing::warn!("{}", err);
-                            Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op_task, err).await;
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op_task,
+                                err,
+                            )
+                            .await;
                             return;
                         }
                     }
@@ -323,14 +357,31 @@ impl Orchestrator {
                     if current_op.lease_epoch > initial_epoch {
                         let err = format!("Worker lease lost: current epoch {} > worker epoch {}. Stale execution aborted.", current_op.lease_epoch, initial_epoch);
                         tracing::warn!("{}", err);
-                        Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op_task, err).await;
+                        Self::handle_partial_failure(
+                            &adapters,
+                            &provisioned_resources,
+                            &storage,
+                            &mut op_task,
+                            err,
+                        )
+                        .await;
                         return;
                     }
                     if let Some(exp) = current_op.lease_expires_at {
                         if exp < Utc::now() {
-                            let err = format!("Worker lease expired at {}. Stale execution aborted.", exp);
+                            let err = format!(
+                                "Worker lease expired at {}. Stale execution aborted.",
+                                exp
+                            );
                             tracing::warn!("{}", err);
-                            Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op_task, err).await;
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op_task,
+                                err,
+                            )
+                            .await;
                             return;
                         }
                     }
@@ -369,7 +420,9 @@ impl Orchestrator {
                         return;
                     }
                     if let Some(adapter) = adapters.get(&action.provider) {
-                        let _ = adapter.destroy(&action.resource_name, action.is_persistent).await;
+                        let _ = adapter
+                            .destroy(&action.resource_name, action.is_persistent)
+                            .await;
                         let _ = storage.delete_resource(&action.resource_name).await;
                         completed += 1;
                     } else {
@@ -378,15 +431,22 @@ impl Orchestrator {
                             &provisioned_resources,
                             &storage,
                             &mut op_task,
-                            format!("Unsupported provider '{}' for resource deletion '{}'", action.provider, action.resource_name),
-                        ).await;
+                            format!(
+                                "Unsupported provider '{}' for resource deletion '{}'",
+                                action.provider, action.resource_name
+                            ),
+                        )
+                        .await;
                         return;
                     }
                     continue;
                 }
 
                 // Resolve dynamic bindings and inject into action environment variables
-                let reqs_for_action = prerequisites.get(&action.resource_name).cloned().unwrap_or_default();
+                let reqs_for_action = prerequisites
+                    .get(&action.resource_name)
+                    .cloned()
+                    .unwrap_or_default();
                 let mut resolved_action = action.clone();
                 if let Err(e) = Self::inject_bindings(
                     &storage,
@@ -394,10 +454,22 @@ impl Orchestrator {
                     &mut resolved_action,
                     &reqs_for_action,
                     &plan.spec.workspace_id,
-                ).await {
-                    let err = format!("Binding resolution failed for '{}': {}", action.resource_name, e);
+                )
+                .await
+                {
+                    let err = format!(
+                        "Binding resolution failed for '{}': {}",
+                        action.resource_name, e
+                    );
                     tracing::warn!("{}", err);
-                    Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op_task, err).await;
+                    Self::handle_partial_failure(
+                        &adapters,
+                        &provisioned_resources,
+                        &storage,
+                        &mut op_task,
+                        err,
+                    )
+                    .await;
                     return;
                 }
 
@@ -409,8 +481,12 @@ impl Orchestrator {
                             &provisioned_resources,
                             &storage,
                             &mut op_task,
-                            format!("Unsupported or unrecognized provider '{}' for resource '{}'", resolved_action.provider, resolved_action.resource_name),
-                        ).await;
+                            format!(
+                                "Unsupported or unrecognized provider '{}' for resource '{}'",
+                                resolved_action.provider, resolved_action.resource_name
+                            ),
+                        )
+                        .await;
                         return;
                     }
                 };
@@ -418,51 +494,64 @@ impl Orchestrator {
                 let mut config = resolved_action.config.clone();
                 if let Some(obj) = config.as_object_mut() {
                     obj.insert("operation_id".to_string(), serde_json::json!(&op_task.id));
-                    obj.insert("workspace_id".to_string(), serde_json::json!(&plan.spec.workspace_id));
-                    obj.insert("fencing_epoch".to_string(), serde_json::json!(initial_epoch));
-                    obj.insert("worker_id".to_string(), serde_json::json!(op_task.lease_owner.as_deref().unwrap_or("worker")));
+                    obj.insert(
+                        "workspace_id".to_string(),
+                        serde_json::json!(&plan.spec.workspace_id),
+                    );
+                    obj.insert(
+                        "fencing_epoch".to_string(),
+                        serde_json::json!(initial_epoch),
+                    );
+                    obj.insert(
+                        "worker_id".to_string(),
+                        serde_json::json!(op_task.lease_owner.as_deref().unwrap_or("worker")),
+                    );
                 }
                 match adapter
-                    .provision(&resolved_action.resource_name, &config, resolved_action.is_persistent)
+                    .provision(
+                        &resolved_action.resource_name,
+                        &config,
+                        resolved_action.is_persistent,
+                    )
                     .await
                 {
-                    Ok(resource) => {
-                        match adapter.health_check(&resource.id).await {
-                            Ok(health) if health.is_healthy => {
-                                collected_evidence.push(health);
-                                let _ = storage.save_resource(resource.clone()).await;
-                                provisioned_resources.push((resource, resolved_action.is_persistent));
-                                successful_resources.insert(resolved_action.resource_name.clone());
-                                completed += 1;
-                            }
-                            Ok(health) => {
-                                let _ = adapter.destroy(&resource.id, resolved_action.is_persistent).await;
-                                Self::handle_partial_failure(
-                                    &adapters,
-                                    &provisioned_resources,
-                                    &storage,
-                                    &mut op_task,
-                                    format!(
-                                        "Health probe failed for {}: {}",
-                                        resolved_action.resource_name, health.message
-                                    ),
-                                )
-                                .await;
-                                return;
-                            }
-                            Err(e) => {
-                                Self::handle_partial_failure(
-                                    &adapters,
-                                    &provisioned_resources,
-                                    &storage,
-                                    &mut op_task,
-                                    e.to_string(),
-                                )
-                                .await;
-                                return;
-                            }
+                    Ok(resource) => match adapter.health_check(&resource.id).await {
+                        Ok(health) if health.is_healthy => {
+                            collected_evidence.push(health);
+                            let _ = storage.save_resource(resource.clone()).await;
+                            provisioned_resources.push((resource, resolved_action.is_persistent));
+                            successful_resources.insert(resolved_action.resource_name.clone());
+                            completed += 1;
                         }
-                    }
+                        Ok(health) => {
+                            let _ = adapter
+                                .destroy(&resource.id, resolved_action.is_persistent)
+                                .await;
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op_task,
+                                format!(
+                                    "Health probe failed for {}: {}",
+                                    resolved_action.resource_name, health.message
+                                ),
+                            )
+                            .await;
+                            return;
+                        }
+                        Err(e) => {
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op_task,
+                                e.to_string(),
+                            )
+                            .await;
+                            return;
+                        }
+                    },
                     Err(e) => {
                         Self::handle_partial_failure(
                             &adapters,
@@ -513,13 +602,19 @@ impl Orchestrator {
     }
 
     /// Security validation boundary: inspect and reject unsafe external endpoints
-    pub fn validate_external_endpoint(
-        protocol: &str,
-        host: &str,
-        port: u16,
-    ) -> Result<()> {
+    pub fn validate_external_endpoint(protocol: &str, host: &str, port: u16) -> Result<()> {
         let p_lower = protocol.to_lowercase();
-        let allowed_protocols = ["postgres", "postgresql", "redis", "rediss", "mongodb", "mysql", "http", "https", "tcp"];
+        let allowed_protocols = [
+            "postgres",
+            "postgresql",
+            "redis",
+            "rediss",
+            "mongodb",
+            "mysql",
+            "http",
+            "https",
+            "tcp",
+        ];
         if !allowed_protocols.contains(&p_lower.as_str()) {
             return Err(SmooothError::PolicyViolation(format!(
                 "Security boundary violation: unsupported external protocol '{}'. Allowed: {:?}",
@@ -529,14 +624,14 @@ impl Orchestrator {
 
         if port == 0 {
             return Err(SmooothError::PolicyViolation(
-                "Security boundary violation: invalid external port 0".to_string()
+                "Security boundary violation: invalid external port 0".to_string(),
             ));
         }
 
         let h_lower = host.trim().to_lowercase();
         if h_lower.is_empty() {
             return Err(SmooothError::PolicyViolation(
-                "Security boundary violation: external host cannot be empty".to_string()
+                "Security boundary violation: external host cannot be empty".to_string(),
             ));
         }
 
@@ -585,12 +680,19 @@ impl Orchestrator {
                 let list = storage.list_resources(consumer_workspace_id).await?;
                 list.into_iter()
                     .find(|r| r.name == target_name_or_id || r.id == target_name_or_id)
-                    .ok_or_else(|| SmooothError::NotFound(format!("Dependency resource '{}' not found in workspace '{}'", target_name_or_id, consumer_workspace_id)))?
+                    .ok_or_else(|| {
+                        SmooothError::NotFound(format!(
+                            "Dependency resource '{}' not found in workspace '{}'",
+                            target_name_or_id, consumer_workspace_id
+                        ))
+                    })?
             }
         };
 
         // Cross-workspace boundary check (unless target is declared External)
-        if target_res.ownership != ResourceOwnership::External && target_res.workspace_id != consumer_workspace_id {
+        if target_res.ownership != ResourceOwnership::External
+            && target_res.workspace_id != consumer_workspace_id
+        {
             return Err(SmooothError::PolicyViolation(format!(
                 "Cross-workspace boundary violation: consumer workspace '{}' cannot bind to target resource '{}' in workspace '{}'",
                 consumer_workspace_id, target_name_or_id, target_res.workspace_id
@@ -609,15 +711,30 @@ impl Orchestrator {
         let config = &target_res.configuration;
         let ownership = &target_res.ownership;
 
-        let protocol = config.get("protocol").and_then(|v| v.as_str())
+        let protocol = config
+            .get("protocol")
+            .and_then(|v| v.as_str())
             .unwrap_or_else(|| {
                 if target_res.provider == "postgres" || target_res.service_type == "database" {
                     "postgres"
-                } else if target_res.provider == "redis" || config.get("image").and_then(|i| i.as_str()).map_or(false, |img| img.contains("redis")) {
+                } else if target_res.provider == "redis"
+                    || config
+                        .get("image")
+                        .and_then(|i| i.as_str())
+                        .is_some_and(|img| img.contains("redis"))
+                {
                     "redis"
-                } else if config.get("image").and_then(|i| i.as_str()).map_or(false, |img| img.contains("mongo")) {
+                } else if config
+                    .get("image")
+                    .and_then(|i| i.as_str())
+                    .is_some_and(|img| img.contains("mongo"))
+                {
                     "mongodb"
-                } else if config.get("image").and_then(|i| i.as_str()).map_or(false, |img| img.contains("mysql")) {
+                } else if config
+                    .get("image")
+                    .and_then(|i| i.as_str())
+                    .is_some_and(|img| img.contains("mysql"))
+                {
                     "mysql"
                 } else {
                     "tcp"
@@ -626,14 +743,22 @@ impl Orchestrator {
             .to_string();
 
         let host = if *ownership == ResourceOwnership::External {
-            config.get("host").and_then(|v| v.as_str()).unwrap_or("localhost").to_string()
+            config
+                .get("host")
+                .and_then(|v| v.as_str())
+                .unwrap_or("localhost")
+                .to_string()
         } else if preferred_endpoint == Some("host") {
             "127.0.0.1".to_string()
         } else if preferred_endpoint == Some("internal") {
             target_res.name.clone()
         } else {
             // Container internal networking: DNS name on docker bridge or container ip
-            config.get("host").and_then(|v| v.as_str()).unwrap_or(&target_res.name).to_string()
+            config
+                .get("host")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&target_res.name)
+                .to_string()
         };
 
         let default_port: u16 = match protocol.as_str() {
@@ -643,40 +768,63 @@ impl Orchestrator {
         };
 
         let port: u16 = if *ownership == ResourceOwnership::External {
-            config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
+            config
+                .get("port")
+                .and_then(|v| v.as_u64())
+                .map(|p| p as u16)
+                .unwrap_or(default_port)
         } else if preferred_endpoint == Some("host") {
             // Check mapped host port
             if let Some(ports) = config.get("ports").and_then(|p| p.as_object()) {
-                ports.values().next().and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
+                ports
+                    .values()
+                    .next()
+                    .and_then(|v| v.as_u64())
+                    .map(|p| p as u16)
+                    .unwrap_or(default_port)
             } else {
-                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
+                config
+                    .get("port")
+                    .and_then(|v| v.as_u64())
+                    .map(|p| p as u16)
+                    .unwrap_or(default_port)
             }
         } else {
             // Internal container port
             if let Some(ports) = config.get("ports").and_then(|p| p.as_object()) {
-                ports.keys().next().and_then(|k| k.parse::<u16>().ok()).unwrap_or(default_port)
+                ports
+                    .keys()
+                    .next()
+                    .and_then(|k| k.parse::<u16>().ok())
+                    .unwrap_or(default_port)
             } else {
-                config.get("port").and_then(|v| v.as_u64()).map(|p| p as u16).unwrap_or(default_port)
+                config
+                    .get("port")
+                    .and_then(|v| v.as_u64())
+                    .map(|p| p as u16)
+                    .unwrap_or(default_port)
             }
         };
-
 
         // Security boundary validation for external endpoints
         if *ownership == ResourceOwnership::External {
             Self::validate_external_endpoint(&protocol, &host, port)?;
         }
 
-        let path_or_database = config.get("database")
+        let path_or_database = config
+            .get("database")
             .or_else(|| config.get("dbname"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let username = config.get("user")
+        let username = config
+            .get("user")
             .or_else(|| config.get("username"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let password = config.get("password")
+        let password = config
+            .get("password")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
@@ -730,7 +878,8 @@ impl Orchestrator {
         }
 
         // 2. Explicit bindings declared in action.config["bindings"]
-        let declared_bindings: Vec<BindingRequirement> = action.config
+        let declared_bindings: Vec<BindingRequirement> = action
+            .config
             .get("bindings")
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default();
@@ -747,7 +896,8 @@ impl Orchestrator {
                 target_name,
                 req.preferred_endpoint.as_deref(),
                 workspace_id,
-            ).await?;
+            )
+            .await?;
 
             if !req.env_mappings.is_empty() {
                 for (field, env_var) in &req.env_mappings {
@@ -758,7 +908,9 @@ impl Orchestrator {
                         "protocol" => conn_details.protocol.clone(),
                         "user" | "username" => conn_details.username.clone().unwrap_or_default(),
                         "password" | "pass" => conn_details.password.clone().unwrap_or_default(),
-                        "database" | "dbname" | "db" => conn_details.path_or_database.clone().unwrap_or_default(),
+                        "database" | "dbname" | "db" => {
+                            conn_details.path_or_database.clone().unwrap_or_default()
+                        }
                         _ => String::new(),
                     };
                     env_map.insert(env_var.clone(), val);
@@ -795,7 +947,9 @@ impl Orchestrator {
                     prereq,
                     None,
                     workspace_id,
-                ).await {
+                )
+                .await
+                {
                     let generated = conn_details.to_env_map(None, false);
                     for (k, v) in generated {
                         env_map.entry(k).or_insert(v);
@@ -929,7 +1083,10 @@ impl Orchestrator {
         }
 
         let observed_status = if let Some(adapter) = self.adapters.get(&res.provider) {
-            adapter.inspect(&res.id).await.unwrap_or(ResourceStatus::Degraded)
+            adapter
+                .inspect(&res.id)
+                .await
+                .unwrap_or(ResourceStatus::Degraded)
         } else {
             res.status.clone()
         };
@@ -938,7 +1095,11 @@ impl Orchestrator {
 
         if is_drifted {
             // Safe autonomous recovery: if intended was Active and observed is Stopped, Degraded, or Terminated
-            if res.status == ResourceStatus::Active && (observed_status == ResourceStatus::Stopped || observed_status == ResourceStatus::Degraded || observed_status == ResourceStatus::Terminated) {
+            if res.status == ResourceStatus::Active
+                && (observed_status == ResourceStatus::Stopped
+                    || observed_status == ResourceStatus::Degraded
+                    || observed_status == ResourceStatus::Terminated)
+            {
                 let recovery_attempts = res
                     .configuration
                     .get("smoooth_recovery_attempts")
@@ -970,18 +1131,32 @@ impl Orchestrator {
                 }
 
                 if let Some(adapter) = self.adapters.get(&res.provider) {
-                    tracing::info!("Auto-recovering drifted resource '{}' (attempt {}/{})", id, recovery_attempts + 1, MAX_RECOVERY_ATTEMPTS);
+                    tracing::info!(
+                        "Auto-recovering drifted resource '{}' (attempt {}/{})",
+                        id,
+                        recovery_attempts + 1,
+                        MAX_RECOVERY_ATTEMPTS
+                    );
                     let mut config = res.configuration.clone();
                     if let Some(obj) = config.as_object_mut() {
                         obj.insert("fencing_epoch".to_string(), serde_json::json!(2));
-                        obj.insert("smoooth_recovery_attempts".to_string(), serde_json::json!(recovery_attempts + 1));
+                        obj.insert(
+                            "smoooth_recovery_attempts".to_string(),
+                            serde_json::json!(recovery_attempts + 1),
+                        );
                     }
-                    if let Ok(re_res) = adapter.provision(&res.name, &config, res.is_persistent).await {
+                    if let Ok(re_res) = adapter
+                        .provision(&res.name, &config, res.is_persistent)
+                        .await
+                    {
                         if let Ok(health) = adapter.health_check(&re_res.id).await {
                             if health.is_healthy {
                                 res.status = ResourceStatus::Active;
                                 if let Some(obj) = res.configuration.as_object_mut() {
-                                    obj.insert("smoooth_recovery_attempts".to_string(), serde_json::json!(0));
+                                    obj.insert(
+                                        "smoooth_recovery_attempts".to_string(),
+                                        serde_json::json!(0),
+                                    );
                                 }
                                 res.updated_at = Utc::now();
                                 let _ = self.storage.save_resource(res.clone()).await;
@@ -999,7 +1174,10 @@ impl Orchestrator {
 
                     // If recovery failed, persist the attempt count
                     if let Some(obj) = res.configuration.as_object_mut() {
-                        obj.insert("smoooth_recovery_attempts".to_string(), serde_json::json!(recovery_attempts + 1));
+                        obj.insert(
+                            "smoooth_recovery_attempts".to_string(),
+                            serde_json::json!(recovery_attempts + 1),
+                        );
                     }
                     res.updated_at = Utc::now();
                     let _ = self.storage.save_resource(res.clone()).await;
@@ -1016,7 +1194,8 @@ impl Orchestrator {
             message: if !is_drifted {
                 "Resource matches intended state.".to_string()
             } else {
-                "Resource drift detected; requires policy authorization or manual inspection.".to_string()
+                "Resource drift detected; requires policy authorization or manual inspection."
+                    .to_string()
             },
         })
     }
@@ -1046,7 +1225,10 @@ impl Orchestrator {
 
         let mut prerequisites: HashMap<String, Vec<String>> = HashMap::new();
         for edge in &plan.spec.dependencies {
-            prerequisites.entry(edge.from.clone()).or_default().push(edge.to.clone());
+            prerequisites
+                .entry(edge.from.clone())
+                .or_default()
+                .push(edge.to.clone());
         }
 
         for action in ordered_actions {
@@ -1059,7 +1241,14 @@ impl Orchestrator {
                             req, action.resource_name
                         );
                         tracing::warn!("{}", err);
-                        Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op, err).await;
+                        Self::handle_partial_failure(
+                            &adapters,
+                            &provisioned_resources,
+                            &storage,
+                            &mut op,
+                            err,
+                        )
+                        .await;
                         return Ok(op);
                     }
                 }
@@ -1070,14 +1259,29 @@ impl Orchestrator {
                 if current_op.lease_epoch > initial_epoch {
                     let err = format!("Worker lease lost: current epoch {} > worker epoch {}. Stale execution aborted.", current_op.lease_epoch, initial_epoch);
                     tracing::warn!("{}", err);
-                    Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op, err).await;
+                    Self::handle_partial_failure(
+                        &adapters,
+                        &provisioned_resources,
+                        &storage,
+                        &mut op,
+                        err,
+                    )
+                    .await;
                     return Ok(op);
                 }
                 if let Some(exp) = current_op.lease_expires_at {
                     if exp < Utc::now() {
-                        let err = format!("Worker lease expired at {}. Stale execution aborted.", exp);
+                        let err =
+                            format!("Worker lease expired at {}. Stale execution aborted.", exp);
                         tracing::warn!("{}", err);
-                        Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op, err).await;
+                        Self::handle_partial_failure(
+                            &adapters,
+                            &provisioned_resources,
+                            &storage,
+                            &mut op,
+                            err,
+                        )
+                        .await;
                         return Ok(op);
                     }
                 }
@@ -1116,7 +1320,9 @@ impl Orchestrator {
                     return Ok(op);
                 }
                 if let Some(adapter) = adapters.get(&action.provider) {
-                    let _ = adapter.destroy(&action.resource_name, action.is_persistent).await;
+                    let _ = adapter
+                        .destroy(&action.resource_name, action.is_persistent)
+                        .await;
                     let _ = storage.delete_resource(&action.resource_name).await;
                     completed += 1;
                 }
@@ -1124,7 +1330,10 @@ impl Orchestrator {
             }
 
             // Resolve dynamic bindings and inject into action environment variables
-            let reqs_for_action = prerequisites.get(&action.resource_name).cloned().unwrap_or_default();
+            let reqs_for_action = prerequisites
+                .get(&action.resource_name)
+                .cloned()
+                .unwrap_or_default();
             let mut resolved_action = action.clone();
             if let Err(e) = Self::inject_bindings(
                 &storage,
@@ -1132,10 +1341,22 @@ impl Orchestrator {
                 &mut resolved_action,
                 &reqs_for_action,
                 &plan.spec.workspace_id,
-            ).await {
-                let err = format!("Binding resolution failed for '{}': {}", action.resource_name, e);
+            )
+            .await
+            {
+                let err = format!(
+                    "Binding resolution failed for '{}': {}",
+                    action.resource_name, e
+                );
                 tracing::warn!("{}", err);
-                Self::handle_partial_failure(&adapters, &provisioned_resources, &storage, &mut op, err).await;
+                Self::handle_partial_failure(
+                    &adapters,
+                    &provisioned_resources,
+                    &storage,
+                    &mut op,
+                    err,
+                )
+                .await;
                 return Ok(op);
             }
 
@@ -1143,42 +1364,61 @@ impl Orchestrator {
                 let mut config = resolved_action.config.clone();
                 if let Some(obj) = config.as_object_mut() {
                     obj.insert("operation_id".to_string(), serde_json::json!(&op.id));
-                    obj.insert("workspace_id".to_string(), serde_json::json!(&plan.spec.workspace_id));
-                    obj.insert("fencing_epoch".to_string(), serde_json::json!(initial_epoch));
-                    obj.insert("worker_id".to_string(), serde_json::json!(op.lease_owner.as_deref().unwrap_or("worker")));
+                    obj.insert(
+                        "workspace_id".to_string(),
+                        serde_json::json!(&plan.spec.workspace_id),
+                    );
+                    obj.insert(
+                        "fencing_epoch".to_string(),
+                        serde_json::json!(initial_epoch),
+                    );
+                    obj.insert(
+                        "worker_id".to_string(),
+                        serde_json::json!(op.lease_owner.as_deref().unwrap_or("worker")),
+                    );
                 }
-                match adapter.provision(&resolved_action.resource_name, &config, resolved_action.is_persistent).await {
-                    Ok(resource) => {
-                        match adapter.health_check(&resource.id).await {
-                            Ok(health) if health.is_healthy => {
-                                collected_evidence.push(health);
-                                let _ = storage.save_resource(resource.clone()).await;
-                                provisioned_resources.push((resource, action.is_persistent));
-                                successful_resources.insert(action.resource_name.clone());
-                                completed += 1;
-                            }
-                            Ok(health) => {
-                                Self::handle_partial_failure(
-                                    &adapters,
-                                    &provisioned_resources,
-                                    &storage,
-                                    &mut op,
-                                    format!("Health probe failed for {}: {}", action.resource_name, health.message),
-                                ).await;
-                                return Ok(op);
-                            }
-                            Err(e) => {
-                                Self::handle_partial_failure(
-                                    &adapters,
-                                    &provisioned_resources,
-                                    &storage,
-                                    &mut op,
-                                    e.to_string(),
-                                ).await;
-                                return Ok(op);
-                            }
+                match adapter
+                    .provision(
+                        &resolved_action.resource_name,
+                        &config,
+                        resolved_action.is_persistent,
+                    )
+                    .await
+                {
+                    Ok(resource) => match adapter.health_check(&resource.id).await {
+                        Ok(health) if health.is_healthy => {
+                            collected_evidence.push(health);
+                            let _ = storage.save_resource(resource.clone()).await;
+                            provisioned_resources.push((resource, action.is_persistent));
+                            successful_resources.insert(action.resource_name.clone());
+                            completed += 1;
                         }
-                    }
+                        Ok(health) => {
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op,
+                                format!(
+                                    "Health probe failed for {}: {}",
+                                    action.resource_name, health.message
+                                ),
+                            )
+                            .await;
+                            return Ok(op);
+                        }
+                        Err(e) => {
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op,
+                                e.to_string(),
+                            )
+                            .await;
+                            return Ok(op);
+                        }
+                    },
                     Err(e) => {
                         Self::handle_partial_failure(
                             &adapters,
@@ -1186,7 +1426,8 @@ impl Orchestrator {
                             &storage,
                             &mut op,
                             e.to_string(),
-                        ).await;
+                        )
+                        .await;
                         return Ok(op);
                     }
                 }

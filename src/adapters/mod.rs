@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::models::{Capability, Resource, ResourceStatus};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 pub mod docker;
 pub mod mongo;
@@ -12,7 +12,6 @@ pub use docker::DockerAdapter;
 pub use mongo::MongoAdapter;
 pub use postgres::PostgresAdapter;
 pub use redis::RedisAdapter;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HealthEvidence {
@@ -44,7 +43,12 @@ pub trait ProviderAdapter: Send + Sync {
     fn supported_capabilities(&self) -> Vec<Capability>;
 
     /// Idempotent resource provisioning
-    async fn provision(&self, name: &str, config: &serde_json::Value, is_persistent: bool) -> Result<Resource>;
+    async fn provision(
+        &self,
+        name: &str,
+        config: &serde_json::Value,
+        is_persistent: bool,
+    ) -> Result<Resource>;
 
     /// Active state inspection (querying actual underlying provider)
     async fn inspect(&self, resource_id: &str) -> Result<ResourceStatus>;
@@ -53,7 +57,11 @@ pub trait ProviderAdapter: Send + Sync {
     async fn health_check(&self, resource_id: &str) -> Result<HealthEvidence>;
 
     /// Reconcile observed state towards intended state
-    async fn reconcile(&self, resource_id: &str, intended_config: &serde_json::Value) -> Result<ResourceStatus>;
+    async fn reconcile(
+        &self,
+        resource_id: &str,
+        intended_config: &serde_json::Value,
+    ) -> Result<ResourceStatus>;
 
     /// Safe destruction with persistent volume preservation safeguards
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()>;

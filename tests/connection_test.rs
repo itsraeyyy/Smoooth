@@ -1,13 +1,13 @@
+use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
-use chrono::Utc;
 
 use smoooth::adapters::docker::containers::ContainerManager;
 use smoooth::engine::Orchestrator;
 use smoooth::models::{
-    CanonicalActionSpec, CanonicalExecutionSpec, ConnectionDetails,
-    Endpoint, OperationStatus, Plan, PolicyConstraints, Resource, ResourceOwnership,
-    ResourceStatus, RiskTier, ServiceBinding, VolumeMount,
+    CanonicalActionSpec, CanonicalExecutionSpec, ConnectionDetails, Endpoint, OperationStatus,
+    Plan, PolicyConstraints, Resource, ResourceOwnership, ResourceStatus, RiskTier, ServiceBinding,
+    VolumeMount,
 };
 use smoooth::security::SecretStore;
 use smoooth::storage::{LocalStorage, Storage};
@@ -115,10 +115,7 @@ fn test_volume_mount_read_only_semantics() {
         container_path: "/var/lib/data".to_string(),
         read_only: false,
     };
-    assert_eq!(
-        rw_mount.to_docker_bind(),
-        "smoooth_data_vol:/var/lib/data"
-    );
+    assert_eq!(rw_mount.to_docker_bind(), "smoooth_data_vol:/var/lib/data");
 
     let ro_mount = VolumeMount {
         volume_name: "smoooth_config_vol".to_string(),
@@ -136,7 +133,10 @@ fn test_label_scrubbing_redaction() {
     let mut labels = HashMap::new();
     labels.insert("smoooth.workspace".to_string(), "prod-app".to_string());
     labels.insert("smoooth.service".to_string(), "web-api".to_string());
-    labels.insert("smoooth.db_password".to_string(), "dont_leak_me".to_string());
+    labels.insert(
+        "smoooth.db_password".to_string(),
+        "dont_leak_me".to_string(),
+    );
     labels.insert("app.secret_key".to_string(), "jwt_secret_token".to_string());
     labels.insert("api_token".to_string(), "bearer_abc_123".to_string());
     labels.insert("safe_env_flag".to_string(), "enabled".to_string());
@@ -185,13 +185,19 @@ async fn test_safe_credential_encryption_and_decryption() {
 
     // Safe details has stripped password
     assert!(binding.safe_connection_details.is_some());
-    assert_eq!(binding.safe_connection_details.as_ref().unwrap().password, None);
+    assert_eq!(
+        binding.safe_connection_details.as_ref().unwrap().password,
+        None
+    );
 
     // Decrypt credentials
     let decrypted = binding
         .decrypt_connection_details(&secret_store)
         .expect("Decryption must succeed");
-    assert_eq!(decrypted.password, Some("super_classified_pass_999!".to_string()));
+    assert_eq!(
+        decrypted.password,
+        Some("super_classified_pass_999!".to_string())
+    );
     assert_eq!(decrypted.host, "postgres-host");
     assert_eq!(decrypted.port, 5432);
 }
@@ -245,9 +251,15 @@ async fn test_dynamic_env_injection_bindings() {
         exposes_network_publicly: true,
     };
 
-    Orchestrator::inject_bindings(&storage, &secret_store, &mut action, &["redis_cache".to_string()], "ws-demo")
-        .await
-        .expect("Binding injection must succeed");
+    Orchestrator::inject_bindings(
+        &storage,
+        &secret_store,
+        &mut action,
+        &["redis_cache".to_string()],
+        "ws-demo",
+    )
+    .await
+    .expect("Binding injection must succeed");
 
     let env = action.config.get("env").expect("Config must have env");
     let env_obj = env.as_object().expect("Env must be JSON object");
@@ -257,10 +269,21 @@ async fn test_dynamic_env_injection_bindings() {
     assert_eq!(env_obj.get("PORT").unwrap().as_str().unwrap(), "3000");
 
     // Dynamic bindings injected
-    assert_eq!(env_obj.get("CACHE_HOST").unwrap().as_str().unwrap(), "redis-cache-1.internal");
+    assert_eq!(
+        env_obj.get("CACHE_HOST").unwrap().as_str().unwrap(),
+        "redis-cache-1.internal"
+    );
     assert_eq!(env_obj.get("CACHE_PORT").unwrap().as_str().unwrap(), "6379");
-    assert_eq!(env_obj.get("CACHE_PASSWORD").unwrap().as_str().unwrap(), "redis_secure_pass");
-    assert!(env_obj.get("CACHE_URL").unwrap().as_str().unwrap().starts_with("redis://"));
+    assert_eq!(
+        env_obj.get("CACHE_PASSWORD").unwrap().as_str().unwrap(),
+        "redis_secure_pass"
+    );
+    assert!(env_obj
+        .get("CACHE_URL")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .starts_with("redis://"));
 }
 
 #[tokio::test]
@@ -312,18 +335,31 @@ async fn test_custom_env_mappings_injection() {
         exposes_network_publicly: false,
     };
 
-    Orchestrator::inject_bindings(&storage, &secret_store, &mut action, &["custom_postgres".to_string()], "ws-custom")
-        .await
-        .expect("Binding injection must succeed");
+    Orchestrator::inject_bindings(
+        &storage,
+        &secret_store,
+        &mut action,
+        &["custom_postgres".to_string()],
+        "ws-custom",
+    )
+    .await
+    .expect("Binding injection must succeed");
 
     let env = action.config.get("env").expect("Config must have env");
     let env_obj = env.as_object().unwrap();
 
     assert_eq!(
-        env_obj.get("DATABASE_CONNECTION_STRING").unwrap().as_str().unwrap(),
+        env_obj
+            .get("DATABASE_CONNECTION_STRING")
+            .unwrap()
+            .as_str()
+            .unwrap(),
         "postgresql://appuser:apppassword@pg.internal:5432/myapp_db"
     );
-    assert_eq!(env_obj.get("SQL_HOST").unwrap().as_str().unwrap(), "pg.internal");
+    assert_eq!(
+        env_obj.get("SQL_HOST").unwrap().as_str().unwrap(),
+        "pg.internal"
+    );
     assert_eq!(env_obj.get("SQL_DB").unwrap().as_str().unwrap(), "myapp_db");
 }
 
@@ -362,7 +398,10 @@ async fn test_cross_workspace_isolation_rejection() {
     )
     .await;
 
-    assert!(result.is_err(), "Cross-workspace resolution must be rejected");
+    assert!(
+        result.is_err(),
+        "Cross-workspace resolution must be rejected"
+    );
     let err_str = result.err().unwrap().to_string();
     assert!(
         err_str.contains("Cross-workspace boundary violation") || err_str.contains("not found"),
@@ -476,7 +515,10 @@ async fn test_external_resource_safe_cross_workspace_and_delete_protection() {
 
     // Verify external resource still exists intact in storage
     let still_exists = storage.get_resource("external-rds-pg").await.unwrap();
-    assert!(still_exists.is_some(), "External resource must NOT be removed from storage");
+    assert!(
+        still_exists.is_some(),
+        "External resource must NOT be removed from storage"
+    );
 }
 
 #[test]
@@ -485,25 +527,37 @@ fn test_explicit_label_allowlist_and_value_sanitization() {
     labels.insert("smoooth.workspace".to_string(), "prod-ws".to_string());
     labels.insert("app.name".to_string(), "my-billing-service".to_string());
     labels.insert("app.version".to_string(), "2.4.1".to_string());
-    labels.insert("org.opencontainers.image.title".to_string(), "billing-app".to_string());
-    
+    labels.insert(
+        "org.opencontainers.image.title".to_string(),
+        "billing-app".to_string(),
+    );
+
     // Non-allowlisted arbitrary labels (must be dropped)
     labels.insert("random_tag".to_string(), "random_value".to_string());
     labels.insert("internal_data".to_string(), "cluster-123".to_string());
 
     // Allowlisted keys with sensitive value patterns (must be dropped)
-    labels.insert("app.service".to_string(), "super_secret_password_here".to_string());
+    labels.insert(
+        "app.service".to_string(),
+        "super_secret_password_here".to_string(),
+    );
 
     let filtered = ContainerManager::filter_safe_labels(&labels);
     assert_eq!(filtered.len(), 4);
     assert_eq!(filtered.get("smoooth.workspace").unwrap(), "prod-ws");
     assert_eq!(filtered.get("app.name").unwrap(), "my-billing-service");
     assert_eq!(filtered.get("app.version").unwrap(), "2.4.1");
-    assert_eq!(filtered.get("org.opencontainers.image.title").unwrap(), "billing-app");
+    assert_eq!(
+        filtered.get("org.opencontainers.image.title").unwrap(),
+        "billing-app"
+    );
 
     assert!(!filtered.contains_key("random_tag"));
     assert!(!filtered.contains_key("internal_data"));
-    assert!(!filtered.contains_key("app.service"), "Sensitive value must trigger label omission");
+    assert!(
+        !filtered.contains_key("app.service"),
+        "Sensitive value must trigger label omission"
+    );
 }
 
 #[test]
@@ -514,26 +568,38 @@ fn test_external_endpoint_ssrf_and_protocol_validation() {
     assert!(ssrf_aws.unwrap_err().to_string().contains("SSRF blocked"));
 
     // 2. GCP metadata service address must be rejected
-    let ssrf_gcp = Orchestrator::validate_external_endpoint("redis", "metadata.google.internal", 6379);
+    let ssrf_gcp =
+        Orchestrator::validate_external_endpoint("redis", "metadata.google.internal", 6379);
     assert!(ssrf_gcp.is_err());
     assert!(ssrf_gcp.unwrap_err().to_string().contains("SSRF blocked"));
 
     // 3. Port 0 must be rejected
     let zero_port = Orchestrator::validate_external_endpoint("postgres", "rds.amazonaws.com", 0);
     assert!(zero_port.is_err());
-    assert!(zero_port.unwrap_err().to_string().contains("invalid external port 0"));
+    assert!(zero_port
+        .unwrap_err()
+        .to_string()
+        .contains("invalid external port 0"));
 
     // 4. Unsupported protocol must be rejected
     let bad_proto = Orchestrator::validate_external_endpoint("ftp", "ftp.example.com", 21);
     assert!(bad_proto.is_err());
-    assert!(bad_proto.unwrap_err().to_string().contains("unsupported external protocol"));
+    assert!(bad_proto
+        .unwrap_err()
+        .to_string()
+        .contains("unsupported external protocol"));
 
     // 5. Valid external cloud database must be accepted
-    let valid_rds = Orchestrator::validate_external_endpoint("postgres", "mydb.c78abc123.us-east-1.rds.amazonaws.com", 5432);
+    let valid_rds = Orchestrator::validate_external_endpoint(
+        "postgres",
+        "mydb.c78abc123.us-east-1.rds.amazonaws.com",
+        5432,
+    );
     assert!(valid_rds.is_ok());
 
     // 6. Valid external Redis cache must be accepted
-    let valid_redis = Orchestrator::validate_external_endpoint("redis", "my-cache.cache.amazonaws.com", 6379);
+    let valid_redis =
+        Orchestrator::validate_external_endpoint("redis", "my-cache.cache.amazonaws.com", 6379);
     assert!(valid_redis.is_ok());
 }
 
@@ -550,12 +616,20 @@ fn test_redis_connection_details_and_env_mapping() {
     };
 
     let env_unmasked = conn.to_env_map(Some("CACHE"), false);
-    assert_eq!(env_unmasked.get("CACHE_HOST").unwrap(), "redis-cluster.local");
+    assert_eq!(
+        env_unmasked.get("CACHE_HOST").unwrap(),
+        "redis-cluster.local"
+    );
     assert_eq!(env_unmasked.get("CACHE_PORT").unwrap(), "6379");
-    assert_eq!(env_unmasked.get("CACHE_PASSWORD").unwrap(), "redis_p@ssword_999!");
-    assert_eq!(env_unmasked.get("CACHE_URL").unwrap(), "redis://redis-cluster.local:6379/0");
+    assert_eq!(
+        env_unmasked.get("CACHE_PASSWORD").unwrap(),
+        "redis_p@ssword_999!"
+    );
+    assert_eq!(
+        env_unmasked.get("CACHE_URL").unwrap(),
+        "redis://redis-cluster.local:6379/0"
+    );
 
     let env_masked = conn.to_env_map(Some("CACHE"), true);
     assert_eq!(env_masked.get("CACHE_PASSWORD").unwrap(), "[REDACTED]");
 }
-

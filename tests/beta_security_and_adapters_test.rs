@@ -77,10 +77,7 @@ async fn test_agent_pairing_hashing_and_revocation() {
         .is_none());
 
     // New token should authenticate
-    let auth_new = orchestrator
-        .authenticate_agent(&new_token)
-        .await
-        .unwrap();
+    let auth_new = orchestrator.authenticate_agent(&new_token).await.unwrap();
     assert!(auth_new.is_some());
 
     // 6. Test revocation
@@ -176,9 +173,15 @@ async fn test_mongo_adapter_guarantees_and_capabilities() {
     assert_eq!(capabilities[0].id, "cap_mongo_db");
     assert_eq!(capabilities[0].provider, "mongodb");
     assert_eq!(capabilities[0].service_type, "database");
-    assert!(capabilities[0].operations.contains(&"provision".to_string()));
-    assert!(capabilities[0].operations.contains(&"health_check".to_string()));
-    assert!(capabilities[0].operations.contains(&"reconcile".to_string()));
+    assert!(capabilities[0]
+        .operations
+        .contains(&"provision".to_string()));
+    assert!(capabilities[0]
+        .operations
+        .contains(&"health_check".to_string()));
+    assert!(capabilities[0]
+        .operations
+        .contains(&"reconcile".to_string()));
     assert!(capabilities[0].operations.contains(&"destroy".to_string()));
 }
 
@@ -223,7 +226,9 @@ async fn test_embedded_sqlite_workload_pattern() {
         },
     };
 
-    let execution_order = spec.resolve_execution_order().expect("DAG resolution should succeed");
+    let execution_order = spec
+        .resolve_execution_order()
+        .expect("DAG resolution should succeed");
     assert_eq!(execution_order.len(), 1);
     assert_eq!(execution_order[0].resource_name, "sqlite-app");
     assert!(execution_order[0].is_persistent);
@@ -258,12 +263,7 @@ async fn test_connected_external_resource_guarantees() {
 
 #[tokio::test]
 async fn test_doctor_diagnostics_report() {
-    let report = Doctor::run_diagnostics(
-        "/tmp/smoooth_test_state.json",
-        "127.0.0.1",
-        4040,
-    )
-    .await;
+    let report = Doctor::run_diagnostics("/tmp/smoooth_test_state.json", "127.0.0.1", 4040).await;
 
     assert!(!report.checks.is_empty());
     let check_names: Vec<String> = report.checks.iter().map(|c| c.name.clone()).collect();

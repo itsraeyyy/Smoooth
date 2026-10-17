@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::models::{Capability, CapabilitySchema, SupportLevel};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpToolDefinition {
@@ -215,7 +215,6 @@ pub fn get_default_capabilities() -> Vec<Capability> {
         },
     ]
 }
-
 
 pub fn get_capability_schema_detail(capability_id: &str) -> Option<CapabilitySchema> {
     match capability_id {
@@ -476,4 +475,3 @@ pub fn get_capability_schema_detail(capability_id: &str) -> Option<CapabilitySch
         _ => None,
     }
 }
-

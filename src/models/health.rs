@@ -16,13 +16,9 @@ pub enum HealthSpec {
         expected_status: u16,
     },
     /// Active TCP socket connection probe against local port
-    Tcp {
-        port: u16,
-    },
+    Tcp { port: u16 },
     /// Safe execution probe inside container using argument array (no shell parsing)
-    Exec {
-        cmd: Vec<String>,
-    },
+    Exec { cmd: Vec<String> },
     /// Basic process liveness probe (running container state)
     Liveness,
 }

@@ -65,7 +65,9 @@ impl PostgresAdapter {
 
         Err(SmooothError::Timeout(format!(
             "PostgreSQL at {}:{} did not become ready within {}s",
-            host, port, timeout_duration.as_secs()
+            host,
+            port,
+            timeout_duration.as_secs()
         )))
     }
 }
@@ -187,7 +189,10 @@ impl ProviderAdapter for PostgresAdapter {
         let (connect_host, connect_port) = if let Some(p) = host_port {
             ("127.0.0.1".to_string(), p)
         } else {
-            let ip = self.docker_adapter.get_container_ip(&container_res.id).await?;
+            let ip = self
+                .docker_adapter
+                .get_container_ip(&container_res.id)
+                .await?;
             (ip, 5432)
         };
 
@@ -213,11 +218,18 @@ impl ProviderAdapter for PostgresAdapter {
             }
         };
 
-        tracing::info!("PostgreSQL service '{}' active and verified (query latency: {}ms)", name, latency);
+        tracing::info!(
+            "PostgreSQL service '{}' active and verified (query latency: {}ms)",
+            name,
+            latency
+        );
 
         let mut output_config = config.clone();
         if let Some(obj) = output_config.as_object_mut() {
-            obj.insert("container_id".to_string(), serde_json::json!(container_res.id));
+            obj.insert(
+                "container_id".to_string(),
+                serde_json::json!(container_res.id),
+            );
             obj.insert("host".to_string(), serde_json::json!(&connect_host));
             obj.insert("port".to_string(), serde_json::json!(connect_port));
             obj.insert("volume_name".to_string(), serde_json::json!(volume_name));
@@ -266,11 +278,15 @@ impl ProviderAdapter for PostgresAdapter {
         resource_id: &str,
         intended_config: &serde_json::Value,
     ) -> Result<ResourceStatus> {
-        self.docker_adapter.reconcile(resource_id, intended_config).await
+        self.docker_adapter
+            .reconcile(resource_id, intended_config)
+            .await
     }
 
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()> {
         // Destroy the container, but NEVER delete the persistent volume if preserve_persistent_data is true!
-        self.docker_adapter.destroy(resource_id, preserve_persistent_data).await
+        self.docker_adapter
+            .destroy(resource_id, preserve_persistent_data)
+            .await
     }
 }

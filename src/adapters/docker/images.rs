@@ -1,6 +1,6 @@
-use std::time::Duration;
 use bollard::image::CreateImageOptions;
 use futures_util::StreamExt;
+use std::time::Duration;
 use tokio::time::timeout;
 
 use crate::adapters::docker::client::DockerClient;
@@ -47,7 +47,10 @@ impl ImageManager {
         timeout(Duration::from_secs(300), pull_future)
             .await
             .map_err(|_| {
-                SmooothError::Timeout(format!("Image pull for '{}' timed out after 300s", full_reference))
+                SmooothError::Timeout(format!(
+                    "Image pull for '{}' timed out after 300s",
+                    full_reference
+                ))
             })?
     }
 }

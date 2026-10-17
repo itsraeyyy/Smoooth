@@ -7,7 +7,9 @@ use smoooth::adapters::docker::containers::{ContainerManager, ContainerSpec};
 use smoooth::adapters::docker::DockerAdapter;
 use smoooth::adapters::redis::RedisAdapter;
 use smoooth::engine::Orchestrator;
-use smoooth::models::plan::{CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan, PolicyConstraints, RiskTier};
+use smoooth::models::plan::{
+    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, Plan, PolicyConstraints, RiskTier,
+};
 use smoooth::models::OperationStatus;
 use smoooth::security::SecretStore;
 use smoooth::storage::LocalStorage;
@@ -20,12 +22,18 @@ async fn test_live_docker_polyglot_redis_application_deployment() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
             Err(e) => {
-                println!("Docker daemon not reachable: {}. Skipping live integration test.", e);
+                println!(
+                    "Docker daemon not reachable: {}. Skipping live integration test.",
+                    e
+                );
                 return;
             }
         },
         Err(e) => {
-            println!("Docker client initialization failed: {}. Skipping live integration test.", e);
+            println!(
+                "Docker client initialization failed: {}. Skipping live integration test.",
+                e
+            );
             return;
         }
     };
@@ -41,7 +49,8 @@ async fn test_live_docker_polyglot_redis_application_deployment() {
 
     let storage = Arc::new(LocalStorage::new_in_memory());
     let secret_store = Arc::new(SecretStore::default_local());
-    let mut orchestrator = Orchestrator::new(storage.clone()).with_secret_store(secret_store.clone());
+    let mut orchestrator =
+        Orchestrator::new(storage.clone()).with_secret_store(secret_store.clone());
 
     let docker_adapter = Arc::new(DockerAdapter::with_client(client.clone()));
     let redis_adapter = Arc::new(RedisAdapter::new(docker_adapter.clone()));
@@ -172,53 +181,93 @@ while True:
     );
 
     println!("[Phase 1] Executing plan via Orchestrator DAG engine...");
-    let op = orchestrator.execute_plan_sync(plan, "idemp-polyglot-1".to_string()).await
+    let op = orchestrator
+        .execute_plan_sync(plan, "idemp-polyglot-1".to_string())
+        .await
         .expect("Plan execution must succeed");
 
     if op.status != OperationStatus::Succeeded {
         eprintln!(">>> EXECUTION FAILED WITH ERROR: {:?}", op.error_message);
     }
-    assert_eq!(op.status, OperationStatus::Succeeded, "Plan execution should succeed: {:?}", op.error_message);
+    assert_eq!(
+        op.status,
+        OperationStatus::Succeeded,
+        "Plan execution should succeed: {:?}",
+        op.error_message
+    );
     println!(">>> Plan succeeded! Verifying Redis and Application live containers...");
 
     // -------------------------------------------------------------------------
     // Phase 2: Active Verification of Deployed Services
     // -------------------------------------------------------------------------
-    let redis_inspect = client.inner().inspect_container(redis_name, None).await
+    let redis_inspect = client
+        .inner()
+        .inspect_container(redis_name, None)
+        .await
         .expect("Inspect redis container");
     let is_redis_running = redis_inspect.state.and_then(|s| s.running).unwrap_or(false);
     assert!(is_redis_running, "Redis container must be running");
 
-    let app_inspect = client.inner().inspect_container(app_name, None).await
+    let app_inspect = client
+        .inner()
+        .inspect_container(app_name, None)
+        .await
         .expect("Inspect app container");
     let is_app_running = app_inspect.state.and_then(|s| s.running).unwrap_or(false);
     assert!(is_app_running, "Application container must be running");
 
     // Verify injected bindings inside application container
     let app_env = app_inspect.config.and_then(|c| c.env).unwrap_or_default();
-    assert!(app_env.iter().any(|e| e == &format!("REDIS_HOST={}", redis_name)), "Must have REDIS_HOST pointing to redis resource");
-    assert!(app_env.iter().any(|e| e == "REDIS_PORT=6379"), "Must have internal REDIS_PORT 6379");
-    assert!(app_env.iter().any(|e| e == "REDIS_PASSWORD=smoooth_secure_redis_pwd_2026!"), "Must have REDIS_PASSWORD");
+    assert!(
+        app_env
+            .iter()
+            .any(|e| e == &format!("REDIS_HOST={}", redis_name)),
+        "Must have REDIS_HOST pointing to redis resource"
+    );
+    assert!(
+        app_env.iter().any(|e| e == "REDIS_PORT=6379"),
+        "Must have internal REDIS_PORT 6379"
+    );
+    assert!(
+        app_env
+            .iter()
+            .any(|e| e == "REDIS_PASSWORD=smoooth_secure_redis_pwd_2026!"),
+        "Must have REDIS_PASSWORD"
+    );
     println!(">>> Injected bindings verified in running application container!");
 
     // Verify application's HTTP health server is responding
-    let app_port = ContainerManager::get_host_port(&client, app_name, 8080).await
+    let app_port = ContainerManager::get_host_port(&client, app_name, 8080)
+        .await
         .expect("Failed to get app host port");
     println!("App listening on host loopback port: {}", app_port);
 
     sleep(Duration::from_millis(500)).await;
 
     // Test health endpoint using raw TCP HTTP request
-    let mut http_stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", app_port)).await
+    let mut http_stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", app_port))
+        .await
         .expect("Should connect to app HTTP port");
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    http_stream.write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n").await.unwrap();
+    http_stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
+        .await
+        .unwrap();
     let mut http_buf = [0u8; 1024];
     let n = http_stream.read(&mut http_buf).await.unwrap();
     let http_resp = String::from_utf8_lossy(&http_buf[..n]);
-    assert!(http_resp.contains("200 OK"), "App health endpoint must return 200 OK");
-    assert!(http_resp.contains("\"redis_status\":\"verified\""), "App response must confirm Redis interaction");
-    println!(">>> App HTTP probe verified: {}", http_resp.lines().next().unwrap_or(""));
+    assert!(
+        http_resp.contains("200 OK"),
+        "App health endpoint must return 200 OK"
+    );
+    assert!(
+        http_resp.contains("\"redis_status\":\"verified\""),
+        "App response must confirm Redis interaction"
+    );
+    println!(
+        ">>> App HTTP probe verified: {}",
+        http_resp.lines().next().unwrap_or("")
+    );
 
     // -------------------------------------------------------------------------
     // Phase 3: Workload Replacement Preserving Persistent Data
@@ -258,7 +307,11 @@ sys.exit(0)
     let replacement_spec = ContainerSpec {
         name: app_name.to_string(),
         image: "python:3.11-alpine".to_string(),
-        cmd: Some(vec!["python".to_string(), "-c".to_string(), updated_script.to_string()]),
+        cmd: Some(vec![
+            "python".to_string(),
+            "-c".to_string(),
+            updated_script.to_string(),
+        ]),
         env: vec![
             "APP_ENV=polyglot_demo_v2".to_string(), // Drift triggers replacement
             format!("REDIS_HOST={}", redis_name),
@@ -280,14 +333,25 @@ sys.exit(0)
         health_spec: None,
     };
 
-    let repl_id = ContainerManager::create_and_start(&client, &replacement_spec).await
+    let repl_id = ContainerManager::create_and_start(&client, &replacement_spec)
+        .await
         .expect("Safe replacement must succeed");
-    println!(">>> Replacement container executed successfully (ID: {})", &repl_id[..12]);
+    println!(
+        ">>> Replacement container executed successfully (ID: {})",
+        &repl_id[..12]
+    );
     sleep(Duration::from_millis(1500)).await;
 
-    let repl_inspect = client.inner().inspect_container(&repl_id, None).await.expect("inspect replacement container");
+    let repl_inspect = client
+        .inner()
+        .inspect_container(&repl_id, None)
+        .await
+        .expect("inspect replacement container");
     let exit_code = repl_inspect.state.and_then(|s| s.exit_code).unwrap_or(-1);
-    assert_eq!(exit_code, 0, "Replacement container should have exited with code 0 (confirming counter reached 2)");
+    assert_eq!(
+        exit_code, 0,
+        "Replacement container should have exited with code 0 (confirming counter reached 2)"
+    );
     println!(">>> Persistent counter 2 verified after container replacement!");
 
     // -------------------------------------------------------------------------
@@ -301,7 +365,11 @@ sys.exit(0)
     let stable_spec = ContainerSpec {
         name: stable_name.to_string(),
         image: "alpine:latest".to_string(),
-        cmd: Some(vec!["/bin/sh".to_string(), "-c".to_string(), "echo 'stable_v1'; sleep 3600".to_string()]),
+        cmd: Some(vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "echo 'stable_v1'; sleep 3600".to_string(),
+        ]),
         env: vec!["STAGE=stable_v1".to_string()],
         port_bindings: HashMap::new(),
         volume_mounts: vec![],
@@ -314,9 +382,13 @@ sys.exit(0)
         health_spec: None,
     };
 
-    let original_id = ContainerManager::create_and_start(&client, &stable_spec).await
+    let original_id = ContainerManager::create_and_start(&client, &stable_spec)
+        .await
         .expect("Stable container start failed");
-    println!("Original stable container started (ID: {})", &original_id[..12]);
+    println!(
+        "Original stable container started (ID: {})",
+        &original_id[..12]
+    );
 
     // Now attempt a replacement with an invalid image that fails creation
     let failing_replacement_spec = ContainerSpec {
@@ -336,21 +408,43 @@ sys.exit(0)
     };
 
     let fail_result = ContainerManager::create_and_start(&client, &failing_replacement_spec).await;
-    assert!(fail_result.is_err(), "Replacement with nonexistent image must fail");
+    assert!(
+        fail_result.is_err(),
+        "Replacement with nonexistent image must fail"
+    );
     let err_msg = fail_result.err().unwrap().to_string();
     assert!(
         err_msg.contains("automatically rolled back"),
-        "Error message must confirm automatic rollback: {}", err_msg
+        "Error message must confirm automatic rollback: {}",
+        err_msg
     );
-    println!(">>> Verified error confirmed automatic rollback: {}", err_msg);
+    println!(
+        ">>> Verified error confirmed automatic rollback: {}",
+        err_msg
+    );
 
     // Verify original stable container is still present, running, and restored!
-    let restored_inspect = client.inner().inspect_container(stable_name, None).await
+    let restored_inspect = client
+        .inner()
+        .inspect_container(stable_name, None)
+        .await
         .expect("Original container must exist after rollback");
-    let is_restored_running = restored_inspect.state.and_then(|s| s.running).unwrap_or(false);
-    assert!(is_restored_running, "Rolled-back container must be running!");
-    let restored_env = restored_inspect.config.and_then(|c| c.env).unwrap_or_default();
-    assert!(restored_env.iter().any(|e| e == "STAGE=stable_v1"), "Restored container must retain original env");
+    let is_restored_running = restored_inspect
+        .state
+        .and_then(|s| s.running)
+        .unwrap_or(false);
+    assert!(
+        is_restored_running,
+        "Rolled-back container must be running!"
+    );
+    let restored_env = restored_inspect
+        .config
+        .and_then(|c| c.env)
+        .unwrap_or_default();
+    assert!(
+        restored_env.iter().any(|e| e == "STAGE=stable_v1"),
+        "Restored container must retain original env"
+    );
     println!(">>> Automatic rollback verified: original container is running and healthy!");
 
     // -------------------------------------------------------------------------

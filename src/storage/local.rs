@@ -22,7 +22,6 @@ struct StateSnapshot {
     audit_events: Vec<AuditEvent>,
 }
 
-
 #[derive(Clone)]
 pub struct LocalStorage {
     snapshot_path: Option<PathBuf>,
@@ -74,8 +73,9 @@ impl LocalStorage {
     async fn persist_snapshot(&self) -> Result<()> {
         if let Some(path) = &self.snapshot_path {
             let state = self.state.read().await;
-            let json = serde_json::to_string_pretty(&*state)
-                .map_err(|e| crate::error::SmooothError::Storage(format!("JSON serialization failed: {}", e)))?;
+            let json = serde_json::to_string_pretty(&*state).map_err(|e| {
+                crate::error::SmooothError::Storage(format!("JSON serialization failed: {}", e))
+            })?;
             drop(state);
 
             let tmp_path = path.with_extension("tmp");
@@ -83,12 +83,18 @@ impl LocalStorage {
 
             // 1. Atomic write to temp file with fsync
             use tokio::io::AsyncWriteExt;
-            let mut file = tokio::fs::File::create(&tmp_path).await
-                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to create temp snapshot: {}", e)))?;
-            file.write_all(json.as_bytes()).await
-                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to write temp snapshot: {}", e)))?;
-            file.sync_all().await
-                .map_err(|e| crate::error::SmooothError::Storage(format!("Failed to sync temp snapshot: {}", e)))?;
+            let mut file = tokio::fs::File::create(&tmp_path).await.map_err(|e| {
+                crate::error::SmooothError::Storage(format!(
+                    "Failed to create temp snapshot: {}",
+                    e
+                ))
+            })?;
+            file.write_all(json.as_bytes()).await.map_err(|e| {
+                crate::error::SmooothError::Storage(format!("Failed to write temp snapshot: {}", e))
+            })?;
+            file.sync_all().await.map_err(|e| {
+                crate::error::SmooothError::Storage(format!("Failed to sync temp snapshot: {}", e))
+            })?;
             drop(file);
 
             // 2. Backup existing snapshot before atomic overwrite
@@ -97,14 +103,21 @@ impl LocalStorage {
             }
 
             // 3. Atomic rename temp file to primary snapshot path
-            tokio::fs::rename(&tmp_path, path).await
-                .map_err(|e| crate::error::SmooothError::Storage(format!("Atomic rename failed for state snapshot: {}", e)))?;
+            tokio::fs::rename(&tmp_path, path).await.map_err(|e| {
+                crate::error::SmooothError::Storage(format!(
+                    "Atomic rename failed for state snapshot: {}",
+                    e
+                ))
+            })?;
         }
         Ok(())
     }
 
     fn serialize_idemp_key(key: &IdempotencyKey) -> String {
-        format!("{}:{}:{}", key.workspace_id, key.operation_type, key.client_key)
+        format!(
+            "{}:{}:{}",
+            key.workspace_id, key.operation_type, key.client_key
+        )
     }
 }
 
@@ -125,7 +138,11 @@ impl Storage for LocalStorage {
 
     async fn get_agent_by_token_hash(&self, token_hash: &str) -> Result<Option<AgentIdentity>> {
         let state = self.state.read().await;
-        Ok(state.agents.values().find(|a| a.token_hash == token_hash).cloned())
+        Ok(state
+            .agents
+            .values()
+            .find(|a| a.token_hash == token_hash)
+            .cloned())
     }
 
     async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>> {
@@ -184,7 +201,10 @@ impl Storage for LocalStorage {
         Ok(())
     }
 
-    async fn check_or_record_idempotency(&self, record: IdempotencyRecord) -> Result<Option<IdempotencyRecord>> {
+    async fn check_or_record_idempotency(
+        &self,
+        record: IdempotencyRecord,
+    ) -> Result<Option<IdempotencyRecord>> {
         let key_str = Self::serialize_idemp_key(&record.key);
         let mut state = self.state.write().await;
         if let Some(existing) = state.idempotency.get(&key_str) {
@@ -226,7 +246,9 @@ impl Storage for LocalStorage {
     async fn save_resource(&self, resource: Resource) -> Result<()> {
         let mut state = self.state.write().await;
         // Retain only latest resource with matching name in the same workspace
-        state.resources.retain(|_, r| !(r.name == resource.name && r.workspace_id == resource.workspace_id));
+        state
+            .resources
+            .retain(|_, r| !(r.name == resource.name && r.workspace_id == resource.workspace_id));
         state.resources.insert(resource.id.clone(), resource);
         drop(state);
         self.persist_snapshot().await?;
@@ -263,7 +285,11 @@ impl Storage for LocalStorage {
         let key_to_remove = if state.resources.contains_key(id) {
             Some(id.to_string())
         } else {
-            state.resources.iter().find(|(_, r)| r.name == id).map(|(k, _)| k.clone())
+            state
+                .resources
+                .iter()
+                .find(|(_, r)| r.name == id)
+                .map(|(k, _)| k.clone())
         };
         if let Some(k) = key_to_remove {
             state.resources.remove(&k);
@@ -299,11 +325,12 @@ impl Storage for LocalStorage {
         let mut list: Vec<AuditEvent> = state
             .audit_events
             .iter()
-            .filter(|e| workspace_id == "*" || workspace_id.is_empty() || e.workspace_id == workspace_id)
+            .filter(|e| {
+                workspace_id == "*" || workspace_id.is_empty() || e.workspace_id == workspace_id
+            })
             .cloned()
             .collect();
-        list.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        list.sort_by_key(|a| std::cmp::Reverse(a.timestamp));
         Ok(list)
     }
 }
-

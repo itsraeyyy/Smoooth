@@ -1,6 +1,6 @@
-/// Self-contained Smoooth Operator Control Dashboard
-/// Embedded directly into the binary with zero external runtime dependencies.
-/// Follows the deep charcoal, high-legibility, restrained data visual design.
+//! Self-contained Smoooth Operator Control Dashboard
+//! Embedded directly into the binary with zero external runtime dependencies.
+//! Follows the deep charcoal, high-legibility, restrained data visual design.
 
 pub fn get_dashboard_html() -> &'static str {
     DASHBOARD_HTML

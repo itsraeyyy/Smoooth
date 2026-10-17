@@ -18,7 +18,9 @@ use volumes::VolumeManager;
 
 use crate::adapters::{AdapterGuarantees, HealthEvidence, ProviderAdapter};
 use crate::error::{Result, SmooothError};
-use crate::models::{Capability, HealthSpec, Resource, ResourceOwnership, ResourceStatus, SupportLevel, VolumeMount};
+use crate::models::{
+    Capability, HealthSpec, Resource, ResourceOwnership, ResourceStatus, SupportLevel, VolumeMount,
+};
 
 pub struct DockerAdapter {
     client: Option<DockerClient>,
@@ -31,7 +33,9 @@ impl DockerAdapter {
     }
 
     pub fn with_client(client: DockerClient) -> Self {
-        Self { client: Some(client) }
+        Self {
+            client: Some(client),
+        }
     }
 
     fn require_client(&self) -> Result<&DockerClient> {
@@ -93,7 +97,9 @@ impl ProviderAdapter for DockerAdapter {
                 provider: "docker".to_string(),
                 service_type: "compute".to_string(),
                 support_level: SupportLevel::SelfHosted,
-                description: "Runs isolated application containers on local or customer Docker engine.".to_string(),
+                description:
+                    "Runs isolated application containers on local or customer Docker engine."
+                        .to_string(),
                 operations: vec![
                     "provision".to_string(),
                     "inspect".to_string(),
@@ -108,7 +114,8 @@ impl ProviderAdapter for DockerAdapter {
                 provider: "docker".to_string(),
                 service_type: "network".to_string(),
                 support_level: SupportLevel::SelfHosted,
-                description: "Isolated inter-service bridge network with DNS resolution.".to_string(),
+                description: "Isolated inter-service bridge network with DNS resolution."
+                    .to_string(),
                 operations: vec!["provision".to_string(), "inspect".to_string()],
             },
             Capability {
@@ -117,7 +124,8 @@ impl ProviderAdapter for DockerAdapter {
                 provider: "docker".to_string(),
                 service_type: "storage".to_string(),
                 support_level: SupportLevel::SelfHosted,
-                description: "Persistent named host volumes with data retention guarantees.".to_string(),
+                description: "Persistent named host volumes with data retention guarantees."
+                    .to_string(),
                 operations: vec!["provision".to_string(), "inspect".to_string()],
             },
         ]
@@ -146,9 +154,7 @@ impl ProviderAdapter for DockerAdapter {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let pinned_digest = config
-            .get("digest")
-            .and_then(|v| v.as_str());
+        let pinned_digest = config.get("digest").and_then(|v| v.as_str());
 
         // 1. Ensure image is pulled
         ImageManager::ensure_image(client, image, pinned_digest).await?;
@@ -166,9 +172,17 @@ impl ProviderAdapter for DockerAdapter {
                     v.get("volume_name").and_then(|s| s.as_str()),
                     v.get("container_path").and_then(|s| s.as_str()),
                 ) {
-                    let read_only = v.get("read_only").and_then(|b| b.as_bool()).unwrap_or(false);
-                    VolumeManager::ensure_volume(client, vol_name, workspace_id, is_persistent).await?;
-                    volume_mounts.push(VolumeMount::new(vol_name.to_string(), mount_path.to_string(), read_only));
+                    let read_only = v
+                        .get("read_only")
+                        .and_then(|b| b.as_bool())
+                        .unwrap_or(false);
+                    VolumeManager::ensure_volume(client, vol_name, workspace_id, is_persistent)
+                        .await?;
+                    volume_mounts.push(VolumeMount::new(
+                        vol_name.to_string(),
+                        mount_path.to_string(),
+                        read_only,
+                    ));
                 }
             }
         }
@@ -177,7 +191,8 @@ impl ProviderAdapter for DockerAdapter {
         let mut port_bindings = HashMap::new();
         if let Some(ports) = config.get("ports").and_then(|v| v.as_object()) {
             for (c_port_str, h_port_val) in ports {
-                if let (Ok(c_port), Some(h_port)) = (c_port_str.parse::<u16>(), h_port_val.as_u64()) {
+                if let (Ok(c_port), Some(h_port)) = (c_port_str.parse::<u16>(), h_port_val.as_u64())
+                {
                     port_bindings.insert(c_port, h_port as u16);
                 }
             }
@@ -203,11 +218,14 @@ impl ProviderAdapter for DockerAdapter {
 
         let cmd = config.get("cmd").and_then(|v| {
             if let Some(arr) = v.as_array() {
-                Some(arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
-            } else if let Some(s) = v.as_str() {
-                Some(vec!["sh".to_string(), "-c".to_string(), s.to_string()])
+                Some(
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                        .collect(),
+                )
             } else {
-                None
+                v.as_str()
+                    .map(|s| vec!["sh".to_string(), "-c".to_string(), s.to_string()])
             }
         });
 
@@ -216,17 +234,11 @@ impl ProviderAdapter for DockerAdapter {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let memory_bytes = config
-            .get("memory_bytes")
-            .and_then(|v| v.as_i64());
+        let memory_bytes = config.get("memory_bytes").and_then(|v| v.as_i64());
 
-        let cpu_shares = config
-            .get("cpu_shares")
-            .and_then(|v| v.as_i64());
+        let cpu_shares = config.get("cpu_shares").and_then(|v| v.as_i64());
 
-        let nano_cpus = config
-            .get("nano_cpus")
-            .and_then(|v| v.as_i64());
+        let nano_cpus = config.get("nano_cpus").and_then(|v| v.as_i64());
 
         let health_spec: Option<HealthSpec> = config
             .get("health_check")

@@ -1,8 +1,8 @@
-use std::collections::{BTreeSet, HashMap};
 use chrono::{DateTime, Utc};
 use hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::error::SmooothError;
 
@@ -125,7 +125,9 @@ impl CanonicalExecutionSpec {
         }
 
         for edge in &self.dependencies {
-            adj.get_mut(edge.to.as_str()).unwrap().push(edge.from.as_str());
+            adj.get_mut(edge.to.as_str())
+                .unwrap()
+                .push(edge.from.as_str());
             *in_degree.get_mut(edge.from.as_str()).unwrap() += 1;
         }
 
@@ -208,7 +210,12 @@ impl Plan {
         hex::encode(hasher.finalize())
     }
 
-    pub fn new(id: String, spec: CanonicalExecutionSpec, risk_tier: RiskTier, cost: Option<f64>) -> Self {
+    pub fn new(
+        id: String,
+        spec: CanonicalExecutionSpec,
+        risk_tier: RiskTier,
+        cost: Option<f64>,
+    ) -> Self {
         let plan_hash = Self::compute_canonical_hash(&spec);
         Self {
             id,

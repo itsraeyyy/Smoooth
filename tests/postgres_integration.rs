@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use smoooth::adapters::docker::client::DockerClient;
 use smoooth::adapters::docker::DockerAdapter;
 use smoooth::adapters::postgres::PostgresAdapter;
 use smoooth::adapters::ProviderAdapter;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_postgres_provisioning_and_query_when_docker_available() {
@@ -30,7 +30,10 @@ async fn test_postgres_provisioning_and_query_when_docker_available() {
 
     // 1. Provision real PostgreSQL service
     let res = postgres.provision(service_name, &config, true).await;
-    assert!(res.is_ok(), "PostgreSQL provisioning and active query verification must succeed");
+    assert!(
+        res.is_ok(),
+        "PostgreSQL provisioning and active query verification must succeed"
+    );
     let resource = res.unwrap();
     assert_eq!(resource.provider, "postgres");
     assert!(resource.is_persistent, "Database must be persistent");
@@ -45,7 +48,10 @@ async fn test_postgres_provisioning_and_query_when_docker_available() {
 
     // 4. Verify data volume is intact by re-provisioning with the same volume
     let re_provision = postgres.provision(service_name, &config, true).await;
-    assert!(re_provision.is_ok(), "Re-provisioning over existing persistent volume must succeed");
+    assert!(
+        re_provision.is_ok(),
+        "Re-provisioning over existing persistent volume must succeed"
+    );
 
     // Final cleanup of test resources
     let re_res = re_provision.unwrap();

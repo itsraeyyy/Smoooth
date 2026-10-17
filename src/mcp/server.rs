@@ -1,14 +1,15 @@
-use std::io::{self, BufRead, Write};
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::io::{self, BufRead, Write};
+use std::sync::Arc;
 
 use crate::engine::Orchestrator;
 use crate::error::SmooothError;
-use crate::mcp::tools::{get_available_tools, get_default_capabilities, get_capability_schema_detail};
+use crate::mcp::tools::{
+    get_available_tools, get_capability_schema_detail, get_default_capabilities,
+};
 use crate::models::{
-    CanonicalActionSpec, CanonicalExecutionSpec, Plan, PolicyConstraints, RiskTier,
-    ServiceBinding,
+    CanonicalActionSpec, CanonicalExecutionSpec, Plan, PolicyConstraints, RiskTier, ServiceBinding,
 };
 use crate::security::SecretStore;
 
@@ -107,11 +108,16 @@ impl McpServer {
 
     /// Process a single JSON-RPC request with default operator caller
     pub async fn handle_request(&self, req: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        self.handle_request_with_caller(req, &CallerContext::default()).await
+        self.handle_request_with_caller(req, &CallerContext::default())
+            .await
     }
 
     /// Process a single JSON-RPC request with explicit authenticated caller context
-    pub async fn handle_request_with_caller(&self, req: JsonRpcRequest, caller: &CallerContext) -> Option<JsonRpcResponse> {
+    pub async fn handle_request_with_caller(
+        &self,
+        req: JsonRpcRequest,
+        caller: &CallerContext,
+    ) -> Option<JsonRpcResponse> {
         let id = req.id;
 
         match req.method.as_str() {
@@ -170,9 +176,15 @@ impl McpServer {
             "tools/call" => {
                 let params = req.params.unwrap_or(Value::Null);
                 let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                let args = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+                let args = params
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
 
-                match self.dispatch_tool_with_caller(tool_name, args, caller).await {
+                match self
+                    .dispatch_tool_with_caller(tool_name, args, caller)
+                    .await
+                {
                     Ok(tool_result) => {
                         let content = vec![serde_json::json!({
                             "type": "text",
@@ -222,16 +234,24 @@ impl McpServer {
 
     /// Dispatch tool calls with default operator caller
     pub async fn dispatch_tool(&self, name: &str, args: Value) -> Result<Value, SmooothError> {
-        self.dispatch_tool_with_caller(name, args, &CallerContext::default()).await
+        self.dispatch_tool_with_caller(name, args, &CallerContext::default())
+            .await
     }
 
     /// Dispatch tool calls to the underlying engine and storage with caller scope & workspace verification
-    pub async fn dispatch_tool_with_caller(&self, name: &str, args: Value, caller: &CallerContext) -> Result<Value, SmooothError> {
+    pub async fn dispatch_tool_with_caller(
+        &self,
+        name: &str,
+        args: Value,
+        caller: &CallerContext,
+    ) -> Result<Value, SmooothError> {
         // Enforce Server-Side Scopes and Workspace Isolation for Authenticated Agents
         if let Some(agent) = &caller.identity {
             let required_scope = match name {
                 "create_plan" => crate::models::AgentScope::Plan,
-                "execute_plan" | "create_service_binding" | "reconcile_resource" => crate::models::AgentScope::Deploy,
+                "execute_plan" | "create_service_binding" | "reconcile_resource" => {
+                    crate::models::AgentScope::Deploy
+                }
                 "approve_plan" => crate::models::AgentScope::Admin,
                 _ => crate::models::AgentScope::ReadOnly,
             };
@@ -241,23 +261,28 @@ impl McpServer {
                     "Scope policy violation: Agent '{}' requires scope '{:?}' for tool '{}'. Granted scopes: {:?}",
                     agent.name, required_scope, name, agent.scopes
                 );
-                let _ = self.orchestrator.storage().record_audit(crate::storage::AuditEvent {
-                    id: 0,
-                    workspace_id: agent.workspace_id.clone(),
-                    actor: format!("agent:{}", agent.agent_id),
-                    action: format!("mcp_tool:{}", name),
-                    target_resource_id: None,
-                    plan_hash: None,
-                    outcome: "denied".to_string(),
-                    redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
-                    timestamp: chrono::Utc::now(),
-                }).await;
+                let _ = self
+                    .orchestrator
+                    .storage()
+                    .record_audit(crate::storage::AuditEvent {
+                        id: 0,
+                        workspace_id: agent.workspace_id.clone(),
+                        actor: format!("agent:{}", agent.agent_id),
+                        action: format!("mcp_tool:{}", name),
+                        target_resource_id: None,
+                        plan_hash: None,
+                        outcome: "denied".to_string(),
+                        redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
+                        timestamp: chrono::Utc::now(),
+                    })
+                    .await;
                 return Err(SmooothError::PolicyViolation(err_msg));
             }
 
             // Check workspace boundary if agent is not global (*)
             if agent.workspace_id != "*" {
-                let requested_ws = args.get("workspace_id")
+                let requested_ws = args
+                    .get("workspace_id")
                     .or_else(|| args.get("spec").and_then(|s| s.get("workspace_id")))
                     .and_then(|v| v.as_str());
 
@@ -267,17 +292,21 @@ impl McpServer {
                             "Cross-workspace boundary violation: Agent '{}' is bound to workspace '{}' and cannot access workspace '{}'",
                             agent.name, agent.workspace_id, ws
                         );
-                        let _ = self.orchestrator.storage().record_audit(crate::storage::AuditEvent {
-                            id: 0,
-                            workspace_id: ws.to_string(),
-                            actor: format!("agent:{}", agent.agent_id),
-                            action: format!("mcp_tool:{}", name),
-                            target_resource_id: None,
-                            plan_hash: None,
-                            outcome: "denied".to_string(),
-                            redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
-                            timestamp: chrono::Utc::now(),
-                        }).await;
+                        let _ = self
+                            .orchestrator
+                            .storage()
+                            .record_audit(crate::storage::AuditEvent {
+                                id: 0,
+                                workspace_id: ws.to_string(),
+                                actor: format!("agent:{}", agent.agent_id),
+                                action: format!("mcp_tool:{}", name),
+                                target_resource_id: None,
+                                plan_hash: None,
+                                outcome: "denied".to_string(),
+                                redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
+                                timestamp: chrono::Utc::now(),
+                            })
+                            .await;
                         return Err(SmooothError::PolicyViolation(err_msg));
                     }
                 }
@@ -291,11 +320,17 @@ impl McpServer {
             }
 
             "get_capability_schema" => {
-                let cap_id = args.get("capability_id").and_then(|v| v.as_str()).unwrap_or("");
+                let cap_id = args
+                    .get("capability_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 match get_capability_schema_detail(cap_id) {
                     Some(schema) => Ok(serde_json::to_value(schema).unwrap_or_default()),
                     None => {
-                        let available: Vec<String> = get_default_capabilities().into_iter().map(|c| c.id).collect();
+                        let available: Vec<String> = get_default_capabilities()
+                            .into_iter()
+                            .map(|c| c.id)
+                            .collect();
                         Err(SmooothError::NotFound(format!(
                             "Capability '{}' not found. Available registered capabilities: {:?}",
                             cap_id, available
@@ -382,11 +417,9 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| SmooothError::Validation("Missing 'plan_id'".to_string()))?;
 
-                let plan = self
-                    .orchestrator
-                    .get_plan(plan_id)
-                    .await?
-                    .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+                let plan = self.orchestrator.get_plan(plan_id).await?.ok_or_else(|| {
+                    SmooothError::NotFound(format!("Plan '{}' not found", plan_id))
+                })?;
 
                 if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
                     if plan.spec.workspace_id != ws {
@@ -433,11 +466,9 @@ impl McpServer {
                     .and_then(|v| v.as_i64())
                     .unwrap_or(3600);
 
-                let mut plan = self
-                    .orchestrator
-                    .get_plan(plan_id)
-                    .await?
-                    .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+                let mut plan = self.orchestrator.get_plan(plan_id).await?.ok_or_else(|| {
+                    SmooothError::NotFound(format!("Plan '{}' not found", plan_id))
+                })?;
 
                 if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
                     if plan.spec.workspace_id != ws {
@@ -476,14 +507,14 @@ impl McpServer {
                 let idemp_key = args
                     .get("idempotency_key")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'idempotency_key'".to_string()))?
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'idempotency_key'".to_string())
+                    })?
                     .to_string();
 
-                let plan = self
-                    .orchestrator
-                    .get_plan(plan_id)
-                    .await?
-                    .ok_or_else(|| SmooothError::NotFound(format!("Plan '{}' not found", plan_id)))?;
+                let plan = self.orchestrator.get_plan(plan_id).await?.ok_or_else(|| {
+                    SmooothError::NotFound(format!("Plan '{}' not found", plan_id))
+                })?;
 
                 if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
                     if plan.spec.workspace_id != ws {
@@ -491,6 +522,37 @@ impl McpServer {
                             "Workspace mismatch: plan '{}' belongs to workspace '{}', requested '{}'",
                             plan_id, plan.spec.workspace_id, ws
                         )));
+                    }
+                }
+
+                let has_destructive_actions =
+                    plan.spec.actions.iter().any(|a| a.action_type == "delete");
+                if has_destructive_actions {
+                    if let Some(agent) = &caller.identity {
+                        if !agent.has_scope(&crate::models::AgentScope::Destructive) {
+                            let err_msg = format!(
+                                "Scope policy violation: Agent '{}' requires 'destructive' scope to execute plan '{}' containing deletion actions",
+                                agent.name, plan_id
+                            );
+                            let _ = self
+                                .orchestrator
+                                .storage()
+                                .record_audit(crate::storage::AuditEvent {
+                                    id: 0,
+                                    workspace_id: plan.spec.workspace_id.clone(),
+                                    actor: format!("agent:{}", agent.agent_id),
+                                    action: "mcp_tool:execute_plan".to_string(),
+                                    target_resource_id: Some(plan_id.to_string()),
+                                    plan_hash: Some(plan.plan_hash.clone()),
+                                    outcome: "denied".to_string(),
+                                    redacted_evidence: Some(
+                                        serde_json::json!({ "reason": err_msg }),
+                                    ),
+                                    timestamp: chrono::Utc::now(),
+                                })
+                                .await;
+                            return Err(SmooothError::PolicyViolation(err_msg));
+                        }
                     }
                 }
 
@@ -509,12 +571,16 @@ impl McpServer {
                 let source_id = args
                     .get("source_resource_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'source_resource_id'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'source_resource_id'".to_string())
+                    })?;
 
                 let target_id = args
                     .get("target_resource_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'target_resource_id'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'target_resource_id'".to_string())
+                    })?;
 
                 let req_ws = args.get("workspace_id").and_then(|v| v.as_str());
 
@@ -563,7 +629,8 @@ impl McpServer {
                     target_id,
                     preferred_endpoint,
                     ws,
-                ).await?;
+                )
+                .await?;
 
                 let binding_id = format!("bind_{}", uuid::Uuid::new_v4().simple());
                 let masked_conn = conn_details.to_uri(true);
@@ -646,13 +713,17 @@ impl McpServer {
                 let op_id = args
                     .get("operation_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'operation_id'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'operation_id'".to_string())
+                    })?;
 
                 let op = self
                     .orchestrator
                     .get_operation(op_id)
                     .await
-                    .ok_or_else(|| SmooothError::NotFound(format!("Operation '{}' not found", op_id)))?;
+                    .ok_or_else(|| {
+                        SmooothError::NotFound(format!("Operation '{}' not found", op_id))
+                    })?;
 
                 if let Some(ws) = args.get("workspace_id").and_then(|v| v.as_str()) {
                     if op.workspace_id != ws {
@@ -733,7 +804,10 @@ impl McpServer {
                 }))
             }
 
-            unknown => Err(SmooothError::Validation(format!("Unknown tool '{}'", unknown))),
+            unknown => Err(SmooothError::Validation(format!(
+                "Unknown tool '{}'",
+                unknown
+            ))),
         }
     }
 }

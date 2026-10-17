@@ -3,11 +3,9 @@ use axum::{
     http::{header, Method, StatusCode},
     middleware::{self, Next},
     response::{
-        Html,
         sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
+        Html, IntoResponse, Response,
     },
-
     routing::{get, post},
     Router,
 };
@@ -154,7 +152,10 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/agents/:id/rotate", post(rotate_agent_handler))
         .route("/api/audit", get(audit_handler))
         .route("/api/doctor", get(doctor_handler))
-        .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .layer(cors)
         .with_state(state.clone());
 
@@ -216,21 +217,25 @@ async fn auth_middleware(
                 identity: Some(agent),
             },
             _ => {
-                // Record failed unauthorized attempt in security audit
-                let _ = state.orchestrator.storage().record_audit(crate::storage::AuditEvent {
-                    id: 0,
-                    workspace_id: "*".to_string(),
-                    actor: "unauthenticated".to_string(),
-                    action: "auth_attempt".to_string(),
-                    target_resource_id: None,
-                    plan_hash: None,
-                    outcome: "denied".to_string(),
-                    redacted_evidence: Some(serde_json::json!({
-                        "path": path,
-                        "token_prefix": if raw_token.len() >= 10 { &raw_token[..10] } else { "short" }
-                    })),
-                    timestamp: chrono::Utc::now(),
-                }).await;
+                // Record failed unauthorized attempt in security audit without logging token characters
+                let _ = state
+                    .orchestrator
+                    .storage()
+                    .record_audit(crate::storage::AuditEvent {
+                        id: 0,
+                        workspace_id: "*".to_string(),
+                        actor: "unauthenticated".to_string(),
+                        action: "auth_attempt".to_string(),
+                        target_resource_id: None,
+                        plan_hash: None,
+                        outcome: "denied".to_string(),
+                        redacted_evidence: Some(serde_json::json!({
+                            "path": path,
+                            "token_provided": !raw_token.is_empty()
+                        })),
+                        timestamp: chrono::Utc::now(),
+                    })
+                    .await;
 
                 return Err((
                     StatusCode::UNAUTHORIZED,
@@ -271,9 +276,15 @@ async fn mcp_post_handler(
         is_operator: caller.is_operator,
         identity: caller.identity,
     };
-    let resp = state.mcp_server.handle_request_with_caller(req, &caller_ctx).await;
+    let resp = state
+        .mcp_server
+        .handle_request_with_caller(req, &caller_ctx)
+        .await;
     match resp {
-        Some(r) => (StatusCode::OK, Json(serde_json::to_value(r).unwrap_or_default())),
+        Some(r) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(r).unwrap_or_default()),
+        ),
         None => (StatusCode::NO_CONTENT, Json(serde_json::Value::Null)),
     }
 }
@@ -295,10 +306,7 @@ async fn sse_connect_handler(
     }
 
     let stream = futures_util::stream::unfold(rx, |mut rx| async move {
-        match rx.recv().await {
-            Some(ev) => Some((ev, rx)),
-            None => None,
-        }
+        rx.recv().await.map(|ev| (ev, rx))
     });
 
     Sse::new(stream).keep_alive(KeepAlive::default())
@@ -345,11 +353,14 @@ async fn sse_message_handler(
         identity: caller.identity,
     };
 
-    let resp = state.mcp_server.handle_request_with_caller(req, &caller_ctx).await;
+    let resp = state
+        .mcp_server
+        .handle_request_with_caller(req, &caller_ctx)
+        .await;
     if let Some(r) = resp {
         let resp_json = serde_json::to_string(&r).unwrap_or_default();
         let sse_event = Event::default().event("message").data(resp_json);
-        if let Err(_) = tx.send(Ok(sse_event)).await {
+        if tx.send(Ok(sse_event)).await.is_err() {
             let mut sessions = state.sse_sessions.write().await;
             sessions.remove(&session_id);
         }
@@ -422,7 +433,12 @@ async fn approve_plan_handler(
     Path(id): Path<String>,
     Json(body): Json<ApprovePlanRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    if !caller.is_operator && !caller.identity.as_ref().map_or(false, |i| i.has_scope(&AgentScope::Admin)) {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -460,16 +476,22 @@ async fn approve_plan_handler(
         ));
     }
 
-    let approver = body.approver.unwrap_or_else(|| "remote_operator".to_string());
+    let approver = body
+        .approver
+        .unwrap_or_else(|| "remote_operator".to_string());
     let ttl = body.ttl_seconds.unwrap_or(3600);
     plan.approve_with_ttl(approver.clone(), ttl);
 
-    state.orchestrator.save_plan(plan.clone()).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
-    })?;
+    state
+        .orchestrator
+        .save_plan(plan.clone())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -481,9 +503,7 @@ async fn approve_plan_handler(
 }
 
 /// List Operations Handler
-async fn list_operations_handler(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
+async fn list_operations_handler(State(_state): State<AppState>) -> impl IntoResponse {
     // For beta dashboard, return summary operations list
     Json(serde_json::json!({
         "operations": []
@@ -507,7 +527,12 @@ async fn reconcile_handler(
     Extension(caller): Extension<AuthenticatedCaller>,
     Path(resource_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    if !caller.is_operator && !caller.identity.as_ref().map_or(false, |i| i.has_scope(&AgentScope::Deploy)) {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -532,7 +557,19 @@ async fn list_agents_handler(
     Extension(_caller): Extension<AuthenticatedCaller>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     match state.orchestrator.list_agents(None).await {
-        Ok(agents) => Ok(Json(serde_json::json!({ "agents": agents }))),
+        Ok(agents) => {
+            let sanitized: Vec<serde_json::Value> = agents
+                .into_iter()
+                .map(|a| {
+                    let mut val = serde_json::to_value(&a).unwrap_or_default();
+                    if let Some(obj) = val.as_object_mut() {
+                        obj.remove("token_hash");
+                    }
+                    val
+                })
+                .collect();
+            Ok(Json(serde_json::json!({ "agents": sanitized })))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -546,7 +583,12 @@ async fn pair_agent_handler(
     Extension(caller): Extension<AuthenticatedCaller>,
     Json(body): Json<PairAgentRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    if !caller.is_operator && !caller.identity.as_ref().map_or(false, |i| i.has_scope(&AgentScope::Admin)) {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -557,15 +599,27 @@ async fn pair_agent_handler(
     }
 
     let ws = body.workspace_id.unwrap_or_else(|| "default".to_string());
-    let scopes_str = body.scopes.unwrap_or_else(|| "read_only,plan,deploy".to_string());
+    let scopes_str = body
+        .scopes
+        .unwrap_or_else(|| "read_only,plan,deploy".to_string());
     let scopes = AgentScope::parse_csv(&scopes_str);
 
-    match state.orchestrator.pair_agent(&body.name, &ws, scopes, body.ttl_hours).await {
-        Ok((agent, raw_token)) => Ok(Json(serde_json::json!({
-            "success": true,
-            "agent": agent,
-            "token": raw_token
-        }))),
+    match state
+        .orchestrator
+        .pair_agent(&body.name, &ws, scopes, body.ttl_hours)
+        .await
+    {
+        Ok((agent, raw_token)) => {
+            let mut agent_val = serde_json::to_value(&agent).unwrap_or_default();
+            if let Some(obj) = agent_val.as_object_mut() {
+                obj.remove("token_hash");
+            }
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "agent": agent_val,
+                "token": raw_token
+            })))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -579,7 +633,12 @@ async fn revoke_agent_handler(
     Extension(caller): Extension<AuthenticatedCaller>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    if !caller.is_operator && !caller.identity.as_ref().map_or(false, |i| i.has_scope(&AgentScope::Admin)) {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -604,7 +663,12 @@ async fn rotate_agent_handler(
     Extension(caller): Extension<AuthenticatedCaller>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    if !caller.is_operator && !caller.identity.as_ref().map_or(false, |i| i.has_scope(&AgentScope::Admin)) {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -643,10 +707,9 @@ async fn audit_handler(
 }
 
 /// Live Preflight Doctor Diagnostics Handler
-async fn doctor_handler(
-    State(_state): State<AppState>,
-) -> impl IntoResponse {
-    let storage_path = std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
+async fn doctor_handler(State(_state): State<AppState>) -> impl IntoResponse {
+    let storage_path =
+        std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
     let report = crate::doctor::Doctor::run_diagnostics(&storage_path, "127.0.0.1", 4040).await;
     Json(report)
 }
@@ -744,7 +807,10 @@ pub async fn start_server(
     println!("  • Public Health     : http://{}/health", addr);
     println!("  • MCP HTTP Post     : http://{}/mcp", addr);
     println!("  • MCP SSE Stream    : http://{}/sse", addr);
-    println!("  • Master Token      : {}...", &auth_token[..6.min(auth_token.len())]);
+    println!(
+        "  • Master Token      : {}...",
+        &auth_token[..6.min(auth_token.len())]
+    );
     println!("============================================================\n");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

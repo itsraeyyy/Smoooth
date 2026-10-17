@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use bollard::container::{
     Config, CreateContainerOptions, InspectContainerOptions, RemoveContainerOptions,
     RenameContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::models::{HostConfig, PortBinding, PortMap, RestartPolicy, RestartPolicyNameEnum};
+use std::collections::HashMap;
 
 use crate::adapters::docker::client::DockerClient;
 use crate::error::{Result, SmooothError};
@@ -16,7 +16,7 @@ pub struct ContainerSpec {
     pub cmd: Option<Vec<String>>,
     pub env: Vec<String>,
     pub port_bindings: HashMap<u16, u16>, // container_port -> host_port (0 = ephemeral)
-    pub volume_mounts: Vec<VolumeMount>, // volume_name -> container_path with read_only
+    pub volume_mounts: Vec<VolumeMount>,  // volume_name -> container_path with read_only
     pub network_name: Option<String>,
     pub labels: HashMap<String, String>,
     pub restart_policy: Option<String>,
@@ -32,7 +32,12 @@ impl ContainerManager {
     /// Check if a label key conforms to the explicit allowed metadata namespaces
     pub fn is_allowed_label_key(key: &str) -> bool {
         let k = key.to_lowercase();
-        if k.starts_with("smoooth.") || k.starts_with("app.") || k.starts_with("service.") || k.starts_with("org.opencontainers.") || k.starts_with("com.docker.") {
+        if k.starts_with("smoooth.")
+            || k.starts_with("app.")
+            || k.starts_with("service.")
+            || k.starts_with("org.opencontainers.")
+            || k.starts_with("com.docker.")
+        {
             return true;
         }
         matches!(
@@ -58,7 +63,12 @@ impl ContainerManager {
         for (k, v) in labels {
             if Self::is_allowed_label_key(k) && !Self::contains_sensitive_value(v) {
                 let k_l = k.to_lowercase();
-                if !k_l.contains("pass") && !k_l.contains("secret") && !k_l.contains("token") && !k_l.contains("cred") && !k_l.contains("key") {
+                if !k_l.contains("pass")
+                    && !k_l.contains("secret")
+                    && !k_l.contains("token")
+                    && !k_l.contains("cred")
+                    && !k_l.contains("key")
+                {
                     filtered.insert(k.clone(), v.clone());
                 }
             }
@@ -75,7 +85,11 @@ impl ContainerManager {
         for (c_port, h_port) in &spec.port_bindings {
             let binding = PortBinding {
                 host_ip: Some("127.0.0.1".to_string()),
-                host_port: if *h_port == 0 { None } else { Some(h_port.to_string()) },
+                host_port: if *h_port == 0 {
+                    None
+                } else {
+                    Some(h_port.to_string())
+                },
             };
             port_map.insert(format!("{}/tcp", c_port), Some(vec![binding]));
         }
@@ -96,7 +110,11 @@ impl ContainerManager {
             };
             RestartPolicy {
                 name,
-                maximum_retry_count: if policy == "on-failure" { Some(3) } else { None },
+                maximum_retry_count: if policy == "on-failure" {
+                    Some(3)
+                } else {
+                    None
+                },
             }
         });
 
@@ -136,25 +154,35 @@ impl ContainerManager {
         let created = docker
             .create_container(Some(options), config)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to create container '{}': {}", spec.name, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to create container '{}': {}",
+                    spec.name, e
+                ))
+            })?;
 
         docker
             .start_container(&created.id, None::<StartContainerOptions<String>>)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to start container '{}': {}", spec.name, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to start container '{}': {}",
+                    spec.name, e
+                ))
+            })?;
 
         Ok(created.id)
     }
 
     /// Create and start container idempotently with transactional rollback on replacement failure
-    pub async fn create_and_start(
-        client: &DockerClient,
-        spec: &ContainerSpec,
-    ) -> Result<String> {
+    pub async fn create_and_start(client: &DockerClient, spec: &ContainerSpec) -> Result<String> {
         let docker = client.inner();
 
         // 1. Check if container with identical name already exists (Idempotent recovery & Fencing check)
-        if let Ok(inspect) = docker.inspect_container(&spec.name, None::<InspectContainerOptions>).await {
+        if let Ok(inspect) = docker
+            .inspect_container(&spec.name, None::<InspectContainerOptions>)
+            .await
+        {
             let container_id = inspect.id.clone().unwrap_or_else(|| spec.name.clone());
 
             // Fencing validation: check if existing container has a higher epoch
@@ -204,18 +232,33 @@ impl ContainerManager {
                     spec.name
                 );
                 // 1. Rename existing container to backup name so original name is freed up
-                let backup_name = format!("{}_smoooth_backup_{}", spec.name, uuid::Uuid::new_v4().simple());
-                docker.rename_container(&container_id, RenameContainerOptions { name: &backup_name }).await
-                    .map_err(|e| SmooothError::ContainerFailed(format!("Failed to prepare backup container for '{}': {}", spec.name, e)))?;
+                let backup_name = format!(
+                    "{}_smoooth_backup_{}",
+                    spec.name,
+                    uuid::Uuid::new_v4().simple()
+                );
+                docker
+                    .rename_container(&container_id, RenameContainerOptions { name: &backup_name })
+                    .await
+                    .map_err(|e| {
+                        SmooothError::ContainerFailed(format!(
+                            "Failed to prepare backup container for '{}': {}",
+                            spec.name, e
+                        ))
+                    })?;
 
                 // 2. Stop backup container to release host ports and mounts cleanly
-                let _ = docker.stop_container(&backup_name, None::<StopContainerOptions>).await;
+                let _ = docker
+                    .stop_container(&backup_name, None::<StopContainerOptions>)
+                    .await;
 
                 // 3. Attempt to create and start the new replacement container
                 match Self::create_and_start_instance(docker, spec).await {
                     Ok(new_id) => {
                         // Replacement succeeded! Safely remove the old backup container (named volumes are preserved)
-                        let _ = docker.remove_container(&backup_name, None::<RemoveContainerOptions>).await;
+                        let _ = docker
+                            .remove_container(&backup_name, None::<RemoveContainerOptions>)
+                            .await;
                         return Ok(new_id);
                     }
                     Err(create_err) => {
@@ -224,11 +267,26 @@ impl ContainerManager {
                             spec.name, create_err
                         );
                         // Clean up failed replacement container if partially created
-                        let _ = docker.remove_container(&spec.name, Some(RemoveContainerOptions { force: true, ..Default::default() })).await;
+                        let _ = docker
+                            .remove_container(
+                                &spec.name,
+                                Some(RemoveContainerOptions {
+                                    force: true,
+                                    ..Default::default()
+                                }),
+                            )
+                            .await;
 
                         // ROLLBACK: Rename backup container back to original name and restart it
-                        let _ = docker.rename_container(&backup_name, RenameContainerOptions { name: &spec.name }).await;
-                        let _ = docker.start_container(&spec.name, None::<StartContainerOptions<String>>).await;
+                        let _ = docker
+                            .rename_container(
+                                &backup_name,
+                                RenameContainerOptions { name: &spec.name },
+                            )
+                            .await;
+                        let _ = docker
+                            .start_container(&spec.name, None::<StartContainerOptions<String>>)
+                            .await;
 
                         return Err(SmooothError::ContainerFailed(format!(
                             "Container replacement failed for '{}': {}; automatically rolled back to previous container instance.",
@@ -241,7 +299,12 @@ impl ContainerManager {
                 docker
                     .start_container(&container_id, None::<StartContainerOptions<String>>)
                     .await
-                    .map_err(|e| SmooothError::ContainerFailed(format!("Failed to start existing container '{}': {}", spec.name, e)))?;
+                    .map_err(|e| {
+                        SmooothError::ContainerFailed(format!(
+                            "Failed to start existing container '{}': {}",
+                            spec.name, e
+                        ))
+                    })?;
                 return Ok(container_id);
             }
         }
@@ -251,13 +314,13 @@ impl ContainerManager {
     }
 
     /// Inspect container live state
-    pub async fn inspect(
-        client: &DockerClient,
-        name_or_id: &str,
-    ) -> Result<ResourceStatus> {
+    pub async fn inspect(client: &DockerClient, name_or_id: &str) -> Result<ResourceStatus> {
         let docker = client.inner();
 
-        match docker.inspect_container(name_or_id, None::<InspectContainerOptions>).await {
+        match docker
+            .inspect_container(name_or_id, None::<InspectContainerOptions>)
+            .await
+        {
             Ok(inspect) => {
                 if let Some(state) = inspect.state {
                     if state.running.unwrap_or(false) {
@@ -285,7 +348,10 @@ impl ContainerManager {
     ) -> Result<()> {
         let docker = client.inner();
 
-        if let Ok(inspect) = docker.inspect_container(name_or_id, None::<InspectContainerOptions>).await {
+        if let Ok(inspect) = docker
+            .inspect_container(name_or_id, None::<InspectContainerOptions>)
+            .await
+        {
             if let Some(caller) = caller_epoch {
                 if let Some(config) = &inspect.config {
                     if let Some(labels) = &config.labels {
@@ -316,29 +382,33 @@ impl ContainerManager {
         docker
             .remove_container(name_or_id, Some(remove_options))
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to remove container '{}': {}", name_or_id, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to remove container '{}': {}",
+                    name_or_id, e
+                ))
+            })?;
 
         Ok(())
     }
 
     /// Stop and remove container
-    pub async fn stop_and_remove(
-        client: &DockerClient,
-        name_or_id: &str,
-    ) -> Result<()> {
+    pub async fn stop_and_remove(client: &DockerClient, name_or_id: &str) -> Result<()> {
         Self::stop_and_remove_with_fencing(client, name_or_id, None).await
     }
 
     /// Retrieve internal container IP address from Docker network
-    pub async fn get_container_ip(
-        client: &DockerClient,
-        name_or_id: &str,
-    ) -> Result<String> {
+    pub async fn get_container_ip(client: &DockerClient, name_or_id: &str) -> Result<String> {
         let docker = client.inner();
         let inspect = docker
             .inspect_container(name_or_id, None::<InspectContainerOptions>)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to inspect container '{}': {}", name_or_id, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to inspect container '{}': {}",
+                    name_or_id, e
+                ))
+            })?;
 
         if let Some(network_settings) = inspect.network_settings {
             if let Some(networks) = network_settings.networks {
@@ -357,19 +427,24 @@ impl ContainerManager {
             }
         }
 
-        Err(SmooothError::NotFound(format!("No IP address found for container '{}'", name_or_id)))
+        Err(SmooothError::NotFound(format!(
+            "No IP address found for container '{}'",
+            name_or_id
+        )))
     }
 
     /// Check if container publishes any ports to the host interface
-    pub async fn has_host_port_binding(
-        client: &DockerClient,
-        name_or_id: &str,
-    ) -> Result<bool> {
+    pub async fn has_host_port_binding(client: &DockerClient, name_or_id: &str) -> Result<bool> {
         let docker = client.inner();
         let inspect = docker
             .inspect_container(name_or_id, None::<InspectContainerOptions>)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to inspect container '{}': {}", name_or_id, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to inspect container '{}': {}",
+                    name_or_id, e
+                ))
+            })?;
 
         if let Some(host_config) = inspect.host_config {
             if let Some(port_bindings) = host_config.port_bindings {
@@ -395,7 +470,12 @@ impl ContainerManager {
         let inspect = docker
             .inspect_container(name_or_id, None::<InspectContainerOptions>)
             .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to inspect container '{}': {}", name_or_id, e)))?;
+            .map_err(|e| {
+                SmooothError::ContainerFailed(format!(
+                    "Failed to inspect container '{}': {}",
+                    name_or_id, e
+                ))
+            })?;
 
         let port_key = format!("{}/tcp", container_port);
 

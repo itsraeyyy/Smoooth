@@ -63,13 +63,9 @@ enum Commands {
         approver: String,
     },
     /// Inspect operation status, progress, logs, and evidence
-    Ops {
-        operation_id: String,
-    },
+    Ops { operation_id: String },
     /// Inspect and reconcile drift or recover crashed resource
-    Reconcile {
-        resource_id: String,
-    },
+    Reconcile { resource_id: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -109,14 +105,19 @@ enum AgentCommands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let cli = Cli::parse();
 
-    let storage_path = std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
+    let storage_path =
+        std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
     let storage = Arc::new(LocalStorage::new_file_backed(&storage_path));
     let mut orchestrator = Orchestrator::new(storage.clone());
     let docker_adapter = Arc::new(DockerAdapter::new());
-    let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(docker_adapter.clone()));
+    let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(
+        docker_adapter.clone(),
+    ));
     let redis_adapter = Arc::new(smoooth::adapters::RedisAdapter::new(docker_adapter.clone()));
     let mongo_adapter = Arc::new(smoooth::adapters::MongoAdapter::new(docker_adapter.clone()));
     orchestrator.register_adapter(docker_adapter);
@@ -128,9 +129,15 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Doctor) => {
             println!("\n🔍 Running Smoooth Beta Environment Diagnostics...\n");
             let report = Doctor::run_diagnostics(&storage_path, "127.0.0.1", 4040).await;
-            
-            println!("Target Environment: {} / {} (Smoooth {})", report.os, report.arch, report.version);
-            println!("Diagnostic Status : {}\n", report.overall_status.to_uppercase());
+
+            println!(
+                "Target Environment: {} / {} (Smoooth {})",
+                report.os, report.arch, report.version
+            );
+            println!(
+                "Diagnostic Status : {}\n",
+                report.overall_status.to_uppercase()
+            );
 
             for check in &report.checks {
                 let badge = match check.status.as_str() {
@@ -144,8 +151,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            println!("\nSummary: {} passed, {} warnings, {} failures.\n", 
-                report.passed_count, report.warning_count, report.failure_count);
+            println!(
+                "\nSummary: {} passed, {} warnings, {} failures.\n",
+                report.passed_count, report.warning_count, report.failure_count
+            );
 
             if report.failure_count > 0 {
                 std::process::exit(1);
@@ -153,14 +162,21 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Some(Commands::Agent { command }) => match command {
-            AgentCommands::Pair { name, workspace, scopes, ttl_hours } => {
+            AgentCommands::Pair {
+                name,
+                workspace,
+                scopes,
+                ttl_hours,
+            } => {
                 let parsed_scopes = AgentScope::parse_csv(&scopes);
                 if parsed_scopes.is_empty() {
                     eprintln!("❌ Error: At least one valid scope required (e.g. read_only, plan, deploy, destructive, admin)");
                     std::process::exit(1);
                 }
 
-                let (agent, raw_token) = orchestrator.pair_agent(&name, &workspace, parsed_scopes, ttl_hours).await?;
+                let (agent, raw_token) = orchestrator
+                    .pair_agent(&name, &workspace, parsed_scopes, ttl_hours)
+                    .await?;
                 println!("\n============================================================");
                 println!("  ✅ AI Coding Agent Paired Successfully!");
                 println!("============================================================");
@@ -183,26 +199,43 @@ async fn main() -> anyhow::Result<()> {
 
             AgentCommands::List { workspace } => {
                 let agents = orchestrator.list_agents(workspace.as_deref()).await?;
-                println!("\n=== Paired AI Coding Agents ({} registered) ===\n", agents.len());
+                println!(
+                    "\n=== Paired AI Coding Agents ({} registered) ===\n",
+                    agents.len()
+                );
                 if agents.is_empty() {
                     println!("No agents paired yet. Run `smoooth agent pair --name <agent-name>` to issue credentials.\n");
                 } else {
                     for a in agents {
                         let status = if a.revoked { "REVOKED" } else { "ACTIVE" };
-                        let over = if a.is_overprivileged() { " [⚠️ ELEVATED]" } else { "" };
+                        let over = if a.is_overprivileged() {
+                            " [⚠️ ELEVATED]"
+                        } else {
+                            ""
+                        };
                         println!("• {} [{}] - Status: {}{}", a.name, a.agent_id, status, over);
                         println!("  Workspace : {}", a.workspace_id);
                         println!("  Scopes    : {:?}", a.scopes);
                         println!("  Prefix    : {}...", a.token_prefix);
-                        println!("  Last Used : {}\n", a.last_used_at.map(|t| t.to_rfc3339()).unwrap_or_else(|| "Never".to_string()));
+                        println!(
+                            "  Last Used : {}\n",
+                            a.last_used_at
+                                .map(|t| t.to_rfc3339())
+                                .unwrap_or_else(|| "Never".to_string())
+                        );
                     }
                 }
             }
 
             AgentCommands::Revoke { agent_id } => {
                 orchestrator.revoke_agent(&agent_id).await?;
-                println!("\n✅ Agent '{}' credentials successfully REVOKED.", agent_id);
-                println!("   All subsequent requests with this token will be rejected immediately.\n");
+                println!(
+                    "\n✅ Agent '{}' credentials successfully REVOKED.",
+                    agent_id
+                );
+                println!(
+                    "   All subsequent requests with this token will be rejected immediately.\n"
+                );
             }
 
             AgentCommands::Rotate { agent_id } => {
@@ -261,12 +294,19 @@ async fn main() -> anyhow::Result<()> {
             // Step 01: Discover
             println!("🔍 [01 Discover] Agent queries available capabilities...");
             let capabilities = get_default_capabilities();
-            println!("   ↳ Found {} discoverable capabilities (Docker, PostgreSQL, Redis, MongoDB).", capabilities.len());
+            println!(
+                "   ↳ Found {} discoverable capabilities (Docker, PostgreSQL, Redis, MongoDB).",
+                capabilities.len()
+            );
 
             // Step 02: Plan
             println!("\n📐 [02 Plan] Agent drafts CanonicalExecutionSpec...");
             let mut artifacts = HashMap::new();
-            artifacts.insert("web_app".to_string(), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string());
+            artifacts.insert(
+                "web_app".to_string(),
+                "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    .to_string(),
+            );
 
             let spec = CanonicalExecutionSpec {
                 schema_version: 1,
@@ -313,25 +353,36 @@ async fn main() -> anyhow::Result<()> {
             );
 
             println!("   ↳ Generated Canonical Plan Hash: {}", plan.plan_hash);
-            println!("   ↳ Risk Tier: {:?} | Estimated Cost: ${:.2}/mo", plan.risk_tier, plan.estimated_monthly_cost_usd.unwrap_or(0.0));
+            println!(
+                "   ↳ Risk Tier: {:?} | Estimated Cost: ${:.2}/mo",
+                plan.risk_tier,
+                plan.estimated_monthly_cost_usd.unwrap_or(0.0)
+            );
 
             // Step 03: Govern
             println!("\n🛡️ [03 Govern] User policy verification...");
             // Bind approval to exact cryptographic plan hash
             plan.approved_plan_hash = Some(plan.plan_hash.clone());
             plan.approved_by = Some("operator@smoooth.local".to_string());
-            println!("   ↳ Policy approved bound to hash: {}...", &plan.plan_hash[..16]);
+            println!(
+                "   ↳ Policy approved bound to hash: {}...",
+                &plan.plan_hash[..16]
+            );
 
             // Step 04: Provision
             println!("\n⚙️ [04 Provision] Starting durable plan execution with fencing leases...");
             let op = orchestrator
                 .execute_plan(plan.clone(), "idemp_client_key_demo_01".to_string())
                 .await?;
-            println!("   ↳ Operation ID: {} (Fencing Epoch: {})", op.id, op.lease_epoch);
+            println!(
+                "   ↳ Operation ID: {} (Fencing Epoch: {})",
+                op.id, op.lease_epoch
+            );
 
             // Step 05: Connect
             println!("\n🔗 [05 Connect] Creating secure zero-leak ServiceBinding...");
-            let raw_conn_string = "postgresql://smoooth_user:s3cr3tP@ssw0rd!@smoooth-postgres:5432/appdb";
+            let raw_conn_string =
+                "postgresql://smoooth_user:s3cr3tP@ssw0rd!@smoooth-postgres:5432/appdb";
             let masked = ServiceBinding::mask_connection_string(raw_conn_string);
             println!("   ↳ Injected Masked Connection: {}", masked);
             println!("   ↳ Credentials encrypted at rest with staged dual-credential support.");
@@ -348,7 +399,10 @@ async fn main() -> anyhow::Result<()> {
             let resources = orchestrator.list_resources("default").await;
             println!("   ↳ Total Active Resources: {}", resources.len());
             for r in &resources {
-                println!("     • {} [{}] (Persistent Volume Guard: {})", r.name, r.id, r.is_persistent);
+                println!(
+                    "     • {} [{}] (Persistent Volume Guard: {})",
+                    r.name, r.id, r.is_persistent
+                );
             }
 
             println!("\n🎉 Golden Workflow successfully demonstrated locally without requiring external DB!");
@@ -356,8 +410,14 @@ async fn main() -> anyhow::Result<()> {
             println!("   Run `smoooth status` to view active resources at any time.\n");
         }
 
-        Some(Commands::Serve { bind, port, token, token_file }) => {
-            smoooth::api::start_server(Arc::new(orchestrator), &bind, port, token, token_file).await?;
+        Some(Commands::Serve {
+            bind,
+            port,
+            token,
+            token_file,
+        }) => {
+            smoooth::api::start_server(Arc::new(orchestrator), &bind, port, token, token_file)
+                .await?;
         }
 
         Some(Commands::Mcp) => {
@@ -370,7 +430,10 @@ async fn main() -> anyhow::Result<()> {
                 Some(mut plan) => {
                     plan.approve_with_ttl(approver.clone(), 3600);
                     orchestrator.save_plan(plan.clone()).await?;
-                    println!("\n✅ Plan '{}' successfully approved by '{}'.", plan_id, approver);
+                    println!(
+                        "\n✅ Plan '{}' successfully approved by '{}'.",
+                        plan_id, approver
+                    );
                     println!("   Bound canonical hash : {}", plan.plan_hash);
                     println!("   Approval expires in  : 1 hour\n");
                 }
@@ -392,7 +455,10 @@ async fn main() -> anyhow::Result<()> {
                         println!("Error       : {}", err);
                     }
                     if let Some(ev) = &op.evidence {
-                        println!("Evidence    : {}", serde_json::to_string_pretty(ev).unwrap_or_default());
+                        println!(
+                            "Evidence    : {}",
+                            serde_json::to_string_pretty(ev).unwrap_or_default()
+                        );
                     }
                     println!("\nLogs ({} entries):", op.logs.len());
                     for log in &op.logs {
@@ -407,7 +473,10 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Some(Commands::Reconcile { resource_id }) => {
-            println!("\n🔍 Running reconciliation for resource '{}'...", resource_id);
+            println!(
+                "\n🔍 Running reconciliation for resource '{}'...",
+                resource_id
+            );
             match orchestrator.reconcile_resource(&resource_id).await {
                 Ok(outcome) => {
                     println!("Resource ID      : {}", outcome.resource_id);
@@ -425,7 +494,8 @@ async fn main() -> anyhow::Result<()> {
 
         None => {
             println!("No subcommand specified. Starting Smoooth API Server & Control Plane Dashboard on 127.0.0.1:4040...");
-            smoooth::api::start_server(Arc::new(orchestrator), "127.0.0.1", 4040, None, None).await?;
+            smoooth::api::start_server(Arc::new(orchestrator), "127.0.0.1", 4040, None, None)
+                .await?;
         }
     }
 

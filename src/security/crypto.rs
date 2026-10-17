@@ -1,8 +1,8 @@
+use crate::error::{Result, SmooothError};
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use crate::error::{Result, SmooothError};
 
 pub const NONCE_LEN: usize = 12;
 pub const KEY_LEN: usize = 32;
@@ -31,8 +31,9 @@ impl SecretStore {
     /// Encrypt plaintext bytes using AES-256-GCM with a randomized 96-bit nonce.
     /// Serialized payload format: [12-byte Nonce] + [Ciphertext + 16-byte Poly1305 Tag]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        let cipher = Aes256Gcm::new_from_slice(&self.master_key)
-            .map_err(|e| SmooothError::CryptoError(format!("Failed to initialize cipher: {}", e)))?;
+        let cipher = Aes256Gcm::new_from_slice(&self.master_key).map_err(|e| {
+            SmooothError::CryptoError(format!("Failed to initialize cipher: {}", e))
+        })?;
 
         // Generate cryptographically secure random nonce
         let mut nonce_bytes = [0u8; NONCE_LEN];
@@ -60,15 +61,16 @@ impl SecretStore {
             ));
         }
 
-        let cipher = Aes256Gcm::new_from_slice(&self.master_key)
-            .map_err(|e| SmooothError::CryptoError(format!("Failed to initialize cipher: {}", e)))?;
+        let cipher = Aes256Gcm::new_from_slice(&self.master_key).map_err(|e| {
+            SmooothError::CryptoError(format!("Failed to initialize cipher: {}", e))
+        })?;
 
         let nonce = Nonce::from_slice(&payload[..NONCE_LEN]);
         let ciphertext = &payload[NONCE_LEN..];
 
-        cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|e| SmooothError::CryptoError(format!("Decryption or authentication tag failed: {}", e)))
+        cipher.decrypt(nonce, ciphertext).map_err(|e| {
+            SmooothError::CryptoError(format!("Decryption or authentication tag failed: {}", e))
+        })
     }
 }
 
@@ -86,7 +88,10 @@ mod tests {
         assert!(encrypted.len() >= secret.len() + NONCE_LEN + 16);
 
         let decrypted = store.decrypt(&encrypted).unwrap();
-        assert_eq!(decrypted, secret, "Decrypted bytes must match original plaintext");
+        assert_eq!(
+            decrypted, secret,
+            "Decrypted bytes must match original plaintext"
+        );
     }
 
     #[test]
@@ -100,6 +105,9 @@ mod tests {
         encrypted[last_idx] ^= 0xFF;
 
         let result = store.decrypt(&encrypted);
-        assert!(result.is_err(), "Tampered ciphertext must fail authentication");
+        assert!(
+            result.is_err(),
+            "Tampered ciphertext must fail authentication"
+        );
     }
 }

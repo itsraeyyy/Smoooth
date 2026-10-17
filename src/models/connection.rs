@@ -1,23 +1,18 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Indicates who owns and manages the lifecycle of the infrastructure resource
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ResourceOwnership {
     /// Fully provisioned and managed by Smoooth (can be reconciled, stopped, destroyed when authorized)
+    #[default]
     SmooothManaged,
     /// Pre-existing or third-party service (e.g. RDS, existing VPS DB, cloud SaaS).
     /// CRITICAL SAFETY GUARANTEE: Smoooth will NEVER stop, delete, or destroy external resources.
     External,
     /// User-defined container workload running on local engine
     CustomWorkload,
-}
-
-impl Default for ResourceOwnership {
-    fn default() -> Self {
-        Self::SmooothManaged
-    }
 }
 
 /// Representation of a reachable network endpoint
@@ -108,7 +103,11 @@ impl ConnectionDetails {
         }
 
         if let Some(pass) = &self.password {
-            let val = if mask_password { "[REDACTED]".to_string() } else { pass.clone() };
+            let val = if mask_password {
+                "[REDACTED]".to_string()
+            } else {
+                pass.clone()
+            };
             env.insert(format!("{}PASSWORD", pfx), val);
         }
 

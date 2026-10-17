@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde_json::json;
+use std::sync::Arc;
 
 use smoooth::adapters::docker::DockerAdapter;
 use smoooth::adapters::postgres::PostgresAdapter;
@@ -32,7 +32,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
             "clientInfo": { "name": "coding-agent-client", "version": "1.0.0" }
         })),
     };
-    let init_resp = mcp.handle_request(init_req).await.expect("Must respond to initialize");
+    let init_resp = mcp
+        .handle_request(init_req)
+        .await
+        .expect("Must respond to initialize");
     assert!(init_resp.error.is_none());
     let server_info = init_resp.result.unwrap()["serverInfo"].clone();
     assert_eq!(server_info["name"], "smoooth-mcp");
@@ -46,8 +49,14 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         method: "tools/list".to_string(),
         params: None,
     };
-    let list_tools_resp = mcp.handle_request(list_tools_req).await.expect("Must list tools");
-    let tools = list_tools_resp.result.unwrap()["tools"].as_array().unwrap().clone();
+    let list_tools_resp = mcp
+        .handle_request(list_tools_req)
+        .await
+        .expect("Must list tools");
+    let tools = list_tools_resp.result.unwrap()["tools"]
+        .as_array()
+        .unwrap()
+        .clone();
     assert!(tools.len() >= 7, "Must expose all golden workflow tools");
     let tool_names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(tool_names.contains(&"list_capabilities"));
@@ -70,7 +79,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let discover_resp = mcp.handle_request(discover_req).await.unwrap();
-    let text = discover_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    let text = discover_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(text.contains("cap_docker_container"));
     assert!(text.contains("cap_postgres_db"));
     assert!(text.contains("cap_redis_cache"));
@@ -88,7 +100,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let schema_docker_resp = mcp.handle_request(schema_docker_req).await.unwrap();
-    let docker_schema_text = schema_docker_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    let docker_schema_text = schema_docker_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(docker_schema_text.contains("parameter_schema"));
     assert!(docker_schema_text.contains("supported_health_checks"));
     assert!(docker_schema_text.contains("approval_requirements"));
@@ -104,7 +119,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let schema_pg_resp = mcp.handle_request(schema_pg_req).await.unwrap();
-    let pg_schema_text = schema_pg_resp.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+    let pg_schema_text = schema_pg_resp.result.unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(pg_schema_text.contains("database"));
     assert!(pg_schema_text.contains("DATABASE_URL"));
 
@@ -119,7 +137,9 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let schema_unknown_resp = mcp.handle_request(schema_unknown_req).await.unwrap();
-    let is_err = schema_unknown_resp.result.unwrap()["isError"].as_bool().unwrap();
+    let is_err = schema_unknown_resp.result.unwrap()["isError"]
+        .as_bool()
+        .unwrap();
     assert!(is_err, "Unknown capability must return isError: true");
 
     // =========================================================================
@@ -154,8 +174,11 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let plan_resp = mcp.handle_request(plan_req).await.unwrap();
     let plan_out: serde_json::Value = serde_json::from_str(
-        plan_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        plan_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     let plan_id = plan_out["plan_id"].as_str().unwrap().to_string();
     let plan_hash = plan_out["plan_hash"].as_str().unwrap().to_string();
     assert!(!plan_id.is_empty());
@@ -179,7 +202,12 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let bad_approve_resp = mcp.handle_request(bad_approve_req).await.unwrap();
-    assert!(bad_approve_resp.result.unwrap()["isError"].as_bool().unwrap(), "Mismatched plan hash approval must fail");
+    assert!(
+        bad_approve_resp.result.unwrap()["isError"]
+            .as_bool()
+            .unwrap(),
+        "Mismatched plan hash approval must fail"
+    );
 
     // 5b. Legitimate approval bound to exact canonical plan hash
     let good_approve_req = JsonRpcRequest {
@@ -197,8 +225,11 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let good_approve_resp = mcp.handle_request(good_approve_req).await.unwrap();
     let approve_out: serde_json::Value = serde_json::from_str(
-        good_approve_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        good_approve_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(approve_out["success"], true);
 
     // =========================================================================
@@ -218,12 +249,18 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let exec_resp = mcp.handle_request(exec_req).await.unwrap();
     let exec_out: serde_json::Value = serde_json::from_str(
-        exec_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        exec_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     let op_id = exec_out["operation_id"].as_str().unwrap().to_string();
     let lease_epoch = exec_out["lease_epoch"].as_u64().unwrap();
     assert!(!op_id.is_empty());
-    assert_eq!(lease_epoch, 1, "Fencing epoch must initialize monotonically to 1");
+    assert_eq!(
+        lease_epoch, 1,
+        "Fencing epoch must initialize monotonically to 1"
+    );
 
     // =========================================================================
     // STEP 7: Replay execution with same key -> Idempotent Success
@@ -242,33 +279,41 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let replay_resp = mcp.handle_request(replay_req).await.unwrap();
     let replay_out: serde_json::Value = serde_json::from_str(
-        replay_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
-    assert_eq!(replay_out["operation_id"], op_id, "Replay must return original operation");
+        replay_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        replay_out["operation_id"], op_id,
+        "Replay must return original operation"
+    );
 
     // =========================================================================
     // STEP 8: Create Service Binding with AES-256-GCM and Zero Secret Leakage
     // =========================================================================
     // Register verified target database in workspace
     let db_pass = "classified_agent_test_pw_999";
-    let _ = storage.save_resource(smoooth::models::Resource {
-        id: "res_app_db_prod".to_string(),
-        name: "app_db".to_string(),
-        workspace_id: "ws-agent-prod".to_string(),
-        service_type: "database".to_string(),
-        provider: "postgres".to_string(),
-        is_persistent: true,
-        ownership: smoooth::models::ResourceOwnership::SmooothManaged,
-        status: smoooth::models::ResourceStatus::Active,
-        configuration: json!({
-            "database": "production_app_db",
-            "user": "prod_user",
-            "password": db_pass,
-            "port": 5432
-        }),
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-    }).await;
+    let _ = storage
+        .save_resource(smoooth::models::Resource {
+            id: "res_app_db_prod".to_string(),
+            name: "app_db".to_string(),
+            workspace_id: "ws-agent-prod".to_string(),
+            service_type: "database".to_string(),
+            provider: "postgres".to_string(),
+            is_persistent: true,
+            ownership: smoooth::models::ResourceOwnership::SmooothManaged,
+            status: smoooth::models::ResourceStatus::Active,
+            configuration: json!({
+                "database": "production_app_db",
+                "user": "prod_user",
+                "password": db_pass,
+                "port": 5432
+            }),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await;
 
     // 8a. Test Cross-Workspace Violation Rejection
     let rogue_bind_req = JsonRpcRequest {
@@ -285,7 +330,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
         })),
     };
     let rogue_resp = mcp.handle_request(rogue_bind_req).await.unwrap();
-    assert!(rogue_resp.result.unwrap()["isError"].as_bool().unwrap(), "Cross-workspace binding must be rejected");
+    assert!(
+        rogue_resp.result.unwrap()["isError"].as_bool().unwrap(),
+        "Cross-workspace binding must be rejected"
+    );
 
     // 8b. Authorized binding within workspace
     let bind_req = JsonRpcRequest {
@@ -303,12 +351,21 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     };
     let bind_resp = mcp.handle_request(bind_req).await.unwrap();
     let bind_out: serde_json::Value = serde_json::from_str(
-        bind_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        bind_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(bind_out["encrypted_at_rest"], true);
     let masked_conn = bind_out["masked_connection_string"].as_str().unwrap();
-    assert!(!masked_conn.contains(db_pass), "Plaintext password must NEVER appear in MCP output");
-    assert!(masked_conn.contains("[REDACTED]"), "Masked token must be present");
+    assert!(
+        !masked_conn.contains(db_pass),
+        "Plaintext password must NEVER appear in MCP output"
+    );
+    assert!(
+        masked_conn.contains("[REDACTED]"),
+        "Masked token must be present"
+    );
 
     // =========================================================================
     // STEP 9: Inspect Operation & Verify Health
@@ -356,7 +413,10 @@ async fn test_agent_mcp_golden_workflow_end_to_end() {
     let reconcile_resp = mcp.handle_request(reconcile_req).await.unwrap();
     assert!(reconcile_resp.error.is_none());
     let rec_out: serde_json::Value = serde_json::from_str(
-        reconcile_resp.result.unwrap()["content"][0]["text"].as_str().unwrap()
-    ).unwrap();
+        reconcile_resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(rec_out["resource_id"], "container_web_app");
 }

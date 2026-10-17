@@ -1,8 +1,8 @@
-use async_trait::async_trait;
 use crate::error::Result;
 use crate::models::{
     AgentIdentity, IdempotencyKey, IdempotencyRecord, Operation, Plan, Resource, ServiceBinding,
 };
+use async_trait::async_trait;
 
 pub mod local;
 
@@ -37,7 +37,10 @@ pub trait Storage: Send + Sync {
     // Idempotency
     async fn check_idempotency(&self, key: &IdempotencyKey) -> Result<Option<IdempotencyRecord>>;
     async fn record_idempotency(&self, record: IdempotencyRecord) -> Result<()>;
-    async fn check_or_record_idempotency(&self, record: IdempotencyRecord) -> Result<Option<IdempotencyRecord>>;
+    async fn check_or_record_idempotency(
+        &self,
+        record: IdempotencyRecord,
+    ) -> Result<Option<IdempotencyRecord>>;
 
     // Operations & Fencing Leases
     async fn save_operation(&self, operation: Operation) -> Result<()>;
@@ -58,4 +61,3 @@ pub trait Storage: Send + Sync {
     async fn record_audit(&self, event: AuditEvent) -> Result<()>;
     async fn list_audit_events(&self, workspace_id: &str) -> Result<Vec<AuditEvent>>;
 }
-

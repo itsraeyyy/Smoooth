@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use bollard::network::{CreateNetworkOptions, InspectNetworkOptions};
+use std::collections::HashMap;
 
 use crate::adapters::docker::client::DockerClient;
 use crate::error::{Result, SmooothError};
@@ -16,7 +16,10 @@ impl NetworkManager {
         let docker = client.inner();
 
         // 1. Check if network already exists
-        if let Ok(net) = docker.inspect_network(network_name, None::<InspectNetworkOptions<String>>).await {
+        if let Ok(net) = docker
+            .inspect_network(network_name, None::<InspectNetworkOptions<String>>)
+            .await
+        {
             if let Some(id) = net.id {
                 return Ok(id);
             }
@@ -35,19 +38,18 @@ impl NetworkManager {
             ..Default::default()
         };
 
-        let response = docker
-            .create_network(options)
-            .await
-            .map_err(|e| SmooothError::ContainerFailed(format!("Failed to create network '{}': {}", network_name, e)))?;
+        let response = docker.create_network(options).await.map_err(|e| {
+            SmooothError::ContainerFailed(format!(
+                "Failed to create network '{}': {}",
+                network_name, e
+            ))
+        })?;
 
         Ok(response.id)
     }
 
     /// Remove network if no longer needed
-    pub async fn remove_network(
-        client: &DockerClient,
-        network_name: &str,
-    ) -> Result<()> {
+    pub async fn remove_network(client: &DockerClient, network_name: &str) -> Result<()> {
         let docker = client.inner();
         let _ = docker.remove_network(network_name).await;
         Ok(())

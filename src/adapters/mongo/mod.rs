@@ -9,7 +9,6 @@ use crate::adapters::{AdapterGuarantees, HealthEvidence, ProviderAdapter};
 use crate::error::{Result, SmooothError};
 use crate::models::{Capability, Resource, ResourceOwnership, ResourceStatus, SupportLevel};
 
-
 pub struct MongoAdapter {
     docker_adapter: Arc<DockerAdapter>,
 }
@@ -38,7 +37,9 @@ impl MongoAdapter {
 
         Err(SmooothError::Timeout(format!(
             "MongoDB at {}:{} did not accept TCP connections within {}s",
-            host, port, timeout_duration.as_secs()
+            host,
+            port,
+            timeout_duration.as_secs()
         )))
     }
 }
@@ -98,8 +99,12 @@ impl ProviderAdapter for MongoAdapter {
             Some(p) => p.to_string(),
             None => {
                 let mut bytes = [0u8; 16];
-                getrandom::getrandom(&mut bytes)
-                    .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate random password: {}", e)))?;
+                getrandom::getrandom(&mut bytes).map_err(|e| {
+                    SmooothError::Internal(anyhow::anyhow!(
+                        "Failed to generate random password: {}",
+                        e
+                    ))
+                })?;
                 hex::encode(bytes)
             }
         };
@@ -130,7 +135,10 @@ impl ProviderAdapter for MongoAdapter {
         );
 
         let mut docker_config = serde_json::Map::new();
-        docker_config.insert("image".to_string(), serde_json::Value::String(image.to_string()));
+        docker_config.insert(
+            "image".to_string(),
+            serde_json::Value::String(image.to_string()),
+        );
         docker_config.insert("env".to_string(), serde_json::Value::Object(env));
 
         // Volume configuration
@@ -152,7 +160,11 @@ impl ProviderAdapter for MongoAdapter {
         // Delegate container provisioning to DockerAdapter
         let mut res = self
             .docker_adapter
-            .provision(&container_name, &serde_json::Value::Object(docker_config), is_persistent)
+            .provision(
+                &container_name,
+                &serde_json::Value::Object(docker_config),
+                is_persistent,
+            )
             .await?;
 
         res.provider = "mongodb".to_string();
@@ -168,9 +180,10 @@ impl ProviderAdapter for MongoAdapter {
                 .await
                 .unwrap_or(27017);
 
-            let latency = Self::verify_mongo_connection("127.0.0.1", host_port, Duration::from_secs(30))
-                .await
-                .unwrap_or(5);
+            let latency =
+                Self::verify_mongo_connection("127.0.0.1", host_port, Duration::from_secs(30))
+                    .await
+                    .unwrap_or(5);
 
             tracing::info!(
                 "MongoDB instance '{}' provisioned and verified in {}ms",
@@ -207,7 +220,10 @@ impl ProviderAdapter for MongoAdapter {
             Ok(latency) => Ok(HealthEvidence {
                 is_healthy: true,
                 latency_ms: Some(latency),
-                message: format!("MongoDB responding to TCP connection on port {} in {}ms", host_port, latency),
+                message: format!(
+                    "MongoDB responding to TCP connection on port {} in {}ms",
+                    host_port, latency
+                ),
                 details: serde_json::json!({ "port": host_port, "latency_ms": latency }),
             }),
             Err(e) => Ok(HealthEvidence {
@@ -224,10 +240,14 @@ impl ProviderAdapter for MongoAdapter {
         resource_id: &str,
         intended_config: &serde_json::Value,
     ) -> Result<ResourceStatus> {
-        self.docker_adapter.reconcile(resource_id, intended_config).await
+        self.docker_adapter
+            .reconcile(resource_id, intended_config)
+            .await
     }
 
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()> {
-        self.docker_adapter.destroy(resource_id, preserve_persistent_data).await
+        self.docker_adapter
+            .destroy(resource_id, preserve_persistent_data)
+            .await
     }
 }

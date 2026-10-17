@@ -1,7 +1,7 @@
-use std::time::Instant;
 use bollard::container::InspectContainerOptions;
 use bollard::exec::{CreateExecOptions, StartExecOptions};
 use bollard::models::ContainerInspectResponse;
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -85,10 +85,20 @@ impl HealthProber {
         let mut last_err = String::new();
 
         for _ in 0..15 {
-            match tokio::time::timeout(std::time::Duration::from_millis(400), TcpStream::connect(&addr)).await {
+            match tokio::time::timeout(
+                std::time::Duration::from_millis(400),
+                TcpStream::connect(&addr),
+            )
+            .await
+            {
                 Ok(Ok(mut stream)) => {
                     let mut buf = [0u8; 1];
-                    match tokio::time::timeout(std::time::Duration::from_millis(150), stream.read(&mut buf)).await {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(150),
+                        stream.read(&mut buf),
+                    )
+                    .await
+                    {
                         Ok(Ok(0)) => {
                             last_err = "Connection closed immediately by peer (no process listening on port)".to_string();
                             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -118,7 +128,10 @@ impl HealthProber {
             Ok(HealthEvidence {
                 is_healthy: true,
                 latency_ms: Some(start.elapsed().as_millis() as u64),
-                message: format!("Container '{}' responded to active TCP probe on port {}.", container_name_or_id, port),
+                message: format!(
+                    "Container '{}' responded to active TCP probe on port {}.",
+                    container_name_or_id, port
+                ),
                 details: serde_json::json!({
                     "running": true,
                     "tcp_port": port,
@@ -159,7 +172,10 @@ impl HealthProber {
                 return Ok(HealthEvidence {
                     is_healthy: false,
                     latency_ms: Some(start.elapsed().as_millis() as u64),
-                    message: format!("Container '{}' unavailable or not found: {}", container_name_or_id, e),
+                    message: format!(
+                        "Container '{}' unavailable or not found: {}",
+                        container_name_or_id, e
+                    ),
                     details: serde_json::json!({
                         "running": false,
                         "error": e.to_string()
@@ -168,9 +184,10 @@ impl HealthProber {
             }
         };
 
-        let state = inspect.state.as_ref().ok_or_else(|| {
-            SmooothError::ContainerFailed("Container has no state".to_string())
-        })?;
+        let state = inspect
+            .state
+            .as_ref()
+            .ok_or_else(|| SmooothError::ContainerFailed("Container has no state".to_string()))?;
 
         let is_running = state.running.unwrap_or(false);
         if !is_running {
@@ -179,8 +196,7 @@ impl HealthProber {
                 latency_ms: Some(start.elapsed().as_millis() as u64),
                 message: format!(
                     "Container '{}' is not running (status: {:?})",
-                    container_name_or_id,
-                    state.status
+                    container_name_or_id, state.status
                 ),
                 details: serde_json::json!({
                     "running": false,
@@ -205,14 +221,23 @@ impl HealthProber {
 
         // 3. Execute probe according to HealthSpec
         match effective_spec {
-            Some(HealthSpec::Http { path, port, expected_status }) => {
+            Some(HealthSpec::Http {
+                path,
+                port,
+                expected_status,
+            }) => {
                 let host_port = Self::resolve_host_port(&inspect, port);
                 let addr = format!("127.0.0.1:{}", host_port);
                 let mut status_code: Option<u16> = None;
                 let mut last_err = String::new();
 
                 for _ in 0..15 {
-                    match tokio::time::timeout(std::time::Duration::from_millis(400), TcpStream::connect(&addr)).await {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(400),
+                        TcpStream::connect(&addr),
+                    )
+                    .await
+                    {
                         Ok(Ok(mut stream)) => {
                             let req = format!(
                                 "GET {} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\nUser-Agent: smoooth-probe\r\n\r\n",
@@ -225,11 +250,17 @@ impl HealthProber {
                             }
 
                             let mut buf = vec![0u8; 1024];
-                            match tokio::time::timeout(std::time::Duration::from_millis(800), stream.read(&mut buf)).await {
+                            match tokio::time::timeout(
+                                std::time::Duration::from_millis(800),
+                                stream.read(&mut buf),
+                            )
+                            .await
+                            {
                                 Ok(Ok(n)) if n > 0 => {
                                     let resp = String::from_utf8_lossy(&buf[..n]);
                                     if let Some(first_line) = resp.lines().next() {
-                                        let parts: Vec<&str> = first_line.split_whitespace().collect();
+                                        let parts: Vec<&str> =
+                                            first_line.split_whitespace().collect();
                                         if parts.len() >= 2 {
                                             if let Ok(code) = parts[1].parse::<u16>() {
                                                 status_code = Some(code);
@@ -237,7 +268,10 @@ impl HealthProber {
                                             }
                                         }
                                     }
-                                    last_err = format!("Unparseable HTTP response: {}", resp.lines().next().unwrap_or(""));
+                                    last_err = format!(
+                                        "Unparseable HTTP response: {}",
+                                        resp.lines().next().unwrap_or("")
+                                    );
                                 }
                                 Ok(Ok(_)) => {
                                     last_err = "Empty HTTP response from peer".to_string();
@@ -265,7 +299,10 @@ impl HealthProber {
                         Ok(HealthEvidence {
                             is_healthy: true,
                             latency_ms: Some(start.elapsed().as_millis() as u64),
-                            message: format!("Container '{}' HTTP check returned expected status {}.", container_name_or_id, code),
+                            message: format!(
+                                "Container '{}' HTTP check returned expected status {}.",
+                                container_name_or_id, code
+                            ),
                             details: serde_json::json!({
                                 "running": true,
                                 "probe": "http",
@@ -294,7 +331,10 @@ impl HealthProber {
                     Ok(HealthEvidence {
                         is_healthy: false,
                         latency_ms: Some(start.elapsed().as_millis() as u64),
-                        message: format!("HTTP check to port {} path '{}' failed: {}", port, path, last_err),
+                        message: format!(
+                            "HTTP check to port {} path '{}' failed: {}",
+                            port, path, last_err
+                        ),
                         details: serde_json::json!({
                             "running": true,
                             "probe": "http",
@@ -317,7 +357,9 @@ impl HealthProber {
 
                 match docker.create_exec(container_name_or_id, exec_options).await {
                     Ok(created) => {
-                        let _ = docker.start_exec(&created.id, None::<StartExecOptions>).await;
+                        let _ = docker
+                            .start_exec(&created.id, None::<StartExecOptions>)
+                            .await;
                         match docker.inspect_exec(&created.id).await {
                             Ok(inspect_resp) => {
                                 let exit_code = inspect_resp.exit_code.unwrap_or(-1);
@@ -325,7 +367,10 @@ impl HealthProber {
                                     Ok(HealthEvidence {
                                         is_healthy: true,
                                         latency_ms: Some(start.elapsed().as_millis() as u64),
-                                        message: format!("Container '{}' exec probe succeeded (exit code 0).", container_name_or_id),
+                                        message: format!(
+                                            "Container '{}' exec probe succeeded (exit code 0).",
+                                            container_name_or_id
+                                        ),
                                         details: serde_json::json!({
                                             "running": true,
                                             "probe": "exec",
@@ -337,7 +382,10 @@ impl HealthProber {
                                     Ok(HealthEvidence {
                                         is_healthy: false,
                                         latency_ms: Some(start.elapsed().as_millis() as u64),
-                                        message: format!("Container '{}' exec probe failed with exit code {}.", container_name_or_id, exit_code),
+                                        message: format!(
+                                            "Container '{}' exec probe failed with exit code {}.",
+                                            container_name_or_id, exit_code
+                                        ),
                                         details: serde_json::json!({
                                             "running": true,
                                             "probe": "exec",
@@ -347,39 +395,42 @@ impl HealthProber {
                                     })
                                 }
                             }
-                            Err(e) => {
-                                Ok(HealthEvidence {
-                                    is_healthy: false,
-                                    latency_ms: Some(start.elapsed().as_millis() as u64),
-                                    message: format!("Failed to inspect exec probe for container '{}': {}", container_name_or_id, e),
-                                    details: serde_json::json!({ "error": e.to_string() }),
-                                })
-                            }
+                            Err(e) => Ok(HealthEvidence {
+                                is_healthy: false,
+                                latency_ms: Some(start.elapsed().as_millis() as u64),
+                                message: format!(
+                                    "Failed to inspect exec probe for container '{}': {}",
+                                    container_name_or_id, e
+                                ),
+                                details: serde_json::json!({ "error": e.to_string() }),
+                            }),
                         }
                     }
-                    Err(e) => {
-                        Ok(HealthEvidence {
-                            is_healthy: false,
-                            latency_ms: Some(start.elapsed().as_millis() as u64),
-                            message: format!("Failed to create exec probe for container '{}': {}", container_name_or_id, e),
-                            details: serde_json::json!({ "error": e.to_string() }),
-                        })
-                    }
+                    Err(e) => Ok(HealthEvidence {
+                        is_healthy: false,
+                        latency_ms: Some(start.elapsed().as_millis() as u64),
+                        message: format!(
+                            "Failed to create exec probe for container '{}': {}",
+                            container_name_or_id, e
+                        ),
+                        details: serde_json::json!({ "error": e.to_string() }),
+                    }),
                 }
             }
 
-            Some(HealthSpec::Liveness) => {
-                Ok(HealthEvidence {
-                    is_healthy: true,
-                    latency_ms: Some(start.elapsed().as_millis() as u64),
-                    message: format!("Container '{}' liveness verified (running).", container_name_or_id),
-                    details: serde_json::json!({
-                        "running": true,
-                        "probe": "liveness",
-                        "status": state.status
-                    }),
-                })
-            }
+            Some(HealthSpec::Liveness) => Ok(HealthEvidence {
+                is_healthy: true,
+                latency_ms: Some(start.elapsed().as_millis() as u64),
+                message: format!(
+                    "Container '{}' liveness verified (running).",
+                    container_name_or_id
+                ),
+                details: serde_json::json!({
+                    "running": true,
+                    "probe": "liveness",
+                    "status": state.status
+                }),
+            }),
 
             Some(HealthSpec::Tcp { port }) => {
                 let host_port = Self::resolve_host_port(&inspect, port);

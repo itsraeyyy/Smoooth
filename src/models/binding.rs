@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::models::connection::{ConnectionDetails, Endpoint, ResourceOwnership};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::models::connection::{ConnectionDetails, Endpoint, ResourceOwnership};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +87,7 @@ impl ServiceBinding {
     }
 
     /// Construct dynamic service binding with typed connection details and environment variable mapping
+    #[allow(clippy::too_many_arguments)]
     pub fn new_dynamic(
         id: String,
         source_resource_id: String,
@@ -134,12 +135,18 @@ impl ServiceBinding {
     }
 
     /// Decrypt stored credentials in memory for injection without logging
-    pub fn decrypt_credentials(&self, secret_store: &crate::security::SecretStore) -> crate::error::Result<Vec<u8>> {
+    pub fn decrypt_credentials(
+        &self,
+        secret_store: &crate::security::SecretStore,
+    ) -> crate::error::Result<Vec<u8>> {
         secret_store.decrypt(&self.encrypted_credentials)
     }
 
     /// Decrypt full connection details with plaintext password in memory
-    pub fn decrypt_connection_details(&self, secret_store: &crate::security::SecretStore) -> crate::error::Result<ConnectionDetails> {
+    pub fn decrypt_connection_details(
+        &self,
+        secret_store: &crate::security::SecretStore,
+    ) -> crate::error::Result<ConnectionDetails> {
         let decrypted_bytes = self.decrypt_credentials(secret_store)?;
         // If it deserializes as ConnectionDetails:
         if let Ok(details) = serde_json::from_slice::<ConnectionDetails>(&decrypted_bytes) {
@@ -153,12 +160,18 @@ impl ServiceBinding {
                     host: url.host_str().unwrap_or("localhost").to_string(),
                     port: url.port().unwrap_or(5432),
                     path_or_database: Some(url.path().trim_start_matches('/').to_string()),
-                    username: if url.username().is_empty() { None } else { Some(url.username().to_string()) },
+                    username: if url.username().is_empty() {
+                        None
+                    } else {
+                        Some(url.username().to_string())
+                    },
                     password: url.password().map(|p| p.to_string()),
                     extra_params: url.query_pairs().into_owned().collect(),
                 });
             }
         }
-        Err(crate::error::SmooothError::Validation("Failed to deserialize decrypted connection details".to_string()))
+        Err(crate::error::SmooothError::Validation(
+            "Failed to deserialize decrypted connection details".to_string(),
+        ))
     }
 }

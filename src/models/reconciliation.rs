@@ -28,7 +28,9 @@ pub struct DriftReport {
 
 impl DriftReport {
     pub fn requires_approval(&self) -> bool {
-        self.items.iter().any(|i| i.risk_tier == DriftRiskTier::Destructive)
+        self.items
+            .iter()
+            .any(|i| i.risk_tier == DriftRiskTier::Destructive)
     }
 }
 

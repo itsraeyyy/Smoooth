@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use smoooth::adapters::docker::client::DockerClient;
 use smoooth::adapters::docker::containers::{ContainerManager, ContainerSpec};
 use smoooth::adapters::docker::images::ImageManager;
 use smoooth::adapters::docker::volumes::VolumeManager;
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_docker_daemon_connectivity_or_graceful_diagnostics() {
@@ -52,7 +52,11 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
         cmd: Some(vec!["sleep".to_string(), "30".to_string()]),
         env: vec!["TEST_VAR=hello_smoooth".to_string()],
         port_bindings: HashMap::new(),
-        volume_mounts: vec![smoooth::models::VolumeMount::new(vol_name.to_string(), "/data".to_string(), false)],
+        volume_mounts: vec![smoooth::models::VolumeMount::new(
+            vol_name.to_string(),
+            "/data".to_string(),
+            false,
+        )],
         network_name: None,
         labels: HashMap::new(),
         restart_policy: None,
@@ -62,11 +66,15 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
         health_spec: None,
     };
 
-    let container_id = ContainerManager::create_and_start(&client, &spec).await.unwrap();
+    let container_id = ContainerManager::create_and_start(&client, &spec)
+        .await
+        .unwrap();
     assert!(!container_id.is_empty());
 
     // 4. Verify running inspection
-    let status = ContainerManager::inspect(&client, container_name).await.unwrap();
+    let status = ContainerManager::inspect(&client, container_name)
+        .await
+        .unwrap();
     assert_eq!(status, smoooth::models::ResourceStatus::Active);
 
     // 5. Cleanup container without deleting volume
@@ -75,7 +83,10 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
 
     // 6. Verify persistent volume was preserved
     let vol_remove_blocked = VolumeManager::remove_volume(&client, vol_name, false).await;
-    assert!(vol_remove_blocked.is_err(), "Persistent volume deletion without force must be blocked");
+    assert!(
+        vol_remove_blocked.is_err(),
+        "Persistent volume deletion without force must be blocked"
+    );
 
     // 7. Explicit cleanup of test volume with force
     let _ = VolumeManager::remove_volume(&client, vol_name, true).await;
