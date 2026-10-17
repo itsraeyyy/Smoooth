@@ -110,8 +110,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let cli = Cli::parse();
 
-    let storage_path =
-        std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
+    let storage_path = std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| {
+        if std::path::Path::new("/var/lib/smoooth/smoooth_state.json").exists() {
+            "/var/lib/smoooth/smoooth_state.json".to_string()
+        } else {
+            "smoooth_state.json".to_string()
+        }
+    });
     let storage = Arc::new(LocalStorage::new_file_backed(&storage_path));
     let mut orchestrator = Orchestrator::new(storage.clone());
     let docker_adapter = Arc::new(DockerAdapter::new());

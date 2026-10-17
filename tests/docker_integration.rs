@@ -14,10 +14,16 @@ async fn test_docker_daemon_connectivity_or_graceful_diagnostics() {
                 assert!(!version.is_empty());
             }
             Err(e) => {
+                if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                    panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but Docker ping failed: {e}");
+                }
                 println!("Docker daemon unreachable (ping error): {}", e);
             }
         },
         Err(e) => {
+            if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but DockerClient::try_new() failed: {e}");
+            }
             println!("Docker client connection unavailable: {}", e);
         }
     }
@@ -28,9 +34,19 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
     let client = match DockerClient::try_new() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
-            Err(_) => return, // Skip live test if daemon is not running in current environment
+            Err(e) => {
+                if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                    panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but Docker ping failed: {e}");
+                }
+                return;
+            }
         },
-        Err(_) => return,
+        Err(e) => {
+            if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but DockerClient::try_new() failed: {e}");
+            }
+            return;
+        }
     };
 
     // 1. Pull lightweight alpine image

@@ -9,9 +9,19 @@ async fn test_postgres_provisioning_and_query_when_docker_available() {
     let client = match DockerClient::try_new() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
-            Err(_) => return, // Graceful skip if Docker daemon is not active in this test runner
+            Err(e) => {
+                if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                    panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but Docker ping failed: {e}");
+                }
+                return;
+            }
         },
-        Err(_) => return,
+        Err(e) => {
+            if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but DockerClient::try_new() failed: {e}");
+            }
+            return;
+        }
     };
 
     let docker = Arc::new(DockerAdapter::with_client(client));

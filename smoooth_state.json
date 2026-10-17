@@ -1,4 +1,22 @@
 {
+  "agents": {
+    "agent_bdba0b12f7444d598e7e9da926273cf1": {
+      "agent_id": "agent_bdba0b12f7444d598e7e9da926273cf1",
+      "name": "live-claude-agent",
+      "token_hash": "c4f49d8c1ecfb0b43bb2aa13d15e2d7e3e406199893cfea41cf7515d9a09dcbb",
+      "token_prefix": "smoooth_ag_4f2",
+      "scopes": [
+        "plan",
+        "deploy"
+      ],
+      "workspace_id": "default",
+      "created_at": "2026-10-17T08:24:19.326570737Z",
+      "expires_at": null,
+      "revoked": false,
+      "revoked_at": null,
+      "last_used_at": null
+    }
+  },
   "plans": {},
   "idempotency": {
     "default:execute_plan:idemp_client_key_demo_01": {
@@ -88,5 +106,23 @@
   },
   "resources": {},
   "bindings": {},
-  "audit_events": []
+  "audit_events": [
+    {
+      "id": 0,
+      "workspace_id": "default",
+      "actor": "operator",
+      "action": "agent_paired",
+      "target_resource_id": "agent_bdba0b12f7444d598e7e9da926273cf1",
+      "plan_hash": null,
+      "outcome": "success",
+      "redacted_evidence": {
+        "name": "live-claude-agent",
+        "scopes": [
+          "plan",
+          "deploy"
+        ]
+      },
+      "timestamp": "2026-10-17T08:24:19.364365841Z"
+    }
+  ]
 }

@@ -23,6 +23,9 @@ async fn test_live_docker_connectivity_and_dynamic_bindings() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
             Err(e) => {
+                if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                    panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but Docker ping failed: {e}");
+                }
                 println!(
                     "Docker daemon not reachable: {}. Skipping live integration test.",
                     e
@@ -31,6 +34,9 @@ async fn test_live_docker_connectivity_and_dynamic_bindings() {
             }
         },
         Err(e) => {
+            if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but DockerClient::try_new() failed: {e}");
+            }
             println!(
                 "Docker client initialization failed: {}. Skipping live integration test.",
                 e

@@ -25,11 +25,17 @@ async fn test_live_vps_docker_and_postgres_workflow_and_failure_drills() {
         Ok(c) => match c.ping().await {
             Ok(_) => c,
             Err(e) => {
+                if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                    panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but Docker ping failed: {e}");
+                }
                 println!("Docker daemon unreachable on host: {}", e);
                 return;
             }
         },
         Err(e) => {
+            if std::env::var("SMOOOTH_REQUIRE_DOCKER").unwrap_or_default() == "1" {
+                panic!("SMOOOTH_REQUIRE_DOCKER=1 is set, but DockerClient::try_new() failed: {e}");
+            }
             println!("Docker client initialization failed: {}", e);
             return;
         }
