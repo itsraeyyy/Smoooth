@@ -14,17 +14,21 @@ pair_proc = subprocess.run(
     ['/usr/local/bin/smoooth', 'agent', 'pair', '--name', 'claude-code-beta', '--workspace', 'beta-drill', '--scopes', 'read_only,plan,deploy'],
     capture_output=True, text=True, check=True
 )
-print(pair_proc.stdout.strip())
 
 agent_token = None
+agent_id = None
 for line in pair_proc.stdout.splitlines():
-    line = line.strip()
-    if line.startswith('smoooth_ag_'):
-        agent_token = line
-        break
+    line_s = line.strip()
+    if 'Agent ID' in line_s:
+        agent_id = line_s.split(':')[-1].strip()
+    if line_s.startswith('smoooth_ag_') or 'SMOOOTH_AUTH_TOKEN=' in line_s:
+        if line_s.startswith('smoooth_ag_'):
+            agent_token = line_s
+        continue
+    print(line)
 
 assert agent_token is not None, "Failed to extract agent token!"
-print(f"Extracted Agent Token: {agent_token[:16]}... (length: {len(agent_token)})")
+print(f"  🔑 Bearer Token Issued : {agent_token[:14]}...[REDACTED_FOR_SECURITY]")
 
 # Test MCP tools/list
 req = urllib.request.Request(
@@ -151,7 +155,11 @@ for attempt in range(40):
     progress = op_detail.get('progress_percent', 0)
     print(f"  [Attempt {attempt+1}] Status: {status}, Progress: {progress}%")
     if status == 'succeeded':
-        print(f"Plan execution SUCCEEDED! Evidence: {len(op_detail.get('evidence', []))} health proofs recorded.")
+        evidence = op_detail.get('evidence') or []
+        print(f"Plan execution SUCCEEDED! Evidence: {len(evidence)} verified health proofs recorded in audit trail:")
+        for idx, ev in enumerate(evidence, 1):
+            print(f"  Proof {idx}: {ev.get('message')} (latency: {ev.get('latency_ms')}ms)")
+        assert len(evidence) >= 2, f"Expected at least 2 health proofs, got {len(evidence)}"
         break
     elif status == 'failed':
         raise RuntimeError(f"Plan execution FAILED: {op_detail.get('error_message')}")
@@ -252,6 +260,30 @@ app_html2 = urllib.request.urlopen(app_req2).read().decode()
 assert "Welcome to nginx" in app_html2, "Self-healing reconciliation failed!"
 print("Self-healing recovery: SUCCESS (Web app revived and healthy on 18080)")
 
+# Step 11: Revocation & Credential Hygiene
+print("\n--- Step 11: Immediate Credential Revocation & Hygiene ---")
+print(f"Revoking test agent '{agent_id}' to prevent credential leakage...")
+subprocess.run(['/usr/local/bin/smoooth', 'agent', 'revoke', agent_id], check=True)
+
+# Verify that the revoked token is immediately rejected
+revoked_rejected = False
+try:
+    rev_req = urllib.request.Request(
+        'http://127.0.0.1:4040/mcp',
+        headers={'Authorization': f'Bearer {agent_token}', 'Content-Type': 'application/json'},
+        data=json.dumps({'jsonrpc': '2.0', 'id': 99, 'method': 'tools/list', 'params': {}}).encode()
+    )
+    urllib.request.urlopen(rev_req)
+except urllib.error.HTTPError as e:
+    assert e.code == 401
+    revoked_rejected = True
+assert revoked_rejected, "Revoked token was NOT rejected!"
+print("Post-drill revocation verification: SUCCESS (Revoked token immediately rejected with 401 Unauthorized)")
+
+# Clean up test containers
+subprocess.run(['docker', 'rm', '-f', 'drill_redis_db', 'drill_web_app'], capture_output=True)
+print("Drill test workloads cleaned up.")
+
 print("\n======================================================================")
-print(" Steps 6 through 10 Release Drill: ALL PASSED")
+print(" Steps 6 through 11 Release Drill: ALL PASSED")
 print("======================================================================")

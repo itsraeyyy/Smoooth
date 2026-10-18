@@ -119,6 +119,21 @@ impl LocalStorage {
             key.workspace_id, key.operation_type, key.client_key
         )
     }
+
+    async fn sync_agents_from_disk(&self) {
+        if let Some(path) = &self.snapshot_path {
+            if path.exists() {
+                if let Ok(data) = tokio::fs::read_to_string(path).await {
+                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
+                        let mut state = self.state.write().await;
+                        for (k, v) in disk_snapshot.agents {
+                            state.agents.insert(k, v);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -132,68 +147,23 @@ impl Storage for LocalStorage {
     }
 
     async fn get_agent(&self, id: &str) -> Result<Option<AgentIdentity>> {
-        {
-            let state = self.state.read().await;
-            if let Some(agent) = state.agents.get(id) {
-                return Ok(Some(agent.clone()));
-            }
-        }
-        if let Some(path) = &self.snapshot_path {
-            if path.exists() {
-                if let Ok(data) = tokio::fs::read_to_string(path).await {
-                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
-                        let mut state = self.state.write().await;
-                        for (k, v) in disk_snapshot.agents {
-                            state.agents.insert(k, v);
-                        }
-                        return Ok(state.agents.get(id).cloned());
-                    }
-                }
-            }
-        }
-        Ok(None)
+        self.sync_agents_from_disk().await;
+        let state = self.state.read().await;
+        Ok(state.agents.get(id).cloned())
     }
 
     async fn get_agent_by_token_hash(&self, token_hash: &str) -> Result<Option<AgentIdentity>> {
-        {
-            let state = self.state.read().await;
-            if let Some(agent) = state.agents.values().find(|a| a.token_hash == token_hash) {
-                return Ok(Some(agent.clone()));
-            }
-        }
-        if let Some(path) = &self.snapshot_path {
-            if path.exists() {
-                if let Ok(data) = tokio::fs::read_to_string(path).await {
-                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
-                        let mut state = self.state.write().await;
-                        for (k, v) in disk_snapshot.agents {
-                            state.agents.insert(k, v);
-                        }
-                        return Ok(state
-                            .agents
-                            .values()
-                            .find(|a| a.token_hash == token_hash)
-                            .cloned());
-                    }
-                }
-            }
-        }
-        Ok(None)
+        self.sync_agents_from_disk().await;
+        let state = self.state.read().await;
+        Ok(state
+            .agents
+            .values()
+            .find(|a| a.token_hash == token_hash)
+            .cloned())
     }
 
     async fn list_agents(&self, workspace_id: Option<&str>) -> Result<Vec<AgentIdentity>> {
-        if let Some(path) = &self.snapshot_path {
-            if path.exists() {
-                if let Ok(data) = tokio::fs::read_to_string(path).await {
-                    if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
-                        let mut state = self.state.write().await;
-                        for (k, v) in disk_snapshot.agents {
-                            state.agents.insert(k, v);
-                        }
-                    }
-                }
-            }
-        }
+        self.sync_agents_from_disk().await;
         let state = self.state.read().await;
         let list: Vec<AgentIdentity> = state
             .agents
@@ -211,6 +181,7 @@ impl Storage for LocalStorage {
     }
 
     async fn revoke_agent(&self, id: &str) -> Result<()> {
+        self.sync_agents_from_disk().await;
         let mut state = self.state.write().await;
         if let Some(agent) = state.agents.get_mut(id) {
             agent.revoked = true;

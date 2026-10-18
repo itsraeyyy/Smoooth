@@ -7,10 +7,9 @@ const distDir = path.resolve(rootDir, 'dist');
 console.log('Building Smoooth landing page for Cloudflare Pages...');
 
 // Ensure dist directory exists
-if (fs.existsSync(distDir)) {
-  fs.rmSync(distDir, { recursive: true, force: true });
+if (!fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true });
 }
-fs.mkdirSync(distDir, { recursive: true });
 
 // Files to copy directly to dist
 const filesToCopy = [

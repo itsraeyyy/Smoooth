@@ -252,9 +252,31 @@ async fn auth_middleware(
     Ok(next.run(req).await)
 }
 
-/// Control Dashboard UI
-async fn dashboard_handler() -> Html<&'static str> {
-    Html(crate::dashboard::get_dashboard_html())
+/// Control Dashboard UI with strict HTTP security headers
+async fn dashboard_handler() -> impl IntoResponse {
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".parse().unwrap(),
+    );
+    headers.insert(
+        header::HeaderName::from_static("x-frame-options"),
+        "DENY".parse().unwrap(),
+    );
+    headers.insert(
+        header::HeaderName::from_static("x-content-type-options"),
+        "nosniff".parse().unwrap(),
+    );
+    headers.insert(
+        header::HeaderName::from_static("referrer-policy"),
+        "strict-origin-when-cross-origin".parse().unwrap(),
+    );
+    headers.insert(
+        header::HeaderName::from_static("permissions-policy"),
+        "camera=(), microphone=(), geolocation=()".parse().unwrap(),
+    );
+
+    (headers, Html(crate::dashboard::get_dashboard_html()))
 }
 
 /// Public Health Probe

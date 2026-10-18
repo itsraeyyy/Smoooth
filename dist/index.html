@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vorcel AI — AI-Powered Coding Without the Complexity</title>
-  <meta name="description" content="Accelerate development workflows with AI-powered code generation, debugging, documentation, and intelligent suggestions built directly into your coding environment.">
+  <title>Smoooth — Infrastructure Freedom, Built for AI Agents</title>
+  <meta name="description" content="Deploy and operate applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP with Docker and multi-database persistence.">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Vorcel AI — AI-Powered Coding Without the Complexity">
-  <meta property="og:description" content="Accelerate development workflows with AI-powered code generation, debugging, documentation, and intelligent suggestions built directly into your coding environment.">
+  <meta property="og:title" content="Smoooth — Infrastructure Freedom, Built for AI Agents">
+  <meta property="og:description" content="Deploy and operate applications on infrastructure you control. Connect Claude Code, Cursor, and Windsurf to your Linux VPS via MCP.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="/desktop.png">
 
-  <!-- Google Fonts: Instrument Serif, JetBrains Mono, Inter -->
+  <!-- Google Fonts: Lexend, Geist, Geist Mono, Silkscreen -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Lexend:wght@300;400;500;600;700;800;900&family=Silkscreen&display=swap" rel="stylesheet">
 
-  <!-- Main Stylesheet (cache-busted) -->
-  <link rel="stylesheet" href="styles.css?v=20261016b">
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles.css?v=20261018d">
 </head>
 <body>
 
@@ -27,50 +27,51 @@
 
     <!-- 1. NAVIGATION BAR -->
     <header class="navbar">
-      <!-- Left: Brand Wordmark -->
-      <div class="brand">
-        <span class="brand-icon">▼</span>
-        <span class="brand-name">Vorcel AI</span>
-      </div>
+      <!-- Left: Brand Wordmark with Precision Pixel Prompt Glyph -->
+      <a href="#home" class="brand" aria-label="Smoooth Home">
+        <svg class="brand-pixel-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="3" height="3" fill="#111111" />
+          <rect x="6" y="5" width="4" height="3" fill="#111111" />
+          <rect x="11" y="8" width="3" height="3" fill="#10B981" />
+          <rect x="6" y="11" width="4" height="3" fill="#111111" />
+          <rect x="2" y="14" width="3" height="3" fill="#111111" />
+        </svg>
+        <span class="brand-name">Smoooth</span>
+      </a>
 
       <!-- Center: Navigation Links -->
-      <nav class="nav-links">
-        <a href="#home" class="nav-link active">Home</a>
+      <nav class="nav-links" aria-label="Main Navigation">
+        <a href="#home" class="nav-link active">Overview</a>
         <a href="#features" class="nav-link">Features</a>
-        <a href="#product" class="nav-link">Product</a>
-        <a href="#support" class="nav-link">Support</a>
-        <a href="#pricing" class="nav-link">Pricing</a>
+        <a href="#how-it-works" class="nav-link">How It Works</a>
+        <a href="#security" class="nav-link">Security</a>
+        <a href="#quickstart" class="nav-link">Quickstart</a>
+        <a href="docs/beta_readiness.md" class="nav-link">Docs</a>
       </nav>
 
       <!-- Right: Actions -->
       <div class="nav-actions">
-        <a href="#login" class="btn-text">Login</a>
-        <a href="#create-account" class="btn-account">Create account</a>
+        <a href="https://github.com/smoooth-dev/smoooth" target="_blank" rel="noopener noreferrer" class="btn-text">GitHub</a>
+        <a href="#quickstart" class="btn-account">Install v0.1.0</a>
       </div>
     </header>
 
-    <!-- 2. HERO SECTION — ROW 1: EDITORIAL HEADLINE & TRUSTED BY -->
+    <!-- 2. HERO SECTION — ROW 1: EDITORIAL HEADLINE & ECOSYSTEM -->
     <section class="hero-row-1" id="home">
       <!-- Left Hero Column (51.67% width) -->
       <div class="hero-left">
         <div>
-          <!-- Monospace Eyebrow -->
-          <div class="eyebrow">
-            <span class="status-dot"></span>
-            <span class="eyebrow-text">WE JUST RAISED $ 2.1 MILLION PER SEED</span>
-          </div>
-
-          <!-- High-Contrast Editorial Serif Headline -->
+          <!-- Clean & Direct Editorial Serif Headline (Anti-Slop: No Eyebrow Pill) -->
           <h1 class="hero-headline">
-            AI-Powered Coding<br>
-            Without the Complexity
+            Your agent chooses the stack.<br>
+            Smoooth makes it work.
           </h1>
         </div>
 
         <!-- Action Buttons -->
         <div class="hero-buttons">
-          <a href="#start" class="btn-primary">Start Free Trial</a>
-          <a href="#demo" class="btn-secondary">Try Live Demo</a>
+          <a href="#quickstart" class="btn-primary">Install on Linux</a>
+          <a href="#features" class="btn-secondary">View Architecture</a>
         </div>
       </div>
 
@@ -78,71 +79,67 @@
       <div class="hero-right">
         <!-- Supporting Copy -->
         <p class="hero-description">
-          Accelerate development workflows with AI-powered code generation, debugging, documentation, and intelligent suggestions built directly into your coding environment.
+          Deploy and operate applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP—provisioning Docker containers, persistent databases, and secure networks on demand.
         </p>
 
-        <!-- Trusted By Section -->
+        <!-- Ecosystem Compatibility Row with Micro Pixel Markers -->
         <div class="trusted-by-section">
-          <div class="trusted-label">TRUSTED BY:</div>
+          <div class="trusted-label">COMPATIBLE AGENTS &amp; INFRASTRUCTURE:</div>
           <div class="trusted-logos">
-            <!-- Calendly -->
+            <!-- Claude Code -->
             <div class="logo-item">
-              <span class="logo-bullet"></span>
-              <span>Calendly</span>
+              <span class="pixel-bullet" aria-hidden="true"></span>
+              <span>Claude Code</span>
             </div>
-            <!-- classpass -->
+            <!-- Cursor -->
             <div class="logo-item">
-              <span class="logo-symbol">⊙</span>
-              <span>classpass</span>
+              <span class="pixel-bullet" aria-hidden="true"></span>
+              <span>Cursor</span>
             </div>
-            <!-- GitHub -->
+            <!-- Windsurf -->
             <div class="logo-item">
-              <svg class="logo-icon-svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+              <span class="pixel-bullet" aria-hidden="true"></span>
+              <span>Windsurf</span>
+            </div>
+            <!-- Docker -->
+            <div class="logo-item">
+              <svg class="logo-icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.186.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.186.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.186.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.186.186.186m5.893 2.715h2.118a.186.186 0 00.186-.186V9.007a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.186V9.007a.185.185 0 00-.184-.186H8.1a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.186V9.007a.185.185 0 00-.185-.186H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.185m-2.928 0h2.119a.185.185 0 00.185-.186V9.007a.185.185 0 00-.185-.186H2.208a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185M23.959 10.9c-.397-.563-1.077-.85-2.02-.85-.122 0-.25.006-.381.018a4.935 4.935 0 00-1.428-.85c-.066-.026-.134-.047-.202-.068-.535-.164-1.127-.123-1.636.113-.087.04-.173.088-.256.143-.243.16-.454.364-.627.606H.619a.62.62 0 00-.619.62c0 2.22.42 4.148 1.25 5.733 1.053 2.012 2.766 3.327 4.957 3.805 1.542.336 3.39.294 5.378-.124 3.01-.634 5.86-2.316 7.82-4.618.307-.36.58-.74.819-1.137.49-.076.99-.214 1.48-.415.545-.224.97-.53 1.264-.91.312-.405.394-.827.247-1.228-.088-.242-.266-.543-.256-.688"/>
               </svg>
-              <span>GitHub</span>
+              <span>Docker</span>
             </div>
-            <!-- Basecamp -->
+            <!-- Ubuntu -->
             <div class="logo-item">
-              <span class="logo-symbol">▲</span>
-              <span>Basecamp</span>
-            </div>
-            <!-- otter -->
-            <div class="logo-item">
-              <span class="logo-symbol">●</span>
-              <span>otter</span>
+              <span class="pixel-bullet" aria-hidden="true"></span>
+              <span>Ubuntu/Debian</span>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 3. HERO SECTION — ROW 2: TECHNICAL PRODUCT COMPOSITION (MOUNTAIN) -->
+    <!-- 3. HERO SECTION — ROW 2: TECHNICAL PRODUCT COMPOSITION -->
     <div class="hero-row-2">
       <img
         src="hero_visual_2x.png"
-        alt="Vorcel AI Platform Preview"
+        alt="Smoooth agent orchestration and infrastructure dashboard preview showing Docker container and PostgreSQL database management"
         class="hero-visual-image"
       />
     </div>
 
-    <!-- 4. SECTION 2: EVERYTHING DEVELOPERS NEED TO MOVE FASTER -->
+    <!-- 4. SECTION 2: AUTONOMOUS INFRASTRUCTURE RUNTIME -->
     <section class="features-section" id="features">
-      <!-- Eyebrow & Editorial Heading Row -->
+      <!-- Clean & Direct Editorial Heading Row (Anti-Slop: No Eyebrow Pill) -->
       <div class="features-header-row">
         <div class="features-header-left">
-          <div class="eyebrow">
-            <span class="status-dot"></span>
-            <span class="eyebrow-text">WHY CHOSE KODA AI</span>
-          </div>
           <h2 class="features-headline">
-            Everything Developers<br>
-            Need to Move Faster
+            Everything Your Agents Need<br>
+            to Operate on Your VPS
           </h2>
         </div>
         <div class="features-header-right">
           <p class="features-description">
-            Powerful AI tools designed to streamline coding, reduce repetitive work, and help developers build with greater speed and confidence.
+            Coding agents write features in seconds, but configuring databases, managing persistent volumes, and checking health still wastes hours. Smoooth gives agents safe, structured tools to manage the full operational lifecycle.
           </p>
         </div>
       </div>
@@ -150,65 +147,69 @@
       <!-- Two Feature Cards -->
       <div class="features-cards-grid">
 
-        <!-- Feature Card 1: Instant Bug Detection -->
+        <!-- Feature Card 1: Stateful Database & Container Adapters -->
         <div class="feature-card">
           <div class="feature-card-header">
-            <!-- Bug Icon Tile -->
-            <div class="icon-tile">
-              <svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 8h-1.81a5.985 5.985 0 00-1.82-1.96l.93-.93a.996.996 0 10-1.41-1.41l-1.47 1.47C12.83 5.06 12.42 5 12 5s-.83.06-1.42.17L9.11 3.7a.996.996 0 10-1.41 1.41l.93.93C7.65 6.64 6.98 7.27 6.81 8H5c-.55 0-1 .45-1 1s.45 1 1 1h1.09c-.05.33-.09.66-.09 1v1H5c-.55 0-1 .45-1 1s.45 1 1 1h1v1c0 .34.04.67.09 1H5c-.55 0-1 .45-1 1s.45 1 1 1h1.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H19c.55 0 1-.45 1-1s-.45-1-1-1h-1.09c.05-.33.09-.66.09-1v-1h1c.55 0 1-.45 1-1s-.45-1-1-1h-1v-1c0-.34-.04-.67-.09-1H19c.55 0 1-.45 1-1s-.45-1-1-1zm-6 8h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1zm0-4h-2c-.55 0-1-.45-1-1s.45-1 1-1h2c.55 0 1 .45 1 1s-.45 1-1 1z" />
+            <!-- Database Icon Tile -->
+            <div class="icon-tile" aria-hidden="true">
+              <svg class="icon-svg stroke-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
               </svg>
             </div>
-            <h3 class="feature-title">Instant Bug Detection</h3>
-            <p class="feature-subtitle">Identify issues before deployment with intelligent error analysis and fixes.</p>
+            <h3 class="feature-title">Stateful Database &amp; Container Adapters</h3>
+            <p class="feature-subtitle">Provision PostgreSQL, Redis, MongoDB, and SQLite with automated volume retention, health verification, and clean rollbacks.</p>
           </div>
 
           <!-- Card 1 Visual: Code Editor Inside Soft Grey Well -->
           <div class="code-well">
             <div class="code-window">
-              <!-- Tab Bar with Issue Pill & Solved Pill -->
+              <!-- Tab Bar with Pixel Dotbar Status -->
               <div class="code-window-bar">
-                <div class="code-tabs">
-                  <button type="button" class="tab-btn active" data-card="bug" data-tab="HTML">HTML</button>
-                  <button type="button" class="tab-btn" data-card="bug" data-tab="CSS">CSS</button>
-                  <button type="button" class="tab-btn" data-card="bug" data-tab="JavaScript">Java Script</button>
+                <div class="code-tabs" role="tablist" aria-label="Database Adapters">
+                  <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-card="db" data-tab="PostgreSQL">PostgreSQL</button>
+                  <button type="button" class="tab-btn" role="tab" aria-selected="false" data-card="db" data-tab="Redis">Redis</button>
+                  <button type="button" class="tab-btn" role="tab" aria-selected="false" data-card="db" data-tab="MongoDB">MongoDB</button>
                 </div>
 
-                <div class="code-bar-badges">
-                  <span class="badge-issues">
-                    <span class="badge-dot"></span>
-                    2 Issue Found
-                  </span>
-                  <span class="badge-solved">Solved Code</span>
+                <div class="code-bar-status">
+                  <div class="pixel-dotbar" title="Loopback RPC Active" aria-hidden="true">
+                    <span class="pixel-dot active"></span>
+                    <span class="pixel-dot active"></span>
+                    <span class="pixel-dot active"></span>
+                    <span class="pixel-dot"></span>
+                  </div>
+                  <span class="code-bar-status-text">127.0.0.1:4040</span>
                 </div>
               </div>
 
-              <!-- Code Body with Error Highlight Lines -->
-              <div class="code-body" id="bugCodeContent">
-                <pre><code><span class="line-num">1</span>&lt;!DOCTYPE html&gt;
-<span class="line-num">2</span>&lt;html&gt;
-<span class="line-num">3</span>&lt;head&gt;
-<span class="line-num">4</span>  &lt;title&gt;Hello, World!&lt;/title&gt;
-<span class="code-line-error"><span class="line-num-error">5</span>&lt;link rel="stylesheet" href="styles.css" /&gt;</span>
-<span class="line-num">6</span>&lt;/head&gt;
-<span class="line-num">7</span>&lt;body&gt;
-<span class="code-line-error"><span class="line-num-error">8</span>  &lt;h1 class="title"&gt;Hello World!&lt;/h1&gt;</span></code></pre>
+              <!-- Code Body showing Adapter Payload -->
+              <div class="code-body" id="dbCodeContent">
+                <pre><code><span class="line-num">1</span><span class="token-kw">POST</span> /api/adapters/postgres/provision
+<span class="line-num">2</span>{
+<span class="line-num">3</span>  <span class="token-var">"service"</span>: <span class="token-fn">"primary-db"</span>,
+<span class="line-num">4</span>  <span class="token-var">"volume"</span>: <span class="token-fn">"/var/lib/smoooth/volumes/pgdata"</span>,
+<span class="line-num">5</span>  <span class="token-var">"persistence"</span>: <span class="token-kw">true</span>,
+<span class="line-num">6</span>  <span class="token-var">"health_probe"</span>: <span class="token-fn">"pg_isready -U postgres"</span>
+<span class="line-num">7</span>}
+<span class="line-num">8</span><span class="token-var">STATUS:</span> <span class="token-fn">HEALTHY</span> (verified in 1.4s, 5432/tcp bound)</code></pre>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Feature Card 2: Context-Aware Suggestions -->
+        <!-- Feature Card 2: Scoped Security & Least Privilege -->
         <div class="feature-card">
           <div class="feature-card-header">
-            <!-- Lightbulb Icon Tile -->
-            <div class="icon-tile">
+            <!-- Shield/Key Icon Tile -->
+            <div class="icon-tile" aria-hidden="true">
               <svg class="icon-svg stroke-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v1m0 18v1m9-10h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M9 21h6m-4-3h2a5 5 0 005-5 5 5 0 00-10 0 5 5 0 003 4.583V18z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h3 class="feature-title">Context-Aware Suggestions</h3>
-            <p class="feature-subtitle">Receive coding recommendations tailored to your project structure, patterns, and best pra...</p>
+            <h3 class="feature-title">Scoped Security &amp; Least Privilege</h3>
+            <p class="feature-subtitle">Never grant an AI agent an unrestricted root shell. Enforce 256-bit cryptographic bearer tokens with granular role-based permissions.</p>
           </div>
 
           <!-- Card 2 Visual: Code Editor Inside Soft Grey Well -->
@@ -216,41 +217,41 @@
             <div class="code-window">
               <!-- Tab Bar with Copy Button -->
               <div class="code-window-bar">
-                <div class="code-tabs">
-                  <button type="button" class="tab-btn active" data-card="suggest" data-tab="HTML">HTML</button>
-                  <button type="button" class="tab-btn" data-card="suggest" data-tab="CSS">CSS</button>
-                  <button type="button" class="tab-btn" data-card="suggest" data-tab="JavaScript">Java Script</button>
+                <div class="code-tabs" role="tablist" aria-label="Security &amp; Permissions">
+                  <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-card="security" data-tab="Pairing">Agent Pairing</button>
+                  <button type="button" class="tab-btn" role="tab" aria-selected="false" data-card="security" data-tab="Scopes">Scopes</button>
+                  <button type="button" class="tab-btn" role="tab" aria-selected="false" data-card="security" data-tab="Audit">Audit Stream</button>
                 </div>
 
-                <button type="button" class="copy-btn" id="copySuggestBtn">
-                  <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <button type="button" class="copy-btn" id="copySecurityBtn" aria-label="Copy agent pairing command">
+                  <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
                   </svg>
-                  <span id="copySuggestText">Copy</span>
+                  <span id="copySecurityText">Copy</span>
                 </button>
               </div>
 
-              <!-- Code Body with Autocomplete Menu -->
-              <div class="code-body-suggest" id="suggestCodeContent">
+              <!-- Code Body with Scoped Autocomplete Popover -->
+              <div class="code-body-suggest" id="securityCodeContent">
                 <div>
-                  <span class="line-num">11</span>
-                  <span class="token-var">user</span> = <span class="token-fn">get_user</span>(user_id)
+                  <span class="line-num">1</span>
+                  <span class="token-kw">$</span> smoooth agent pair --name <span class="token-fn">"claude-code"</span> --scopes <span class="token-var">"read_only,plan,deploy"</span>
                 </div>
                 <div style="margin-top: 4px;">
-                  <span class="line-num">12</span>
-                  <span class="token-kw">if</span> user.
+                  <span class="line-num">2</span>
+                  <span class="token-var">token:</span> <span class="token-fn">smt_a8f93e...</span> (256-bit entropy, saved to /etc/smoooth/auth.token)
                 </div>
 
-                <!-- Autocomplete Dropdown Popover -->
+                <!-- Granular Scope Popover with Silkscreen Footer -->
                 <div class="autocomplete-popover">
-                  <div class="popover-item active">&gt; is_active</div>
-                  <div class="popover-item">&gt; is_authenticated</div>
-                  <div class="popover-item">&gt; is_admin</div>
-                  <div class="popover-item">&gt; get_permission</div>
+                  <div class="popover-item active">&gt; read_only (granted)</div>
+                  <div class="popover-item active">&gt; plan (granted)</div>
+                  <div class="popover-item active">&gt; deploy (granted)</div>
+                  <div class="popover-item" style="color:#DC2626;">&gt; admin (blocked)</div>
                   <div class="popover-footer">
-                    <span>AI Suggestion</span>
-                    <span class="key-pill">Tab</span>
+                    <span class="popover-footer-label">LEAST PRIVILEGE</span>
+                    <span class="key-pill">RBAC</span>
                   </div>
                 </div>
               </div>
@@ -261,25 +262,207 @@
       </div>
     </section>
 
-    <!-- 5. FOOTER -->
+    <!-- 5. SECTION 3: QUICKSTART / HOW IT WORKS -->
+    <section class="quickstart-section" id="how-it-works">
+      <!-- Clean & Direct Heading (Anti-Slop: No Eyebrow Pill) -->
+      <div class="features-header-row">
+        <div class="features-header-left">
+          <h2 class="features-headline">
+            From Bare VPS to Agent-Operated<br>
+            in Under 2 Minutes
+          </h2>
+        </div>
+        <div class="features-header-right">
+          <p class="features-description">
+            Install once on Ubuntu 24.04 or Debian 12. Connect any MCP-compatible coding tool over local loopback.
+          </p>
+        </div>
+      </div>
+
+      <div class="steps-grid" id="quickstart">
+        <!-- Step 1 -->
+        <div class="step-card">
+          <div>
+            <div class="step-header">
+              <span class="step-num">01</span>
+              <span class="step-tech">SYSTEMD DAEMON</span>
+            </div>
+            <h3 class="step-title">Install the Daemon</h3>
+            <p class="step-desc">
+              The idempotent installer configures an unprivileged service account, systemd isolation, and a 256-bit bearer token.
+            </p>
+          </div>
+          <pre class="step-code"><code>sudo ./install.sh --show-token</code></pre>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card">
+          <div>
+            <div class="step-header">
+              <span class="step-num">02</span>
+              <span class="step-tech">MCP PROTOCOL</span>
+            </div>
+            <h3 class="step-title">Pair Your Coding Agent</h3>
+            <p class="step-desc">
+              Point Claude Code, Cursor, or Windsurf to Smoooth's loopback endpoint. Zero unauthenticated port exposure.
+            </p>
+          </div>
+          <pre class="step-code"><code>claude mcp add --transport sse smoooth \
+  http://127.0.0.1:4040/sse \
+  --header "Authorization: Bearer &lt;TOKEN&gt;"</code></pre>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card">
+          <div>
+            <div class="step-header">
+              <span class="step-num">03</span>
+              <span class="step-tech">AUTONOMOUS RUNTIME</span>
+            </div>
+            <h3 class="step-title">Prompt to Provision &amp; Deploy</h3>
+            <p class="step-desc">
+              Smoooth resolves dependencies into a topological DAG, creates persistent volumes, and verifies container health probes.
+            </p>
+          </div>
+          <pre class="step-code"><code>"Deploy my web app with PostgreSQL 
+and Redis, and expose it on port 8000."</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. SECTION 4: OPERATIONAL GUARANTEES -->
+    <section class="guarantees-section" id="security">
+      <!-- Clean & Direct Heading (Anti-Slop: No Eyebrow Pill) -->
+      <div class="features-header-row">
+        <div class="features-header-left">
+          <h2 class="features-headline">
+            Security, Control, and<br>
+            Zero Cloud Lock-In
+          </h2>
+        </div>
+        <div class="features-header-right">
+          <p class="features-description">
+            Smoooth was designed specifically to prevent runaway agents and avoid surprise cloud bills.
+          </p>
+        </div>
+      </div>
+
+      <div class="guarantees-grid">
+        <!-- Card 1: Multi-node Infra Freedom -->
+        <div class="guarantee-card">
+          <div class="guarantee-icon" aria-hidden="true">
+            <svg class="pixel-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="1" y="1" width="4" height="4" />
+              <rect x="11" y="1" width="4" height="4" fill="#9CA3AF" />
+              <rect x="1" y="11" width="4" height="4" fill="#9CA3AF" />
+              <rect x="11" y="11" width="4" height="4" fill="#10B981" />
+              <rect x="7" y="2" width="2" height="2" fill="#D1D5DB" />
+              <rect x="7" y="12" width="2" height="2" fill="#D1D5DB" />
+              <rect x="2" y="7" width="2" height="2" fill="#D1D5DB" />
+              <rect x="12" y="7" width="2" height="2" fill="#D1D5DB" />
+            </svg>
+          </div>
+          <h4 class="guarantee-title">Zero Cloud Lock-In</h4>
+          <p class="guarantee-desc">
+            Runs on any $5 VPS, bare-metal server, or home lab. Your data stays on your own SSDs without proprietary PaaS pricing tiers.
+          </p>
+        </div>
+
+        <!-- Card 2: 256-bit Loopback Security -->
+        <div class="guarantee-card">
+          <div class="guarantee-icon" aria-hidden="true">
+            <svg class="pixel-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="5" y="2" width="6" height="2" />
+              <rect x="4" y="4" width="2" height="4" />
+              <rect x="10" y="4" width="2" height="4" />
+              <rect x="3" y="7" width="10" height="7" />
+              <rect x="7" y="9" width="2" height="2" fill="#10B981" />
+              <rect x="7.5" y="11" width="1" height="2" fill="#10B981" />
+            </svg>
+          </div>
+          <h4 class="guarantee-title">Private by Default</h4>
+          <p class="guarantee-desc">
+            The daemon binds exclusively to 127.0.0.1:4040. Access the embedded web dashboard securely via SSH tunnel with zero public attack surface.
+          </p>
+        </div>
+
+        <!-- Card 3: 2-Phase DAG Engine -->
+        <div class="guarantee-card">
+          <div class="guarantee-icon" aria-hidden="true">
+            <svg class="pixel-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="2" y="4" width="2" height="2" />
+              <rect x="4" y="2" width="8" height="2" />
+              <rect x="12" y="4" width="2" height="3" />
+              <rect x="2" y="9" width="2" height="3" />
+              <rect x="4" y="12" width="8" height="2" />
+              <rect x="12" y="10" width="2" height="2" />
+              <rect x="11" y="2" width="3" height="4" fill="#10B981" />
+              <rect x="2" y="10" width="3" height="4" fill="#10B981" />
+            </svg>
+          </div>
+          <h4 class="guarantee-title">Transactional 2-Phase DAG</h4>
+          <p class="guarantee-desc">
+            Every deployment validates an execution plan before provisioning. If a container fails health checks, Smoooth rolls back automatically.
+          </p>
+        </div>
+
+        <!-- Card 4: Local-First Observability -->
+        <div class="guarantee-card">
+          <div class="guarantee-icon" aria-hidden="true">
+            <svg class="pixel-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="2" y="3" width="12" height="10" fill="#E5E7EB" />
+              <rect x="3" y="4" width="10" height="7" fill="#111111" />
+              <rect x="5" y="6" width="3" height="2" fill="#10B981" />
+              <rect x="9" y="6" width="2" height="1" fill="#FFFFFF" />
+              <rect x="5" y="9" width="5" height="1" fill="#9CA3AF" />
+              <rect x="6" y="13" width="4" height="2" fill="#111111" />
+            </svg>
+          </div>
+          <h4 class="guarantee-title">Local-First Observability</h4>
+          <p class="guarantee-desc">
+            Embedded dashboard with strict Content Security Policy (CSP), offline platform typography, and append-only audit logging. Zero external telemetry.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. SECTION 5: FINAL CALL TO ACTION -->
+    <section class="cta-section">
+      <h2 class="cta-headline">Take Control of Your Agent Infrastructure</h2>
+      <p class="cta-desc">
+        Available now for Linux x86_64. Download the v0.1.0 Beta release bundle and start deploying on infrastructure you control.
+      </p>
+      <div class="cta-buttons">
+        <a href="#quickstart" class="btn-primary">Download v0.1.0 Release</a>
+        <a href="docs/beta_readiness.md" class="btn-secondary">Read Documentation</a>
+      </div>
+    </section>
+
+    <!-- 8. FOOTER -->
     <footer class="footer">
       <div class="footer-left">
-        <span class="brand-icon">▼</span>
-        <span class="brand-name">Vorcel AI</span>
+        <svg class="brand-pixel-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="3" height="3" fill="#111111" />
+          <rect x="6" y="5" width="4" height="3" fill="#111111" />
+          <rect x="11" y="8" width="3" height="3" fill="#10B981" />
+          <rect x="6" y="11" width="4" height="3" fill="#111111" />
+          <rect x="2" y="14" width="3" height="3" fill="#111111" />
+        </svg>
+        <span class="brand-name">Smoooth</span>
         <span class="footer-divider">/</span>
-        <span class="footer-subtext">Smoooth 1:1 Pixel Clone with Next.js &amp; Rust</span>
+        <span class="footer-subtext">Infrastructure freedom, built for AI agents. Open-source under Apache-2.0 / MIT.</span>
       </div>
 
       <div class="footer-links">
-        <a href="#privacy">Privacy</a>
-        <a href="#terms">Terms</a>
-        <a href="#docs">Docs</a>
-        <a href="#github">GitHub</a>
+        <a href="docs/beta_readiness.md">Docs</a>
+        <a href="RELEASE_NOTES.md">Release Notes</a>
+        <a href="#security">Security Model</a>
+        <a href="https://github.com/smoooth-dev/smoooth" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
     </footer>
 
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20261018d"></script>
 </body>
 </html>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vorcel AI — AI-Powered Coding Without the Complexity",
-  description: "Accelerate development workflows with AI-powered code generation, debugging, documentation, and intelligent suggestions built directly into your coding environment.",
+  title: "Smoooth — Infrastructure Freedom, Built for AI Agents",
+  description: "Deploy and operate applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP with Docker and multi-database persistence.",
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Lexend:wght@300;400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Lexend:wght@300;400;500;600;700;800;900&family=Silkscreen&display=swap"
           rel="stylesheet"
         />
       </head>
