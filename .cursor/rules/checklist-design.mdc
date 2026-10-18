@@ -1,0 +1,16 @@
+---
+description: Automated UI/UX Design Checklist & Review Rules powered by Checklist Design and Anti-Slop Guidelines
+globs: "**/*.{html,css,js,ts,tsx,jsx}"
+---
+
+# Checklist Design & Anti-Slop UI Rules
+
+When designing, building, or refactoring UI components, pages, or user flows:
+
+1. **Anti-Slop Rule**:
+   - **NEVER use decorative pill-shaped eyebrow badges, kicker pills** (`rounded-full`, pastel backgrounds, sparkle icons, uppercase tracking-wide text) above headings, heroes, cards, or sections. Headings must start cleanly and directly.
+
+2. **Core Design Enforcements**:
+   - **Accessibility**: WCAG 2.1 AA contrast, visible focus rings, aria-invalid, screen reader alt text.
+   - **States**: Explicitly build Default, Hover, Active, Focus, Disabled, Loading, Empty, and Error states.
+   - **Mobile Touch Targets**: Minimum 44x44px touch areas and proper keyboard inputs.
