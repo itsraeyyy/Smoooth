@@ -13,16 +13,20 @@ use crate::models::HealthSpec;
 pub struct HealthProber;
 
 impl HealthProber {
-    /// Helper to detect host port from container inspection
+    /// Helper to detect host TCP port from container inspection (ignores UDP ports)
     fn detect_port(inspect: &ContainerInspectResponse) -> Option<u16> {
         let from_ns = inspect.network_settings.as_ref().and_then(|ns| {
             ns.ports.as_ref().and_then(|pm| {
-                pm.values().find_map(|bindings| {
-                    bindings.as_ref().and_then(|b_list| {
-                        b_list.first().and_then(|b| {
-                            b.host_port.as_ref().and_then(|hp| hp.parse::<u16>().ok())
+                pm.iter().find_map(|(k, bindings)| {
+                    if k.ends_with("/tcp") || !k.contains('/') {
+                        bindings.as_ref().and_then(|b_list| {
+                            b_list.first().and_then(|b| {
+                                b.host_port.as_ref().and_then(|hp| hp.parse::<u16>().ok())
+                            })
                         })
-                    })
+                    } else {
+                        None
+                    }
                 })
             })
         });
@@ -31,12 +35,16 @@ impl HealthProber {
         }
         inspect.host_config.as_ref().and_then(|hc| {
             hc.port_bindings.as_ref().and_then(|pm| {
-                pm.values().find_map(|bindings| {
-                    bindings.as_ref().and_then(|b_list| {
-                        b_list.first().and_then(|b| {
-                            b.host_port.as_ref().and_then(|hp| hp.parse::<u16>().ok())
+                pm.iter().find_map(|(k, bindings)| {
+                    if k.ends_with("/tcp") || !k.contains('/') {
+                        bindings.as_ref().and_then(|b_list| {
+                            b_list.first().and_then(|b| {
+                                b.host_port.as_ref().and_then(|hp| hp.parse::<u16>().ok())
+                            })
                         })
-                    })
+                    } else {
+                        None
+                    }
                 })
             })
         })
