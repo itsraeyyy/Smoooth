@@ -945,10 +945,23 @@ async fn deploy_workload_handler(
     let ws = body.workspace.unwrap_or_else(|| "default".to_string());
     let service_type = body.service_type.unwrap_or_else(|| "web".to_string());
     let port = body.port.unwrap_or(8080);
-    let env_vars = body.env_vars.unwrap_or_default();
+    let mut env_vars = body.env_vars.unwrap_or_default();
+    env_vars.entry("PORT".to_string()).or_insert_with(|| port.to_string());
+
+    let container_port = if clean_image.contains("nginx") {
+        80
+    } else if clean_image.contains("redis") {
+        6379
+    } else if clean_image.contains("postgres") {
+        5432
+    } else if clean_image.contains("mongo") {
+        27017
+    } else {
+        port
+    };
 
     let mut ports_map = serde_json::Map::new();
-    ports_map.insert(port.to_string(), serde_json::json!(port));
+    ports_map.insert(format!("{}/tcp", container_port), serde_json::json!(port));
 
     let action = crate::models::CanonicalActionSpec {
         action_type: "create".to_string(),

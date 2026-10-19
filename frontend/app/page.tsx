@@ -19,9 +19,13 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#080C14]">
-      <div dangerouslySetInnerHTML={{ __html: rawHtml }} />
+    <>
+      <div
+        className="min-h-screen bg-[#080C14]"
+        dangerouslySetInnerHTML={{ __html: rawHtml }}
+        suppressHydrationWarning
+      />
       <HarnessInteractiveBridge />
-    </main>
+    </>
   );
 }

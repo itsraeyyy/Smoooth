@@ -71,14 +71,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-US">
+    <html lang="en-US" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/harness/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
       </head>
-      <body className="antialiased min-h-screen bg-[#080C14] text-[#F9FAFB]">
+      <body className="antialiased min-h-screen bg-[#080C14] text-[#F9FAFB]" suppressHydrationWarning>
         {children}
       </body>
     </html>
   );
 }
+
