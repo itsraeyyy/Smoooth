@@ -158,6 +158,33 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("click", () => {
     qrTriggers.forEach(t => t.classList.remove("ds-qr-active"));
   });
+
+  // 8. Migration persona tabs switcher
+  const personaTabs = document.querySelectorAll(".migration-persona-tab");
+  const personaPanels = document.querySelectorAll(".persona-panel");
+  if (personaTabs.length > 0 && personaPanels.length > 0) {
+    personaTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        const target = tab.getAttribute("data-persona");
+        personaTabs.forEach(t => {
+          const isActive = t === tab;
+          t.setAttribute("aria-selected", isActive ? "true" : "false");
+          if (isActive) {
+            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-white/20 bg-white/10 text-white shadow-sm";
+          } else {
+            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5";
+          }
+        });
+        personaPanels.forEach(panel => {
+          if (panel.getAttribute("data-persona-panel") === target) {
+            panel.classList.remove("hidden");
+          } else {
+            panel.classList.add("hidden");
+          }
+        });
+      });
+    });
+  }
 });
 </script>
 `;

@@ -2,6 +2,8 @@
 
 > **Effortless stack migration for developers and AI agents.**  
 > *Move your workloads from Coolify, Docker Compose, Portainer, Render, Fly.io, or Dokku into Smoooth with zero downtime and automated persistent volume safeguarding.*
+>
+> 📖 **Persona & Scenario Deep-Dive**: See the companion [Coolify to Smoooth Migration Playbook](./coolify_migration_playbook.md) for detailed developer user journeys (Indie Hackers, Agencies, AI engineers, and Homelabbers).
 
 ---
 
