@@ -1,10 +1,11 @@
 query,intent,monthly_volume,difficulty,target_url,status,current_position,last_checked
-"self-hosted ai agent infrastructure",Commercial,1200,Low,https://smoooth.dev,live,New,2026-10-18
-"mcp server docker deploy",Transactional,850,Low,https://smoooth.dev#how-it-works,live,New,2026-10-18
-"deploy docker containers claude code",Transactional,1400,Low,https://smoooth.dev#quickstart,live,New,2026-10-18
-"cursor mcp server deployment",Transactional,920,Low,https://smoooth.dev#how-it-works,live,New,2026-10-18
-"autonomous coding agent vps runtime",Informational,650,Low,https://smoooth.dev,live,New,2026-10-18
-"ai agent database adapter postgres pgvector",Transactional,480,Low,https://smoooth.dev#features,live,New,2026-10-18
-"self-hosted alternative to e2b",Commercial,750,Medium,https://smoooth.dev,planned,New,2026-10-18
-"windsurf codeium agent vps deploy",Informational,350,Low,https://smoooth.dev#quickstart,live,New,2026-10-18
-"zero cloud lock in agent hosting",Informational,280,Low,https://smoooth.dev#security,live,New,2026-10-18
+"infrastructure runtime for ai agents",commercial,1400,28,https://smoooth.dev,live,-,2026-10-19
+"mcp server docker deploy",transactional,2100,32,https://smoooth.dev#how-it-works,live,-,2026-10-19
+"self hosted paas for claude code",commercial,950,22,https://smoooth.dev,live,-,2026-10-19
+"ai agent vps deployment",informational,1800,35,https://smoooth.dev#quickstart,live,-,2026-10-19
+"cursor mcp server devops",transactional,1200,26,https://smoooth.dev#features,live,-,2026-10-19
+"deploy postgresql docker ai agent",transactional,880,18,https://smoooth.dev#features,live,-,2026-10-19
+"safe agent bash access vps",commercial,650,24,https://smoooth.dev#security,live,-,2026-10-19
+"self hosted coolify alternative for agents",comparison,1100,30,https://smoooth.dev#guarantees,live,-,2026-10-19
+"autonomous infrastructure runtime",commercial,750,20,https://smoooth.dev,live,-,2026-10-19
+"mcp database provisioning",transactional,520,15,https://smoooth.dev#features,live,-,2026-10-19

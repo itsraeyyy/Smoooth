@@ -167,11 +167,53 @@ const fullHtml = `<!DOCTYPE html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>DeepSeek Harness | Explore the limits of intelligence</title>
-  <meta name="description" content="Use DeepSeek Harness to work with documents, analyze spreadsheets, write code, and schedule tasks. Extend its capabilities with composable plugins."/>
+  <title>Smoooth — Autonomous Infrastructure Runtime for AI Coding Agents</title>
+  <meta name="description" content="Deploy and operate stateful applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP — provisioning Docker containers, persistent databases, and secure networks on demand."/>
+  <meta name="keywords" content="Smoooth, infrastructure runtime, AI coding agents, Model Context Protocol, MCP server, Claude Code, Cursor, Windsurf, Docker orchestration, PostgreSQL, Redis, self-hosted PaaS, Linux VPS, autonomous DevOps, open source"/>
+  <meta property="og:title" content="Smoooth — Autonomous Infrastructure Runtime for AI Coding Agents"/>
+  <meta property="og:description" content="Deploy and operate stateful applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP."/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:url" content="https://smoooth.dev"/>
+  <meta property="og:image" content="https://smoooth.dev/harness/images/deepseek-harness-social.jpg"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Smoooth — Autonomous Infrastructure Runtime for AI Coding Agents"/>
+  <meta name="twitter:description" content="Deploy and operate stateful applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP."/>
+  <meta name="twitter:image" content="https://smoooth.dev/harness/images/deepseek-harness-social.jpg"/>
+  <link rel="canonical" href="https://smoooth.dev"/>
   <link rel="icon" href="/harness/favicon.svg" type="image/svg+xml"/>
   <link rel="icon" href="/favicon.ico" type="image/x-icon"/>
   <link rel="stylesheet" href="styles.css"/>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "Smoooth",
+        "url": "https://smoooth.dev",
+        "operatingSystem": "Linux (Ubuntu 22.04/24.04, Debian 12), macOS, Windows",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "Infrastructure & DevOps Runtime",
+        "description": "Deploy and operate stateful applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP — provisioning Docker containers, persistent databases, and secure networks on demand.",
+        "license": "https://opensource.org/licenses/Apache-2.0",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      },
+      {
+        "@type": "Organization",
+        "name": "Smoooth",
+        "url": "https://smoooth.dev",
+        "logo": "https://smoooth.dev/harness/favicon.svg",
+        "sameAs": [
+          "https://github.com/itsraeyyy/Smoooth"
+        ]
+      }
+    ]
+  }
+  </script>
   <style>
     :root { --ds-color-bg-page: #080C14; }
     body { background-color: #080C14; color: #F9FAFB; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }

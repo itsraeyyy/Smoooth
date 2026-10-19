@@ -95,13 +95,29 @@ async function capture() {
   console.log('Hero screenshot saved to', outputPath);
 
   // Scroll to capabilities section
-  await sendPage('Runtime.evaluate', { expression: 'document.getElementById("capabilities")?.scrollIntoView()' });
+  await sendPage('Runtime.evaluate', { expression: 'document.getElementById("features")?.scrollIntoView()' });
   await new Promise(r => setTimeout(r, 1000));
 
   console.log('Capturing capabilities screenshot...');
   const { data: capData } = await sendPage('Page.captureScreenshot', { format: 'png' });
   fs.writeFileSync(outputCapabilitiesPath, Buffer.from(capData, 'base64'));
   console.log('Capabilities screenshot saved to', outputCapabilitiesPath);
+
+  // Scroll to how-it-works section
+  await sendPage('Runtime.evaluate', { expression: 'document.getElementById("how-it-works")?.scrollIntoView()' });
+  await new Promise(r => setTimeout(r, 1000));
+  const { data: howData } = await sendPage('Page.captureScreenshot', { format: 'png' });
+  const outputHowPath = path.resolve(__dirname, '../nextjs_how_it_works.png');
+  fs.writeFileSync(outputHowPath, Buffer.from(howData, 'base64'));
+  console.log('How it works screenshot saved to', outputHowPath);
+
+  // Scroll to quickstart/footer
+  await sendPage('Runtime.evaluate', { expression: 'document.getElementById("quickstart")?.scrollIntoView()' });
+  await new Promise(r => setTimeout(r, 1000));
+  const { data: footerData } = await sendPage('Page.captureScreenshot', { format: 'png' });
+  const outputFooterPath = path.resolve(__dirname, '../nextjs_footer.png');
+  fs.writeFileSync(outputFooterPath, Buffer.from(footerData, 'base64'));
+  console.log('Footer screenshot saved to', outputFooterPath);
 
   ws.close();
   edge.kill();

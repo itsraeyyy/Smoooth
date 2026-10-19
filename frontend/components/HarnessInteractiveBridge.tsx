@@ -178,10 +178,11 @@ export function HarnessInteractiveBridge() {
           detail.style.color = "#8b949e";
           detail.style.lineHeight = "1.6";
           detail.innerHTML = `
-            <div style="color: #58a6ff; font-weight: 500;">› Probing runtime dependencies & plugins...</div>
-            <div style="color: #c9d1d9;">  • Initializing Cordis micro-kernel context</div>
-            <div style="color: #c9d1d9;">  • Loading dynamic plugin registry (shell, git, fs)</div>
-            <div style="color: #3fb950; margin-top: 4px;">✓ Environment verified. Ready for tasks.</div>
+            <div style="color: #58a6ff; font-weight: 500;">› Resolving 2-phase transactional DAG...</div>
+            <div style="color: #c9d1d9;">  • Enforcing 256-bit bearer token scopes: [read_only, plan, deploy]</div>
+            <div style="color: #c9d1d9;">  • Mounting persistent volume: /var/lib/smoooth/volumes/pgdata</div>
+            <div style="color: #c9d1d9;">  • Allocating loopback networking (127.0.0.1:4040/sse)</div>
+            <div style="color: #3fb950; margin-top: 4px;">✓ Health checks verified. Checkpoint committed.</div>
           `;
           thoughtBtn.parentNode?.insertBefore(detail, thoughtBtn.nextSibling);
         }

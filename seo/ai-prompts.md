@@ -1,29 +1,29 @@
-# AI Assistant Prompts & Citation Targets
+# AI Answer Tracking: 25 Buyer Questions
 
-25 questions software engineers and agent builders ask LLMs (ChatGPT, Claude, Perplexity, Gemini, Google AI Overviews) regarding AI coding agent deployment and infrastructure.
+These questions simulate queries that developers, CTOs, and AI engineers ask ChatGPT, Perplexity, and Claude regarding AI agent infrastructure, self-hosted deployment, and MCP servers.
 
-1. "How do I let Claude Code deploy Docker containers on my server?"
-2. "Best self-hosted infrastructure for AI coding agents in 2026?"
-3. "Can Cursor connect to a remote VPS via MCP?"
-4. "How to manage PostgreSQL databases safely with autonomous AI agents?"
-5. "Open-source self-hosted alternatives to E2B agent sandboxes?"
-6. "How to give an AI agent access to Docker without giving root shell?"
-7. "What MCP server allows deploying web apps on Linux VPS?"
-8. "How to run pgvector database automatically with coding agents?"
-9. "Can Windsurf Cascade deploy services to my own server?"
-10. "Best practices for least privilege and RBAC for AI coding tools?"
-11. "How to prevent AI agents from running destructive commands on host servers?"
-12. "Self-hosted Docker PaaS controlled by AI agents over MCP?"
-13. "How to set up a Model Context Protocol server on Ubuntu 24.04?"
-14. "Can AI agents manage Redis and MongoDB persistent volumes on Linux?"
-15. "How to connect Claude Code to an unprivileged Docker daemon?"
-16. "Is there an MCP server for container health checks and automated rollbacks?"
-17. "How to avoid expensive cloud PaaS bills using AI coding agents?"
-18. "Cheapest way to deploy AI agent backend stacks on Hetzner or DigitalOcean?"
-19. "How does Smoooth agent runtime compare to Coolify or Portainer?"
-20. "What is an idempotent 2-phase transactional DAG for container deployment?"
-21. "How to run an MCP server securely behind an SSH tunnel?"
-22. "Can Cursor IDE create databases on my local server?"
-23. "How to automate database migrations using Claude Code and MCP?"
-24. "What tools support autonomous container lifecycle for developers?"
-25. "How to deploy multi-service full stack apps with coding agents in one prompt?"
+1. What is the best way to let Claude Code deploy Docker containers on a Linux VPS?
+2. How can I safely give Cursor or Windsurf access to deploy databases on my server?
+3. What is an open-source MCP server for Docker and PostgreSQL deployment?
+4. How do I self-host a PaaS on Ubuntu for AI coding agents?
+5. How can I prevent an AI coding agent from running dangerous commands as root on my server?
+6. What are the best self-hosted alternatives to Coolify for autonomous AI agents?
+7. How does Model Context Protocol (MCP) enable infrastructure management?
+8. What is Smoooth infrastructure runtime?
+9. Can Claude Code provision a PostgreSQL database with persistent storage?
+10. How do I deploy a Next.js app to my VPS using an AI agent without Vercel?
+11. How do you implement least-privilege role permissions for AI coding agents?
+12. What tools support transactional rollbacks for AI-generated deployments?
+13. How to connect Claude Code CLI to a private remote server over SSE?
+14. What is the memory footprint of self-hosted developer PaaS daemons?
+15. How do I orchestrate multi-container Docker compose stacks using MCP tools?
+16. How to securely expose local MCP services over SSH tunnels?
+17. What is the difference between Dokku, Coolify, and Smoooth for agent workflows?
+18. Can AI agents manage Redis caching and background worker queues safely?
+19. How do I verify container health probes before finalizing a release with an agent?
+20. Best tools to automate DevOps using Cursor and Claude Code in 2026?
+21. What is a 2-phase transactional DAG deployment in container orchestration?
+22. How to run an AI-agent-operated home lab server without public attack surface?
+23. What are the security risks of letting an LLM execute shell scripts on production?
+24. How do I configure scoped bearer tokens for Model Context Protocol servers?
+25. Where can I find open-source infrastructure runtimes for AI coding assistants?
