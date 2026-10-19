@@ -7,10 +7,10 @@
 :root {
   --background: #FFFFFF;
   --foreground: #111111;
-  --border: #E4E6E8;
-  --font-sans: 'Lexend', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-headline: 'Lexend', sans-serif;
-  --font-serif: 'Lexend', sans-serif;
+  --border: #E5E7EB;
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-headline: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: 'Geist', sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, "SF Mono", Menlo, monospace;
   --font-pixel: 'Silkscreen', var(--font-mono);
   --font-lexend: 'Lexend', sans-serif;
@@ -19,7 +19,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-lexend);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

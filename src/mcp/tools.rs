@@ -112,6 +112,23 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
             }),
         },
 
+        McpToolDefinition {
+            name: "configure_ingress".to_string(),
+            description: "Map a public domain name and TLS configuration to an internal container service via Caddy reverse proxy".to_string(),
+            step: "05 Connect".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["domain", "target_resource", "target_port"],
+                "properties": {
+                    "domain": { "type": "string", "description": "Public domain (e.g. api.example.com)" },
+                    "target_resource": { "type": "string", "description": "Resource identifier of container" },
+                    "target_port": { "type": "integer", "description": "Internal container port" },
+                    "tls": { "type": "boolean", "description": "Enable automatic ACME TLS (default: true)" },
+                    "path_prefix": { "type": "string", "description": "Optional subpath prefix (e.g. /api)" }
+                }
+            }),
+        },
+
         // 06 Verify
         McpToolDefinition {
             name: "verify_connection".to_string(),

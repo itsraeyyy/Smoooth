@@ -26,9 +26,9 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans: ["var(--font-lexend)", "var(--font-sans)", "system-ui", "sans-serif"],
-        headline: ["var(--font-lexend)", "var(--font-headline)", "system-ui", "sans-serif"],
-        serif: ["var(--font-lexend)", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        headline: ["var(--font-headline)", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "monospace"],
         pixel: ["var(--font-pixel)", "monospace"],
       },

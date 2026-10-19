@@ -9,6 +9,13 @@ use crate::adapters::docker::client::DockerClient;
 use crate::error::{Result, SmooothError};
 use crate::models::{connection::VolumeMount, HealthSpec, ResourceStatus};
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PortMappingSpec {
+    pub container_port: u16,
+    pub host_port: u16,
+    pub protocol: String, // "tcp" or "udp"
+}
+
 #[derive(Debug, Clone)]
 pub struct ContainerSpec {
     pub name: String,
@@ -16,6 +23,7 @@ pub struct ContainerSpec {
     pub cmd: Option<Vec<String>>,
     pub env: Vec<String>,
     pub port_bindings: HashMap<u16, u16>, // container_port -> host_port (0 = ephemeral)
+    pub custom_port_bindings: Vec<PortMappingSpec>, // protocol-aware bindings (e.g. 27015/udp)
     pub volume_mounts: Vec<VolumeMount>,  // volume_name -> container_path with read_only
     pub network_name: Option<String>,
     pub labels: HashMap<String, String>,
@@ -92,6 +100,18 @@ impl ContainerManager {
                 },
             };
             port_map.insert(format!("{}/tcp", c_port), Some(vec![binding]));
+        }
+        for pm in &spec.custom_port_bindings {
+            let proto = pm.protocol.to_lowercase();
+            let binding = PortBinding {
+                host_ip: Some("127.0.0.1".to_string()),
+                host_port: if pm.host_port == 0 {
+                    None
+                } else {
+                    Some(pm.host_port.to_string())
+                },
+            };
+            port_map.insert(format!("{}/{}", pm.container_port, proto), Some(vec![binding]));
         }
 
         let binds: Vec<String> = spec

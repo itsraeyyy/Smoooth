@@ -98,7 +98,7 @@ impl ProviderAdapter for DockerAdapter {
                 service_type: "compute".to_string(),
                 support_level: SupportLevel::SelfHosted,
                 description:
-                    "Runs isolated application containers on local or customer Docker engine."
+                    "Runs isolated application containers on local or customer Docker engine with TCP and UDP port mapping support."
                         .to_string(),
                 operations: vec![
                     "provision".to_string(),
@@ -189,18 +189,47 @@ impl ProviderAdapter for DockerAdapter {
 
         // 4. Configure ports
         let mut port_bindings = HashMap::new();
+        let mut custom_port_bindings = Vec::new();
         if let Some(ports) = config.get("ports").and_then(|v| v.as_object()) {
             for (c_port_str, h_port_val) in ports {
-                if let (Ok(c_port), Some(h_port)) = (c_port_str.parse::<u16>(), h_port_val.as_u64())
-                {
-                    port_bindings.insert(c_port, h_port as u16);
+                if let Some(h_port) = h_port_val.as_u64() {
+                    if c_port_str.contains('/') {
+                        let parts: Vec<&str> = c_port_str.split('/').collect();
+                        if parts.len() == 2 {
+                            if let Ok(c_port) = parts[0].parse::<u16>() {
+                                let proto = parts[1].to_lowercase();
+                                custom_port_bindings.push(containers::PortMappingSpec {
+                                    container_port: c_port,
+                                    host_port: h_port as u16,
+                                    protocol: proto,
+                                });
+                                continue;
+                            }
+                        }
+                    }
+                    if let Ok(c_port) = c_port_str.parse::<u16>() {
+                        port_bindings.insert(c_port, h_port as u16);
+                    }
                 }
             }
         }
-        if port_bindings.is_empty() {
+        if port_bindings.is_empty() && custom_port_bindings.is_empty() {
             if let Some(h_port) = config.get("port").and_then(|v| v.as_u64()) {
+                let proto = config
+                    .get("protocol")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("tcp")
+                    .to_lowercase();
                 let c_port = if image.contains("nginx") || image.contains("http") { 80 } else { h_port as u16 };
-                port_bindings.insert(c_port, h_port as u16);
+                if proto == "udp" {
+                    custom_port_bindings.push(containers::PortMappingSpec {
+                        container_port: c_port,
+                        host_port: h_port as u16,
+                        protocol: "udp".to_string(),
+                    });
+                } else {
+                    port_bindings.insert(c_port, h_port as u16);
+                }
             }
         }
 
@@ -256,6 +285,7 @@ impl ProviderAdapter for DockerAdapter {
             cmd,
             env,
             port_bindings,
+            custom_port_bindings,
             volume_mounts,
             network_name,
             labels,

@@ -68,6 +68,7 @@ async fn test_docker_container_lifecycle_when_daemon_available() {
         cmd: Some(vec!["sleep".to_string(), "30".to_string()]),
         env: vec!["TEST_VAR=hello_smoooth".to_string()],
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![smoooth::models::VolumeMount::new(
             vol_name.to_string(),
             "/data".to_string(),

@@ -249,7 +249,7 @@ impl McpServer {
         if let Some(agent) = &caller.identity {
             let required_scope = match name {
                 "create_plan" => crate::models::AgentScope::Plan,
-                "execute_plan" | "create_service_binding" | "reconcile_resource" => {
+                "execute_plan" | "create_service_binding" | "reconcile_resource" | "configure_ingress" => {
                     crate::models::AgentScope::Deploy
                 }
                 "approve_plan" => crate::models::AgentScope::Admin,
@@ -678,6 +678,34 @@ impl McpServer {
                     "exposed_env_keys": binding.exposed_env_keys,
                     "rotation_stage": binding.rotation_stage,
                     "encrypted_at_rest": true
+                }))
+            }
+
+            "configure_ingress" => {
+                let domain = args
+                    .get("domain")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'domain'".to_string()))?;
+                let target_resource = args
+                    .get("target_resource")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'target_resource'".to_string()))?;
+                let target_port = args
+                    .get("target_port")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'target_port'".to_string()))? as u16;
+                let tls = args.get("tls").and_then(|v| v.as_bool()).unwrap_or(true);
+                let path_prefix = args.get("path_prefix").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+                let ingress = crate::ingress::IngressManager::default_local();
+                let route = ingress.add_route(domain, target_resource, target_port, tls, path_prefix)?;
+                let mode = crate::ingress::IngressManager::detect_mode();
+
+                Ok(serde_json::json!({
+                    "status": "configured",
+                    "route": route,
+                    "ingress_mode": mode,
+                    "message": format!("Ingress route for '{}' mapped to '{}' on port {}", domain, target_resource, target_port)
                 }))
             }
 

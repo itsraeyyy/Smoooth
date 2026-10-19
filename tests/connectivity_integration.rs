@@ -90,6 +90,7 @@ async fn test_live_docker_connectivity_and_dynamic_bindings() {
         ]),
         env: vec!["SERVICE_ROLE=backend".to_string()],
         port_bindings,
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![],
         network_name: None,
         restart_policy: Some("no".to_string()),
@@ -288,6 +289,7 @@ async fn test_live_docker_connectivity_and_dynamic_bindings() {
         ]),
         env: vec!["CONFIG_VERSION=v1".to_string()],
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![v_mount.clone()],
         network_name: None,
         restart_policy: Some("no".to_string()),
@@ -332,6 +334,7 @@ async fn test_live_docker_connectivity_and_dynamic_bindings() {
         ]),
         env: vec!["CONFIG_VERSION=v2".to_string()], // Environment drift!
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![v_mount],
         network_name: None,
         restart_policy: Some("no".to_string()),

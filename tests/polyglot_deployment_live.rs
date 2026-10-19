@@ -325,6 +325,7 @@ sys.exit(0)
             "REDIS_PASSWORD=smoooth_secure_redis_pwd_2026!".to_string(),
         ],
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![],
         network_name: Some("smoooth_poly_net".to_string()),
         restart_policy: Some("no".to_string()),
@@ -378,6 +379,7 @@ sys.exit(0)
         ]),
         env: vec!["STAGE=stable_v1".to_string()],
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![],
         network_name: None,
         restart_policy: Some("no".to_string()),
@@ -403,6 +405,7 @@ sys.exit(0)
         cmd: Some(vec!["echo".to_string(), "fail".to_string()]),
         env: vec!["STAGE=failing_v2".to_string()], // Environment drift
         port_bindings: HashMap::new(),
+        custom_port_bindings: Vec::new(),
         volume_mounts: vec![],
         network_name: None,
         restart_policy: Some("no".to_string()),

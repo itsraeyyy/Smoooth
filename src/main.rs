@@ -66,6 +66,11 @@ enum Commands {
     Ops { operation_id: String },
     /// Inspect and reconcile drift or recover crashed resource
     Reconcile { resource_id: String },
+    /// Manage ingress routes, Caddy dynamic routing, and public domains
+    Ingress {
+        #[command(subcommand)]
+        command: IngressCommands,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -100,6 +105,43 @@ enum AgentCommands {
     Rotate {
         /// Agent ID to rotate
         agent_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum IngressCommands {
+    /// Show ingress mode (Standalone Caddy vs Upstream Subordinate) and port availability
+    Status,
+    /// List all registered domain ingress routes
+    List,
+    /// Add a new domain ingress route pointing to an internal resource and port
+    Add {
+        /// Public domain name (e.g. "api.example.com")
+        #[arg(short, long)]
+        domain: String,
+        /// Target resource name
+        #[arg(short, long)]
+        target: String,
+        /// Internal target port (e.g. 19080)
+        #[arg(short, long)]
+        port: u16,
+        /// Enable TLS (default: true)
+        #[arg(long, default_value_t = true)]
+        tls: bool,
+        /// Optional path prefix (e.g. "/api")
+        #[arg(long)]
+        path_prefix: Option<String>,
+    },
+    /// Remove an ingress route by domain or route ID
+    Remove {
+        /// Domain or route ID to remove
+        target: String,
+    },
+    /// Export reverse-proxy configuration snippet (caddy, nginx, or traefik)
+    Export {
+        /// Format: caddy, nginx, or traefik
+        #[arg(short, long, default_value = "caddy")]
+        format: String,
     },
 }
 
@@ -493,6 +535,75 @@ async fn main() -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     eprintln!("❌ Reconciliation failed: {}\n", e);
+                }
+            }
+        }
+
+        Some(Commands::Ingress { command }) => {
+            let ingress_manager = smoooth::ingress::IngressManager::default_local();
+            match command {
+                IngressCommands::Status => {
+                    println!("\n🔍 Smoooth Ingress & Routing Subsystem");
+                    let mode = smoooth::ingress::IngressManager::detect_mode();
+                    match mode {
+                        smoooth::ingress::IngressMode::StandaloneCaddy => {
+                            println!("Ingress Mode : Standalone Caddy (Ports 80 & 443 available)");
+                            println!("TLS Engine   : Automatic ACME / Let's Encrypt");
+                        }
+                        smoooth::ingress::IngressMode::UpstreamProxy { existing_proxy } => {
+                            println!("Ingress Mode : Upstream Subordinate");
+                            println!("Status       : {}", existing_proxy);
+                            println!("Advice       : Use 'smoooth ingress export' to generate upstream proxy config.");
+                        }
+                    }
+                    let routes = ingress_manager.list_routes().unwrap_or_default();
+                    println!("Active Routes: {}\n", routes.len());
+                }
+                IngressCommands::List => {
+                    let routes = ingress_manager.list_routes().unwrap_or_default();
+                    if routes.is_empty() {
+                        println!("\nNo ingress routes configured. Use 'smoooth ingress add' to register a domain.\n");
+                    } else {
+                        println!("\n=== Active Ingress Routes ({}) ===", routes.len());
+                        for r in routes {
+                            let scheme = if r.tls { "https" } else { "http" };
+                            let prefix = r.path_prefix.as_deref().unwrap_or("/");
+                            println!("  • {}://{} (path: {}) -> {} (port {}) [ID: {}]",
+                                scheme, r.domain, prefix, r.target_resource, r.target_port, r.id
+                            );
+                        }
+                        println!();
+                    }
+                }
+                IngressCommands::Add { domain, target, port, tls, path_prefix } => {
+                    match ingress_manager.add_route(&domain, &target, port, tls, path_prefix) {
+                        Ok(route) => {
+                            println!("\n✅ Ingress route registered successfully!");
+                            println!("Domain       : {}", route.domain);
+                            println!("Target       : {} (port {})", route.target_resource, route.target_port);
+                            println!("TLS          : {}", if route.tls { "Enabled (HTTPS)" } else { "Disabled (HTTP)" });
+                            println!("Route ID     : {}\n", route.id);
+                        }
+                        Err(e) => {
+                            eprintln!("\n❌ Failed to add ingress route: {}\n", e);
+                        }
+                    }
+                }
+                IngressCommands::Remove { target } => {
+                    match ingress_manager.remove_route(&target) {
+                        Ok(true) => println!("\n✅ Route '{}' removed successfully.\n", target),
+                        Ok(false) => eprintln!("\n❌ Route '{}' not found.\n", target),
+                        Err(e) => eprintln!("\n❌ Failed to remove route: {}\n", e),
+                    }
+                }
+                IngressCommands::Export { format } => {
+                    match ingress_manager.render_upstream_snippet(&format) {
+                        Ok(cfg) => {
+                            println!("\n=== Ingress Configuration [{}] ===\n", format.to_uppercase());
+                            print!("{}", cfg);
+                        }
+                        Err(e) => eprintln!("\n❌ Failed to export ingress config: {}\n", e),
+                    }
                 }
             }
         }
