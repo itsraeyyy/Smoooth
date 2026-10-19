@@ -186,6 +186,11 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/workloads/deploy", post(deploy_workload_handler))
         .route("/api/workloads/:id", delete(delete_workload_handler))
         .route("/api/workloads/:id/restart", post(restart_workload_handler))
+        // Migration Engine (Coolify, Compose, Render, Fly, Dokku, Host Scanner)
+        .route("/api/migrate/detect", post(migrate_detect_handler))
+        .route("/api/migrate/preview", post(migrate_preview_handler))
+        .route("/api/migrate/apply", post(migrate_apply_handler))
+        .route("/api/migrate/scan-host", get(migrate_scan_host_handler))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -1110,6 +1115,108 @@ async fn delete_workload_handler(
         "success": true,
         "resource_id": id
     })))
+}
+
+#[derive(Deserialize)]
+pub struct MigrateDetectRequest {
+    pub content: String,
+}
+
+#[derive(Deserialize)]
+pub struct MigratePreviewRequest {
+    pub content: String,
+    pub format: Option<String>,
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MigrateApplyRequest {
+    pub preview: crate::migration::MigrationPreview,
+    pub approver: Option<String>,
+}
+
+/// Detect format of foreign manifest
+async fn migrate_detect_handler(
+    Json(body): Json<MigrateDetectRequest>,
+) -> impl IntoResponse {
+    let source = crate::migration::MigrationEngine::detect_format(&body.content);
+    Json(serde_json::json!({
+        "format": source,
+        "format_display": format!("{}", source)
+    }))
+}
+
+/// Generate migration preview and canonical plan
+async fn migrate_preview_handler(
+    Json(body): Json<MigratePreviewRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let ws = body.workspace.unwrap_or_else(|| "default".to_string());
+    let forced = body.format.as_deref().and_then(|f| match f.to_lowercase().as_str() {
+        "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
+        "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
+        "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
+        "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
+        "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
+        "caprover" => Some(crate::migration::MigrationSource::CapRover),
+        _ => None,
+    });
+
+    match crate::migration::MigrationEngine::preview(&body.content, forced, &ws) {
+        Ok(preview) => Ok(Json(preview)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Apply migration plan in 1-click
+async fn migrate_apply_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Json(body): Json<MigrateApplyRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Deploy scope required to execute migration" })),
+        ));
+    }
+
+    let approver = body.approver.unwrap_or_else(|| {
+        if let Some(id) = &caller.identity {
+            format!("agent:{}", id.name)
+        } else {
+            "operator_migration_hub".to_string()
+        }
+    });
+
+    match crate::migration::MigrationEngine::apply(&body.preview, &state.orchestrator, &approver).await {
+        Ok(res) => Ok(Json(res)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Live scan local host Docker daemon and /data/coolify
+async fn migrate_scan_host_handler(
+    Query(query): Query<StatusQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let ws = query.workspace.unwrap_or_else(|| "default".to_string());
+    match crate::migration::MigrationEngine::scan_host(&ws).await {
+        Ok(preview) => Ok(Json(preview)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
 }
 
 /// Resolve the authentication token using environment, CLI arguments, or configuration files

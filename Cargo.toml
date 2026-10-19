@@ -26,3 +26,5 @@ tower-http = { version = "0.5", features = ["cors"] }
 aes-gcm = "0.10"
 getrandom = "0.2"
 url = "2.5"
+serde_yaml = "0.9"
+toml = "0.8"

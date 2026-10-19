@@ -76,6 +76,97 @@ enum Commands {
         #[command(subcommand)]
         command: BuildCommands,
     },
+    /// Effortlessly migrate stacks from Coolify, Docker Compose, Render, Fly.io, Dokku, or live host Docker
+    Migrate {
+        #[command(subcommand)]
+        command: MigrateCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum MigrateCommands {
+    /// Auto-detect manifest format (Compose, Coolify, Render, Fly, Dokku) and preview or deploy
+    Auto {
+        /// Configuration file path or directory
+        source: String,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Migrate from Docker Compose (docker-compose.yml or compose.yaml)
+    Compose {
+        /// Path to docker-compose.yml or folder containing it
+        path: String,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Migrate from Coolify JSON export or local VPS installation
+    Coolify {
+        /// Path to Coolify JSON backup / export file
+        #[arg(short, long)]
+        file: Option<String>,
+        /// Scan local VPS Coolify directory (/data/coolify)
+        #[arg(long)]
+        scan_local: bool,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Scan live Docker host VPS to discover and adopt running containers and Coolify stacks with zero downtime
+    ScanHost {
+        /// Automatically execute and register the workloads into Smoooth
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Migrate from Render Blueprint (render.yaml)
+    Render {
+        /// Path to render.yaml
+        file: String,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Migrate from Fly.io configuration (fly.toml)
+    Fly {
+        /// Path to fly.toml
+        file: String,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
+    /// Migrate from Dokku Procfile
+    Dokku {
+        /// Path to Procfile
+        file: String,
+        /// Optional path to .env file
+        #[arg(long)]
+        env_file: Option<String>,
+        /// Automatically execute and provision the stack
+        #[arg(long, short)]
+        apply: bool,
+        /// Target workspace isolation boundary
+        #[arg(short, long, default_value = "default")]
+        workspace: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -687,6 +778,136 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
+        Some(Commands::Migrate { command }) => {
+            let orchestrator_arc = Arc::new(orchestrator);
+            match command {
+                MigrateCommands::Auto { source, apply, workspace } => {
+                    let content = read_manifest_or_dir(&source)?;
+                    let preview = smoooth::migration::MigrationEngine::preview(&content, None, &workspace)?;
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        print_apply_hint("auto", &source);
+                    }
+                }
+
+                MigrateCommands::Compose { path, apply, workspace } => {
+                    let content = read_manifest_or_dir(&path)?;
+                    let preview = smoooth::migration::MigrationEngine::preview(
+                        &content,
+                        Some(smoooth::migration::MigrationSource::DockerCompose),
+                        &workspace,
+                    )?;
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        print_apply_hint("compose", &path);
+                    }
+                }
+
+                MigrateCommands::Coolify { file, scan_local, apply, workspace } => {
+                    let preview = if scan_local || file.is_none() {
+                        smoooth::migration::MigrationEngine::preview(
+                            "",
+                            Some(smoooth::migration::MigrationSource::CoolifyLocal),
+                            &workspace,
+                        )?
+                    } else {
+                        let path = file.unwrap();
+                        let content = std::fs::read_to_string(&path)
+                            .map_err(|e| anyhow::anyhow!("Failed to read Coolify file '{}': {}", path, e))?;
+                        smoooth::migration::MigrationEngine::preview(
+                            &content,
+                            Some(smoooth::migration::MigrationSource::CoolifyJson),
+                            &workspace,
+                        )?
+                    };
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        println!("💡 To provision these Coolify workloads in 1-click, run:");
+                        println!("   smoooth migrate coolify --apply\n");
+                    }
+                }
+
+                MigrateCommands::ScanHost { apply, workspace } => {
+                    println!("\n🔍 Inspecting running Docker host containers and Coolify stacks...");
+                    let preview = smoooth::migration::MigrationEngine::scan_host(&workspace).await?;
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        println!("💡 To adopt and manage these host workloads in Smoooth with zero downtime, run:");
+                        println!("   smoooth migrate scan-host --apply\n");
+                    }
+                }
+
+                MigrateCommands::Render { file, apply, workspace } => {
+                    let content = std::fs::read_to_string(&file)
+                        .map_err(|e| anyhow::anyhow!("Failed to read Render file '{}': {}", file, e))?;
+                    let preview = smoooth::migration::MigrationEngine::preview(
+                        &content,
+                        Some(smoooth::migration::MigrationSource::RenderBlueprint),
+                        &workspace,
+                    )?;
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        print_apply_hint("render", &file);
+                    }
+                }
+
+                MigrateCommands::Fly { file, apply, workspace } => {
+                    let content = std::fs::read_to_string(&file)
+                        .map_err(|e| anyhow::anyhow!("Failed to read Fly.io file '{}': {}", file, e))?;
+                    let preview = smoooth::migration::MigrationEngine::preview(
+                        &content,
+                        Some(smoooth::migration::MigrationSource::FlyToml),
+                        &workspace,
+                    )?;
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        print_apply_hint("fly", &file);
+                    }
+                }
+
+                MigrateCommands::Dokku { file, env_file, apply, workspace } => {
+                    let procfile = std::fs::read_to_string(&file)
+                        .map_err(|e| anyhow::anyhow!("Failed to read Procfile '{}': {}", file, e))?;
+                    let env_content = env_file.and_then(|ef| std::fs::read_to_string(ef).ok());
+                    let (workloads, canonical_spec, ingress) = smoooth::migration::ForeignParser::parse_dokku_app(
+                        &procfile,
+                        env_content.as_deref(),
+                        None,
+                        &workspace,
+                    )?;
+                    let preview = smoooth::migration::MigrationPreview {
+                        source_format: smoooth::migration::MigrationSource::DokkuApp,
+                        workspace_id: workspace.clone(),
+                        summary: format!("Discovered {} Dokku process workload(s)", workloads.len()),
+                        dependencies: Vec::new(),
+                        ingress_routes: ingress,
+                        estimated_monthly_cost_usd: (workloads.len() as f64) * 8.0,
+                        risk_tier: smoooth::models::RiskTier::Low,
+                        workloads,
+                        canonical_spec,
+                    };
+                    print_migration_preview(&preview);
+                    if apply {
+                        execute_migration_cli(&preview, &orchestrator_arc).await?;
+                    } else {
+                        print_apply_hint("dokku", &file);
+                    }
+                }
+            }
+        }
+
         None => {
             println!("No subcommand specified. Starting Smoooth API Server & Control Plane Dashboard on 127.0.0.1:4040...");
             smoooth::api::start_server(Arc::new(orchestrator), "127.0.0.1", 4040, None, None)
@@ -695,4 +916,107 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn read_manifest_or_dir(path_str: &str) -> anyhow::Result<String> {
+    let p = std::path::Path::new(path_str);
+    if p.is_dir() {
+        let c1 = p.join("docker-compose.yml");
+        let c2 = p.join("compose.yaml");
+        let c3 = p.join("render.yaml");
+        let c4 = p.join("fly.toml");
+        let c5 = p.join("Procfile");
+        if c1.exists() {
+            std::fs::read_to_string(&c1).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c1, e))
+        } else if c2.exists() {
+            std::fs::read_to_string(&c2).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c2, e))
+        } else if c3.exists() {
+            std::fs::read_to_string(&c3).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c3, e))
+        } else if c4.exists() {
+            std::fs::read_to_string(&c4).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c4, e))
+        } else if c5.exists() {
+            std::fs::read_to_string(&c5).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c5, e))
+        } else {
+            anyhow::bail!("No supported configuration file (docker-compose.yml, render.yaml, fly.toml, Procfile) found in directory '{}'", path_str);
+        }
+    } else {
+        std::fs::read_to_string(p).map_err(|e| anyhow::anyhow!("Failed to read manifest file '{}': {}", path_str, e))
+    }
+}
+
+fn print_migration_preview(preview: &smoooth::migration::MigrationPreview) {
+    println!("\n📦 === Smoooth Migration Engine: Stack Discovery ===");
+    println!("Source Platform    : {}", preview.source_format);
+    println!("Target Workspace   : {}", preview.workspace_id);
+    println!("Workloads Found    : {}", preview.workloads.len());
+    println!("Risk Tier / Budget : {:?} / ~${:.2}/mo", preview.risk_tier, preview.estimated_monthly_cost_usd);
+    println!("Summary            : {}\n", preview.summary);
+
+    println!("{:<24} {:<12} {:<12} {:<26} {:<12}", "WORKLOAD", "TYPE", "PROVIDER", "IMAGE", "PERSISTENT");
+    println!("{:-<24} {:-<12} {:-<12} {:-<26} {:-<12}", "", "", "", "", "");
+    for w in &preview.workloads {
+        let img_display = if w.image.len() > 25 {
+            format!("{}...", &w.image[..22])
+        } else {
+            w.image.clone()
+        };
+        println!("{:<24} {:<12} {:<12} {:<26} {:<12}",
+            w.name, w.service_type, w.provider,
+            img_display,
+            if w.is_persistent { "YES (GUARD)" } else { "NO" }
+        );
+        if !w.domains.is_empty() {
+            println!("  ↳ Ingress Domain : {}", w.domains.join(", "));
+        }
+        if !w.ports.is_empty() {
+            let port_strs: Vec<String> = w.ports.iter().map(|p| format!("{}->{}/{}", p.host_port.unwrap_or(p.container_port), p.container_port, p.protocol)).collect();
+            println!("  ↳ Port Mappings  : {}", port_strs.join(", "));
+        }
+        if !w.volumes.is_empty() {
+            let vol_strs: Vec<String> = w.volumes.iter().map(|v| format!("{}:{}", v.source, v.target)).collect();
+            println!("  ↳ Volume Mounts  : {}", vol_strs.join(", "));
+        }
+        if !w.depends_on.is_empty() {
+            println!("  ↳ Depends On     : {}", w.depends_on.join(", "));
+        }
+        for note in &w.notes {
+            println!("  ↳ Note           : {}", note);
+        }
+    }
+    println!();
+}
+
+async fn execute_migration_cli(
+    preview: &smoooth::migration::MigrationPreview,
+    orchestrator: &Arc<smoooth::engine::Orchestrator>,
+) -> anyhow::Result<()> {
+    println!("🚀 Executing 1-Click Migration with cryptographic approval lease...");
+    match smoooth::migration::MigrationEngine::apply(preview, orchestrator, "operator_cli").await {
+        Ok(res) => {
+            println!("\n============================================================");
+            println!("  ✅ Migration Completed Successfully!");
+            println!("============================================================");
+            println!("  • Plan ID              : {}", res.plan_id);
+            if let Some(op) = res.operation_id {
+                println!("  • Operation ID         : {}", op);
+            }
+            println!("  • Workloads Live       : {:?}", res.provisioned_resources);
+            if !res.ingress_routes_added.is_empty() {
+                println!("  • Active Ingress Routes: {:?}", res.ingress_routes_added);
+            }
+            println!("\n  All workloads are now fully managed under Smoooth.");
+            println!("  Check status anytime with: `smoooth status --workspace {}`", preview.workspace_id);
+            println!("============================================================\n");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("\n❌ Migration execution failed: {}\n", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn print_apply_hint(subcmd: &str, target: &str) {
+    println!("💡 Dry-run preview generated successfully. To provision these workloads in 1 click, run:");
+    println!("   smoooth migrate {} \"{}\" --apply\n", subcmd, target);
 }

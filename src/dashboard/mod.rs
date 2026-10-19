@@ -788,6 +788,12 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
               </a>
             </li>
             <li>
+              <a class="nav-item" id="nav-btn-migrate" onclick="switchTab('migrate')">
+                <svg class="nav-item__icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0l4-4m-4 4l-4-4"></path><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg>
+                <span class="nav-item__label">Migration Hub</span>
+              </a>
+            </li>
+            <li>
               <a class="nav-item" id="nav-btn-build" onclick="switchTab('build')">
                 <svg class="nav-item__icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 <span class="nav-item__label">Build Studio (Nixpacks)</span>
@@ -1061,6 +1067,129 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
                   <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">Loading workloads...</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- TAB: MIGRATION HUB (COOLIFY / COMPOSE / RENDER / FLY / DOKKU) -->
+        <!-- ========================================================== -->
+        <div id="tab-migrate" class="tab-pane" style="display: none;">
+          <div class="card health">
+            <div class="health__head">
+              <div class="health__title">Migration & Stack Import Hub</div>
+              <span class="label-mono">Coolify · Docker Compose · Render · Fly.io · Dokku · Host VPS Scanner</span>
+            </div>
+
+            <!-- Quick Actions Toolbar -->
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 0.4px dashed var(--hairline);">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="btn btn--secondary" onclick="scanHostVps()" style="display: flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                  Scan Host VPS Docker Daemon
+                </button>
+                <label class="btn btn--secondary" style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  Upload File
+                  <input type="file" id="migrate-file-upload" onchange="handleManifestUpload(event)" style="display: none;">
+                </label>
+              </div>
+
+              <!-- Template Presets -->
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="label-mono" style="font-size: 10px; color: var(--text-dim);">Load Preset:</span>
+                <button class="btn btn--secondary" style="padding: 4px 8px; font-size: 11px;" onclick="loadMigrationTemplate('compose')">Docker Compose</button>
+                <button class="btn btn--secondary" style="padding: 4px 8px; font-size: 11px;" onclick="loadMigrationTemplate('coolify')">Coolify Stack</button>
+                <button class="btn btn--secondary" style="padding: 4px 8px; font-size: 11px;" onclick="loadMigrationTemplate('fly')">Fly.io</button>
+                <button class="btn btn--secondary" style="padding: 4px 8px; font-size: 11px;" onclick="loadMigrationTemplate('render')">Render</button>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <!-- Left Column: Manifest Input -->
+              <div>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                  <div class="form-group" style="flex: 1;">
+                    <label>Target Workspace</label>
+                    <input type="text" class="form-input" id="migrate-workspace" value="default">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label>Source Platform Format</label>
+                    <select class="form-input" id="migrate-format-select" style="background: var(--field); color: var(--text);">
+                      <option value="auto">Auto-Detect</option>
+                      <option value="compose">Docker Compose (compose.yaml)</option>
+                      <option value="coolify">Coolify JSON / Export</option>
+                      <option value="render">Render Blueprint (render.yaml)</option>
+                      <option value="fly">Fly.io (fly.toml)</option>
+                      <option value="dokku">Dokku (Procfile)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="margin: 0;">Stack Manifest / Configuration Content</label>
+                    <span id="migrate-detected-badge" class="label-mono" style="color: var(--green-bright); font-size: 10px;"></span>
+                  </div>
+                  <textarea class="form-input" id="migrate-manifest-input" rows="14" style="font-family: var(--mono); font-size: 11px; line-height: 1.5; resize: vertical;" placeholder="# Paste docker-compose.yml, Coolify JSON export, fly.toml, or render.yaml here..."></textarea>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 14px;">
+                  <button class="btn btn--secondary" onclick="previewMigration()">Inspect & Preview Stack</button>
+                  <button class="btn" id="btn-migrate-apply" onclick="applyMigration()" disabled style="opacity: 0.6; cursor: not-allowed;">🚀 1-Click Migrate to Smoooth</button>
+                </div>
+              </div>
+
+              <!-- Right Column: Discovered Workloads & Spec -->
+              <div>
+                <div style="background: var(--field); border: 0.5px solid var(--hairline); border-radius: 6px; padding: 14px; min-height: 380px; display: flex; flex-direction: column;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 0.4px solid var(--hairline); padding-bottom: 8px;">
+                    <span class="label-mono" style="color: var(--green-bright);">Discovered Workloads & Topology</span>
+                    <span id="migrate-risk-badge" class="tag tag--green" style="display: none;">LOW RISK</span>
+                  </div>
+
+                  <div id="migrate-empty-state" style="margin: auto; text-align: center; color: var(--text-dim); padding: 30px 10px;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 8px; opacity: 0.4;"><path d="M12 3v12m0 0l4-4m-4 4l-4-4"></path><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path></svg>
+                    <div>Paste a configuration or click <strong>Scan Host VPS</strong> to preview discovered containers, database guards, and domain routing.</div>
+                  </div>
+
+                  <div id="migrate-preview-content" style="display: none; flex: 1; overflow-y: auto;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+                      <div style="background: var(--card); border: 0.4px solid var(--hairline); border-radius: 4px; padding: 8px;">
+                        <div style="font-size: 10px; color: var(--text-dim);">WORKLOADS</div>
+                        <div id="prev-workload-count" style="font-size: 16px; font-weight: 600; color: var(--text-bright); margin-top: 2px;">0</div>
+                      </div>
+                      <div style="background: var(--card); border: 0.4px solid var(--hairline); border-radius: 4px; padding: 8px;">
+                        <div style="font-size: 10px; color: var(--text-dim);">PERSISTENT VOLS</div>
+                        <div id="prev-vol-count" style="font-size: 16px; font-weight: 600; color: var(--green-bright); margin-top: 2px;">0</div>
+                      </div>
+                      <div style="background: var(--card); border: 0.4px solid var(--hairline); border-radius: 4px; padding: 8px;">
+                        <div style="font-size: 10px; color: var(--text-dim);">EST. COST</div>
+                        <div id="prev-cost" style="font-size: 16px; font-weight: 600; color: var(--text-bright); margin-top: 2px;">$0/mo</div>
+                      </div>
+                    </div>
+
+                    <div class="label-mono" style="font-size: 10px; color: var(--text-muted); margin-bottom: 6px;">Resource Manifest Items</div>
+                    <div id="migrate-workloads-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+
+                    <div id="migrate-ingress-section" style="margin-top: 12px; display: none;">
+                      <div class="label-mono" style="font-size: 10px; color: var(--green-bright); margin-bottom: 6px;">Discovered HTTPS Ingress Routes</div>
+                      <div id="migrate-ingress-list" style="display: flex; flex-direction: column; gap: 4px;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Migration Progress Terminal Box -->
+            <div style="margin-top: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span class="label-mono">Migration Execution Terminal Log</span>
+                <span class="tag tag--green" id="migrate-terminal-status">READY</span>
+              </div>
+              <div class="terminal-box" id="migrate-terminal-box">
+                <div class="term-line"><span class="term-num">1</span><span>Migration engine ready. Inspect a manifest or click 'Scan Host VPS Docker Daemon' to begin.</span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1537,6 +1666,7 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
     const tabTitles = {
       overview: 'OVERVIEW',
       resources: 'WORKLOADS & FLEET',
+      migrate: 'MIGRATION HUB',
       build: 'BUILD STUDIO (NIXPACKS)',
       ingress: 'INGRESS & DOMAINS',
       operations: 'DURABLE OPERATIONS',
@@ -1564,6 +1694,7 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
     function refreshCurrentTab() {
       if (activeTab === 'overview') loadOverview();
       else if (activeTab === 'resources') loadResources();
+      else if (activeTab === 'migrate') initMigrationHub();
       else if (activeTab === 'ingress') loadIngress();
       else if (activeTab === 'agents') loadAgents();
       else if (activeTab === 'operations') loadOperations();
@@ -1756,6 +1887,361 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       switchTab('ingress');
       openAddIngressModal();
       document.getElementById('new-ingress-target').value = currentDrawerId;
+    }
+
+    // ==========================================================
+    // MIGRATION HUB CONTROLLER
+    // ==========================================================
+    let currentMigrationPreview = null;
+
+    function initMigrationHub() {
+      const input = document.getElementById('migrate-manifest-input');
+      if (input && !input.value.trim()) {
+        loadMigrationTemplate('compose');
+      }
+    }
+
+    const migrationTemplates = {
+      compose: `version: "3.8"
+services:
+  web:
+    image: ghcr.io/smoooth/demo-web:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://postgres:secret@db:5432/appdb
+    labels:
+      - "traefik.http.routers.web.rule=Host(\`app.smoooth.local\`)"
+      - "coolify.fqdn=https://app.smoooth.local"
+    depends_on:
+      - db
+      - cache
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=appdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:`,
+
+      coolify: `{
+  "name": "Production E-Commerce Stack",
+  "applications": [
+    {
+      "name": "storefront-api",
+      "fqdn": "https://store.example.com",
+      "docker_image": "storefront-api:v2",
+      "ports_exposes": "8080",
+      "environment_variables": [
+        { "key": "PORT", "value": "8080" },
+        { "key": "DATABASE_URL", "value": "postgresql://postgres:secret@postgres-db:5432/store" }
+      ]
+    }
+  ],
+  "databases": [
+    {
+      "name": "postgres-db",
+      "type": "standalone-postgresql",
+      "postgres_user": "postgres",
+      "postgres_password": "secr3tPassword!",
+      "postgres_db": "store"
+    }
+  ]
+}`,
+
+      fly: `app = "my-fly-app"
+primary_region = "iad"
+
+[build]
+  image = "my-app:v1"
+
+[env]
+  PORT = "8080"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]`,
+
+      render: `services:
+  - type: web
+    name: render-api
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: NODE_ENV
+        value: production
+
+databases:
+  - name: render-postgres
+    databaseName: production_db
+    user: pg_admin`
+    };
+
+    function loadMigrationTemplate(type) {
+      if (migrationTemplates[type]) {
+        document.getElementById('migrate-manifest-input').value = migrationTemplates[type];
+        const fmtSelect = document.getElementById('migrate-format-select');
+        if (type === 'coolify') fmtSelect.value = 'coolify';
+        else if (type === 'compose') fmtSelect.value = 'compose';
+        else if (type === 'fly') fmtSelect.value = 'fly';
+        else if (type === 'render') fmtSelect.value = 'render';
+        else fmtSelect.value = 'auto';
+        previewMigration();
+      }
+    }
+
+    function handleManifestUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('migrate-manifest-input').value = e.target.result;
+        previewMigration();
+      };
+      reader.readAsText(file);
+    }
+
+    async function scanHostVps() {
+      const workspace = document.getElementById('migrate-workspace').value.trim() || 'default';
+      const termBox = document.getElementById('migrate-terminal-box');
+      const badge = document.getElementById('migrate-terminal-status');
+
+      badge.textContent = 'SCANNING';
+      badge.className = 'tag tag--blue';
+      termBox.innerHTML = '<div class="term-line"><span class="term-num">1</span><span>[1/2] Connecting to local Docker daemon & inspecting running containers...</span></div>';
+
+      try {
+        const res = await apiFetch(`/api/migrate/scan-host?workspace=${encodeURIComponent(workspace)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        const preview = await res.json();
+        renderMigrationPreview(preview);
+
+        badge.textContent = 'SCANNED';
+        badge.className = 'tag tag--green';
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">2</span><span style="color: var(--green-bright);">[2/2] Host scan complete! Discovered ${preview.workloads.length} container workload(s) on VPS.</span></div>`;
+        termBox.innerHTML += '<div class="term-line"><span class="term-num">3</span><span>Click \\'1-Click Migrate to Smoooth\\' to adopt all containers with persistent volume protection.</span></div>';
+      } catch (err) {
+        badge.textContent = 'FAILED';
+        badge.className = 'tag tag--red';
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">2</span><span style="color: var(--red);">Host scan failed: ${escapeHtml(err.message)}</span></div>`;
+      }
+    }
+
+    async function previewMigration() {
+      const content = document.getElementById('migrate-manifest-input').value.trim();
+      const workspace = document.getElementById('migrate-workspace').value.trim() || 'default';
+      const format = document.getElementById('migrate-format-select').value;
+      const termBox = document.getElementById('migrate-terminal-box');
+      const badge = document.getElementById('migrate-terminal-status');
+
+      if (!content) {
+        alert('Please paste a configuration or select a template.');
+        return;
+      }
+
+      badge.textContent = 'ANALYZING';
+      badge.className = 'tag tag--blue';
+      termBox.innerHTML = '<div class="term-line"><span class="term-num">1</span><span>Analyzing manifest structure and resolving dependency topology...</span></div>';
+
+      try {
+        const res = await apiFetch('/api/migrate/preview', {
+          method: 'POST',
+          body: JSON.stringify({
+            content,
+            format: format === 'auto' ? null : format,
+            workspace
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const preview = await res.json();
+        renderMigrationPreview(preview);
+
+        badge.textContent = 'READY';
+        badge.className = 'tag tag--green';
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">2</span><span style="color: var(--green-bright);">Parsed ${preview.workloads.length} workload(s) from ${escapeHtml(preview.source_format)}. Validated dependency DAG.</span></div>`;
+      } catch (err) {
+        badge.textContent = 'ERROR';
+        badge.className = 'tag tag--red';
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">2</span><span style="color: var(--red);">Validation error: ${escapeHtml(err.message)}</span></div>`;
+      }
+    }
+
+    function renderMigrationPreview(preview) {
+      currentMigrationPreview = preview;
+      document.getElementById('migrate-empty-state').style.display = 'none';
+      document.getElementById('migrate-preview-content').style.display = 'block';
+
+      // Summary stats
+      document.getElementById('prev-workload-count').textContent = preview.workloads.length;
+      const persistentCount = preview.workloads.filter(w => w.is_persistent).length;
+      document.getElementById('prev-vol-count').textContent = persistentCount;
+      document.getElementById('prev-cost').textContent = `$${(preview.estimated_monthly_cost_usd || 0).toFixed(0)}/mo`;
+
+      // Detected format badge
+      document.getElementById('migrate-detected-badge').textContent = `Detected: ${preview.source_format}`;
+
+      // Risk badge
+      const riskEl = document.getElementById('migrate-risk-badge');
+      riskEl.style.display = 'inline-block';
+      const risk = (preview.risk_tier || 'low').toLowerCase();
+      riskEl.textContent = `${risk.toUpperCase()} RISK`;
+      riskEl.className = risk === 'low' ? 'tag tag--green' : 'tag tag--amber';
+
+      // Workloads list
+      const listEl = document.getElementById('migrate-workloads-list');
+      listEl.innerHTML = '';
+      preview.workloads.forEach(w => {
+        const item = document.createElement('div');
+        item.style.background = 'var(--card)';
+        item.style.border = '0.4px solid var(--hairline)';
+        item.style.borderRadius = '4px';
+        item.style.padding = '8px 10px';
+
+        const typeColor = w.service_type === 'database' ? 'var(--blue)' : (w.service_type === 'cache' ? 'var(--amber)' : 'var(--green-bright)');
+
+        const portsStr = (w.ports || []).map(p => `${p.host_port || p.container_port}->${p.container_port}`).join(', ');
+        const volsStr = (w.volumes || []).map(v => v.source).join(', ');
+
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">${escapeHtml(w.name)}</div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-family: var(--pixel); font-size: 9px; color: ${typeColor}; text-transform: uppercase;">${escapeHtml(w.service_type)}</span>
+              ${w.is_persistent ? '<span class="tag tag--green" style="font-size: 9px; padding: 1px 4px;">GUARDED</span>' : ''}
+            </div>
+          </div>
+          <div style="font-family: var(--mono); font-size: 10px; color: var(--text-muted);">${escapeHtml(w.image || 'zero-dockerfile nixpacks')}</div>
+          ${portsStr ? `<div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Ports: <span style="font-family: var(--mono); color: var(--text-muted);">${escapeHtml(portsStr)}</span></div>` : ''}
+          ${volsStr ? `<div style="font-size: 10px; color: var(--text-dim); margin-top: 1px;">Storage: <span style="font-family: var(--mono); color: var(--green-bright);">${escapeHtml(volsStr)}</span></div>` : ''}
+        `;
+        listEl.appendChild(item);
+      });
+
+      // Ingress routes
+      const ingSection = document.getElementById('migrate-ingress-section');
+      const ingList = document.getElementById('migrate-ingress-list');
+      if (preview.ingress_routes && preview.ingress_routes.length > 0) {
+        ingSection.style.display = 'block';
+        ingList.innerHTML = '';
+        preview.ingress_routes.forEach(r => {
+          const div = document.createElement('div');
+          div.style.fontFamily = 'var(--mono)';
+          div.style.fontSize = '11px';
+          div.style.padding = '4px 8px';
+          div.style.background = 'var(--field)';
+          div.style.border = '0.4px solid var(--hairline)';
+          div.style.borderRadius = '3px';
+          div.style.display = 'flex';
+          div.style.justifyContent = 'space-between';
+          div.innerHTML = `
+            <span style="color: var(--green-bright);">https://${escapeHtml(r.domain)}</span>
+            <span style="color: var(--text-dim);">&rarr; ${escapeHtml(r.target_resource)}:${r.target_port}</span>
+          `;
+          ingList.appendChild(div);
+        });
+      } else {
+        ingSection.style.display = 'none';
+      }
+
+      // Enable migrate button
+      const applyBtn = document.getElementById('btn-migrate-apply');
+      applyBtn.disabled = false;
+      applyBtn.style.opacity = '1';
+      applyBtn.style.cursor = 'pointer';
+    }
+
+    async function applyMigration() {
+      if (!currentMigrationPreview) return;
+      const applyBtn = document.getElementById('btn-migrate-apply');
+      const termBox = document.getElementById('migrate-terminal-box');
+      const badge = document.getElementById('migrate-terminal-status');
+
+      applyBtn.disabled = true;
+      applyBtn.style.opacity = '0.6';
+      applyBtn.style.cursor = 'wait';
+
+      badge.textContent = 'MIGRATING';
+      badge.className = 'tag tag--blue';
+      termBox.innerHTML = '<div class="term-line"><span class="term-num">1</span><span>[1/4] Generating CanonicalExecutionSpec & acquiring cryptographic lease...</span></div>';
+
+      try {
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">2</span><span>[2/4] Provisioning ${currentMigrationPreview.workloads.length} container workloads & persistent volume mounts...</span></div>`;
+
+        const res = await apiFetch('/api/migrate/apply', {
+          method: 'POST',
+          body: JSON.stringify({
+            preview: currentMigrationPreview,
+            approver: 'operator_dashboard_hub'
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">3</span><span style="color: var(--green-bright);">[3/4] Containers provisioned! Operation ID: ${data.operation_id || data.plan_id}</span></div>`;
+        if (data.ingress_routes_added && data.ingress_routes_added.length > 0) {
+          termBox.innerHTML += `<div class="term-line"><span class="term-num">4</span><span style="color: var(--green-bright);">[4/4] Ingress configured for: ${data.ingress_routes_added.join(', ')}</span></div>`;
+        } else {
+          termBox.innerHTML += '<div class="term-line"><span class="term-num">4</span><span style="color: var(--green-bright);">[4/4] Workload health checks verified. Execution successful!</span></div>';
+        }
+
+        badge.textContent = 'MIGRATED';
+        badge.className = 'tag tag--green';
+
+        // Refresh overview and resources in background
+        loadOverview();
+        loadResources();
+
+        setTimeout(() => {
+          alert('Migration complete! All workloads have been imported and provisioned in Smoooth.');
+        }, 300);
+
+      } catch (err) {
+        badge.textContent = 'FAILED';
+        badge.className = 'tag tag--red';
+        termBox.innerHTML += `<div class="term-line"><span class="term-num">3</span><span style="color: var(--red);">Migration failed: ${escapeHtml(err.message)}</span></div>`;
+      } finally {
+        applyBtn.disabled = false;
+        applyBtn.style.opacity = '1';
+        applyBtn.style.cursor = 'pointer';
+      }
     }
 
     // Build Studio

@@ -7,6 +7,7 @@ pub mod engine;
 pub mod error;
 pub mod ingress;
 pub mod mcp;
+pub mod migration;
 pub mod models;
 pub mod security;
 pub mod storage;

@@ -138,6 +138,7 @@ Features:
 
 ## 📄 Documentation
 
+- [Migration Guide: Moving from Coolify & Others](docs/migration_guide.md)
 - [Beta Readiness & Distribution Specification](docs/beta_readiness.md)
 - [Agent Onboarding & Deployment Scenarios Guide](docs/onboarding_guide.md)
 - [Linux Installation & Operations Guide](docs/installation.md)

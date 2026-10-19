@@ -249,6 +249,14 @@ impl McpServer {
         if let Some(agent) = &caller.identity {
             let required_scope = match name {
                 "create_plan" => crate::models::AgentScope::Plan,
+                "migrate_stack" => {
+                    let apply = args.get("apply").and_then(|a| a.as_bool()).unwrap_or(false);
+                    if apply {
+                        crate::models::AgentScope::Deploy
+                    } else {
+                        crate::models::AgentScope::Plan
+                    }
+                }
                 "execute_plan" | "create_service_binding" | "reconcile_resource" | "configure_ingress" => {
                     crate::models::AgentScope::Deploy
                 }
@@ -336,6 +344,59 @@ impl McpServer {
                             cap_id, available
                         )))
                     }
+                }
+            }
+
+            "scan_foreign_workloads" => {
+                let ws = args
+                    .get("workspace_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default");
+                let preview = crate::migration::MigrationEngine::scan_host(ws).await?;
+                Ok(serde_json::to_value(preview).unwrap_or_default())
+            }
+
+            "migrate_stack" => {
+                let source_raw = args
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'source' argument (manifest content or file path)".to_string()))?;
+
+                let content = if std::path::Path::new(source_raw).exists() {
+                    std::fs::read_to_string(source_raw)
+                        .map_err(|e| SmooothError::Validation(format!("Failed to read file '{}': {}", source_raw, e)))?
+                } else {
+                    source_raw.to_string()
+                };
+
+                let ws = args
+                    .get("workspace_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("default");
+
+                let forced = args.get("format").and_then(|f| f.as_str()).and_then(|f| match f.to_lowercase().as_str() {
+                    "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
+                    "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
+                    "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
+                    "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
+                    "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
+                    "caprover" => Some(crate::migration::MigrationSource::CapRover),
+                    _ => None,
+                });
+
+                let preview = crate::migration::MigrationEngine::preview(&content, forced, ws)?;
+
+                let apply = args.get("apply").and_then(|v| v.as_bool()).unwrap_or(false);
+                if apply {
+                    let approver = if let Some(agent) = &caller.identity {
+                        format!("agent:{}", agent.name)
+                    } else {
+                        "mcp_agent".to_string()
+                    };
+                    let result = crate::migration::MigrationEngine::apply(&preview, &self.orchestrator, &approver).await?;
+                    Ok(serde_json::to_value(result).unwrap_or_default())
+                } else {
+                    Ok(serde_json::to_value(preview).unwrap_or_default())
                 }
             }
 
