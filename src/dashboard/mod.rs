@@ -1822,7 +1822,13 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
           if (out.success) {
             badge.textContent = 'SUCCESS';
             badge.className = 'tag tag--green';
-            alert(`Built and tagged '${image_tag}'!`);
+            lastBuiltImage = image_tag;
+            const banner = document.getElementById('build-deploy-banner');
+            if (banner) {
+              banner.style.display = 'flex';
+              const readyTag = document.getElementById('ready-image-tag');
+              if (readyTag) readyTag.textContent = image_tag;
+            }
           } else {
             badge.textContent = 'FAILED';
             badge.className = 'tag tag--red';
@@ -1832,6 +1838,125 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
         badge.textContent = 'ERROR';
         badge.className = 'tag tag--red';
       }
+    }
+
+    // 1-Click Workload Deployment & Lifecycle Bridge
+    let lastBuiltImage = '';
+    function openDeployFromBuild() {
+      const img = lastBuiltImage || (document.getElementById('build-image-tag') ? document.getElementById('build-image-tag').value.trim() : '') || 'app:v1';
+      openDeployModalWithImage(img);
+    }
+    function openNewWorkloadModal() {
+      openDeployModalWithImage('');
+    }
+    function openDeployModalWithImage(img) {
+      const fb = document.getElementById('deploy-status-feedback');
+      if (fb) fb.style.display = 'none';
+      const imgInput = document.getElementById('deploy-image');
+      if (imgInput) imgInput.value = img;
+      const nameInput = document.getElementById('deploy-name');
+      if (nameInput) {
+        if (img) {
+          const base = img.split(':')[0].replace(/[^a-zA-Z0-9_-]/g, '-');
+          nameInput.value = base;
+        } else {
+          nameInput.value = '';
+        }
+      }
+      document.getElementById('deploy-workload-modal').classList.add('is-open');
+    }
+    function closeDeployModal() {
+      document.getElementById('deploy-workload-modal').classList.remove('is-open');
+    }
+    async function submitDeployWorkload() {
+      const name = document.getElementById('deploy-name').value.trim();
+      const image = document.getElementById('deploy-image').value.trim();
+      const service_type = document.getElementById('deploy-type').value;
+      const port = parseInt(document.getElementById('deploy-port').value, 10) || 8080;
+      const domain = document.getElementById('deploy-domain').value.trim();
+      const envsStr = document.getElementById('deploy-envs').value.trim();
+      const btn = document.getElementById('btn-submit-deploy');
+      const fb = document.getElementById('deploy-status-feedback');
+
+      if (!name || !image) {
+        alert('Workload Name and Container Image Tag are required.');
+        return;
+      }
+
+      let env_vars = {};
+      if (envsStr) {
+        envsStr.split(',').forEach(p => {
+          const [k, v] = p.split('=');
+          if (k && v) env_vars[k.trim()] = v.trim();
+        });
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Deploying...';
+      fb.style.display = 'block';
+      fb.style.color = 'var(--text-muted)';
+      fb.textContent = `Instantiating container '${name}' from image '${image}'...`;
+
+      try {
+        const res = await apiFetch('/api/workloads/deploy', {
+          method: 'POST',
+          body: JSON.stringify({ name, image, port, service_type, domain, env_vars })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          fb.style.color = 'var(--green-bright)';
+          fb.textContent = `Workload '${name}' deployed successfully! Opening fleet inspector...`;
+          setTimeout(() => {
+            closeDeployModal();
+            btn.disabled = false;
+            btn.textContent = '🚀 Deploy Container';
+            switchTab('resources');
+            openDrawerForWorkload(name);
+          }, 800);
+        } else {
+          fb.style.color = 'var(--red)';
+          fb.textContent = `Deployment error: ${data.error || data.message || 'Failed'}`;
+          btn.disabled = false;
+          btn.textContent = '🚀 Deploy Container';
+        }
+      } catch (err) {
+        fb.style.color = 'var(--red)';
+        fb.textContent = `Request failed: ${err.toString()}`;
+        btn.disabled = false;
+        btn.textContent = '🚀 Deploy Container';
+      }
+    }
+
+    async function restartWorkload(id) {
+      if (!confirm(`Restart container '${id}'?`)) return;
+      const res = await apiFetch(`/api/workloads/${encodeURIComponent(id)}/restart`, { method: 'POST' });
+      if (res.ok) {
+        alert(`Workload '${id}' restarted.`);
+        loadResources();
+        if (currentDrawerId === id) refreshDrawerLogs();
+      } else {
+        const err = await res.json();
+        alert(`Restart failed: ${err.message || err.error}`);
+      }
+    }
+    async function deleteWorkload(id) {
+      if (!confirm(`Permanently destroy and remove workload '${id}'? This will stop and remove the Docker container.`)) return;
+      const res = await apiFetch(`/api/workloads/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert(`Workload '${id}' destroyed and removed.`);
+        if (currentDrawerId === id) closeDrawer();
+        loadResources();
+        loadOverview();
+      } else {
+        const err = await res.json();
+        alert(`Delete failed: ${err.message || err.error}`);
+      }
+    }
+    function restartWorkloadFromDrawer() {
+      if (currentDrawerId) restartWorkload(currentDrawerId);
+    }
+    function deleteWorkloadFromDrawer() {
+      if (currentDrawerId) deleteWorkload(currentDrawerId);
     }
 
     // Ingress
