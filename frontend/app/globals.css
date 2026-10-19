@@ -5,21 +5,14 @@
 @tailwind utilities;
 
 :root {
-  --ds-color-bg-page: #080C14;
+  --ds-color-bg-page: #0a0a0a;
 }
 
 body {
-  background-color: var(--ds-color-bg-page);
+  background-color: #0a0a0a;
   color: #F9FAFB;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* DeepSeek Hero Ambient Royal Navy Glow */
-.ds-hero-glow {
-  background: 
-    radial-gradient(ellipse 90% 65% at 50% 12%, rgba(30, 75, 155, 0.42) 0%, rgba(16, 42, 92, 0.22) 50%, rgba(8, 12, 20, 0.95) 85%, #080C14 100%),
-    #080C14;
 }
 
 /* Ensure workflow story preview is always visible */
@@ -27,3 +20,23 @@ body {
   opacity: 1 !important;
 }
 
+/* Split button styling adjustments */
+.HarnessDownloadMenu_split__148cc {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  border: 0;
+  background-color: #ffffff;
+  color: #0a0a0a;
+}
+
+.HarnessDownloadMenu_split__148cc:hover {
+  background-color: #f0f0f0;
+}
+
+.HarnessDownloadMenu_divider__Dao4X {
+  top: 25%;
+  bottom: 25%;
+  height: 50%;
+  border-left: 1px solid rgba(0, 0, 0, 0.15);
+}

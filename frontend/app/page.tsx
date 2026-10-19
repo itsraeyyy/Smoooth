@@ -21,7 +21,7 @@ export default function Home() {
   return (
     <>
       <div
-        className="min-h-screen bg-[#080C14]"
+        className="min-h-screen bg-[#0a0a0a]"
         dangerouslySetInnerHTML={{ __html: rawHtml }}
         suppressHydrationWarning
       />

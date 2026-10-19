@@ -4,45 +4,124 @@ import { useEffect } from "react";
 
 export function HarnessInteractiveBridge() {
   useEffect(() => {
-    // 1. Draw Royal Navy Ambient Light on Hero Canvas
+    // 1. Render Atmospheric Oceanic Twilight Sky on Hero Canvas matching live deepseek.com
     const canvas = document.querySelector("canvas") as HTMLCanvasElement | null;
     if (canvas) {
-      const resize = () => {
-        canvas.width = canvas.parentElement?.clientWidth || window.innerWidth;
-        canvas.height = canvas.parentElement?.clientHeight || 900;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          const grad = ctx.createRadialGradient(
-            canvas.width / 2,
-            canvas.height * 0.15,
-            10,
-            canvas.width / 2,
-            canvas.height * 0.25,
-            canvas.width * 0.65
-          );
-          grad.addColorStop(0, "rgba(35, 85, 175, 0.48)");
-          grad.addColorStop(0.35, "rgba(20, 52, 115, 0.32)");
-          grad.addColorStop(0.7, "rgba(10, 18, 32, 0.85)");
-          grad.addColorStop(1, "rgba(8, 12, 20, 0)");
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-      };
-      resize();
-      window.addEventListener("resize", resize);
       if (canvas.parentElement) {
         canvas.parentElement.style.opacity = "1";
         canvas.parentElement.style.filter = "none";
+        (canvas.parentElement.style as any).webkitMask = "none";
+        canvas.parentElement.style.mask = "none";
       }
+
+      const renderAtmosphere = () => {
+        const parent = canvas.parentElement;
+        const w = parent?.clientWidth || window.innerWidth;
+        const h = parent?.clientHeight || 1200;
+
+        canvas.width = w * (window.devicePixelRatio || 1);
+        canvas.height = h * (window.devicePixelRatio || 1);
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${h}px`;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+
+        // Layer 1: Base Oceanic Sky Gradient calibrated to live deepseek.com pixels:
+        // Top Left: (25, 53, 90) | Top Center: (44, 81, 128) | Hero Center: (46, 79, 121)
+        const baseGrad = ctx.createLinearGradient(0, 0, 0, h);
+        baseGrad.addColorStop(0, "#19355a");
+        baseGrad.addColorStop(0.18, "#284b77");
+        baseGrad.addColorStop(0.38, "#1d3656");
+        baseGrad.addColorStop(0.65, "#14243a");
+        baseGrad.addColorStop(0.88, "#0d141e");
+        baseGrad.addColorStop(1, "#0a0a0a");
+        ctx.fillStyle = baseGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Layer 2: Volumetric Top-Right Light Shaft (The luminous silver-slate sky glow matching live site at 93, 109, 127)
+        const trGlow = ctx.createRadialGradient(
+          w * 0.94, h * 0.04, 10,
+          w * 0.85, h * 0.12, w * 0.82
+        );
+        trGlow.addColorStop(0, "rgba(165, 185, 208, 0.48)");
+        trGlow.addColorStop(0.28, "rgba(115, 145, 180, 0.30)");
+        trGlow.addColorStop(0.60, "rgba(55, 85, 125, 0.14)");
+        trGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = trGlow;
+        ctx.fillRect(0, 0, w, h);
+
+        // Layer 3: Center Luminous Aura behind "DeepSeek Harness Ready to use. Right now."
+        const centerAura = ctx.createRadialGradient(
+          w * 0.5, h * 0.22, 20,
+          w * 0.5, h * 0.22, w * 0.55
+        );
+        centerAura.addColorStop(0, "rgba(55, 95, 150, 0.42)");
+        centerAura.addColorStop(0.35, "rgba(35, 68, 115, 0.26)");
+        centerAura.addColorStop(0.70, "rgba(18, 42, 78, 0.10)");
+        centerAura.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = centerAura;
+        ctx.fillRect(0, 0, w, h);
+
+        // Layer 4: Top-Left Navy Depth
+        const tlGlow = ctx.createRadialGradient(
+          w * 0.08, h * 0.04, 10,
+          w * 0.15, h * 0.08, w * 0.58
+        );
+        tlGlow.addColorStop(0, "rgba(35, 70, 115, 0.30)");
+        tlGlow.addColorStop(0.5, "rgba(18, 42, 75, 0.12)");
+        tlGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = tlGlow;
+        ctx.fillRect(0, 0, w, h);
+
+        // Layer 5: Window Ambient Backlight (Soft luminous shelf behind desktop window top)
+        const windowGlow = ctx.createRadialGradient(
+          w * 0.5, h * 0.52, 40,
+          w * 0.5, h * 0.52, w * 0.48
+        );
+        windowGlow.addColorStop(0, "rgba(45, 78, 125, 0.26)");
+        windowGlow.addColorStop(0.5, "rgba(22, 45, 80, 0.10)");
+        windowGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = windowGlow;
+        ctx.fillRect(0, 0, w, h);
+      };
+
+      renderAtmosphere();
+      window.addEventListener("resize", renderAtmosphere);
     }
 
-    // 2. Reveal entrance-animated elements via IntersectionObserver
+    // 2. Wire up Hero Split Download button and dropdown toggle
+    const toggleBtn = document.querySelector(".HarnessDownloadMenu_arrow__60_9L") as HTMLButtonElement | null;
+    const dropdown = document.getElementById("hero-download-dropdown") as HTMLElement | null;
+    if (toggleBtn && dropdown) {
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isVisible = dropdown.style.display !== "none";
+        dropdown.style.display = isVisible ? "none" : "block";
+        toggleBtn.setAttribute("aria-expanded", isVisible ? "false" : "true");
+        setTimeout(() => {
+          dropdown.style.opacity = isVisible ? "0" : "1";
+          dropdown.style.transform = isVisible ? "translate(-50%, -6px)" : "translate(-50%, 0)";
+        }, 10);
+      });
+      document.addEventListener("click", () => {
+        dropdown.style.opacity = "0";
+        dropdown.style.transform = "translate(-50%, -6px)";
+        toggleBtn.setAttribute("aria-expanded", "false");
+        setTimeout(() => {
+          dropdown.style.display = "none";
+        }, 200);
+      });
+    }
+
+    // 3. Reveal entrance-animated elements via IntersectionObserver
     const hiddenElements = document.querySelectorAll<HTMLElement>(
       '[style*="opacity:0"], [style*="opacity: 0"], .HarnessCapabilitiesSection_entrance__EZAWd, #products'
     );
 
     hiddenElements.forEach((el) => {
-      // Preserve canvas mask wrapper
       if (el.tagName.toLowerCase() === "canvas" || el.querySelector("canvas")) {
         el.style.opacity = "1";
         el.style.filter = "none";
@@ -67,7 +146,6 @@ export function HarnessInteractiveBridge() {
       );
       observer.observe(el);
 
-      // Immediate reveal if already within viewport
       const rect = el.getBoundingClientRect();
       if (rect.top < window.innerHeight && rect.bottom > 0) {
         el.style.opacity = "1";
@@ -76,7 +154,7 @@ export function HarnessInteractiveBridge() {
       }
     });
 
-    // 3. Wire up "Thought for a while" accordion
+    // 4. Wire up "Thought for a while" accordion
     const thoughtBtn = document.querySelector<HTMLElement>(
       ".HarnessDesktopPreview_analysisSummary__Qp8FG"
     );
@@ -111,7 +189,7 @@ export function HarnessInteractiveBridge() {
       });
     }
 
-    // 4. Wire up Pomodoro timer Start button
+    // 5. Wire up Pomodoro timer Start button
     const timerStart = document.querySelector<HTMLElement>(
       ".HarnessPluginsPreview_timerStart__34s_M"
     );
@@ -142,7 +220,7 @@ export function HarnessInteractiveBridge() {
       });
     }
 
-    // 5. Wire up Copy buttons in developer experience
+    // 6. Wire up Copy buttons in developer experience
     const buttons = document.querySelectorAll<HTMLButtonElement>("button");
     buttons.forEach((btn) => {
       if (btn.textContent?.trim() === "Copy") {
@@ -161,7 +239,7 @@ export function HarnessInteractiveBridge() {
       }
     });
 
-    // 6. Activate live demo frames (Workflow, Trace, Deliverables, Plugins)
+    // 7. Activate live demo frames (Workflow, Trace, Deliverables, Plugins)
     const demoFrames = document.querySelectorAll<HTMLElement>("[data-running]");
     demoFrames.forEach((frame) => {
       frame.setAttribute("data-running", "true");
@@ -179,7 +257,7 @@ export function HarnessInteractiveBridge() {
       }
     });
 
-    // 7. Mobile hamburger menu toggle
+    // 8. Mobile hamburger menu toggle
     const mobileMenuBtn = document.getElementById("harness-mobile-menu");
     const mobileMenu = document.querySelector<HTMLElement>(".ds-mobile-menu");
     const mobileCloseBtn = mobileMenu?.querySelector<HTMLButtonElement>(
@@ -199,7 +277,7 @@ export function HarnessInteractiveBridge() {
       });
     }
 
-    // 8. Mobile download dropdown inside drawer
+    // 9. Mobile download dropdown inside drawer
     const mobileDownloadTrigger = document.querySelector<HTMLButtonElement>(
       ".harness-mobile-download-trigger"
     );
@@ -217,7 +295,7 @@ export function HarnessInteractiveBridge() {
       });
     }
 
-    // 9. WeChat QR code popup on click / touch
+    // 10. WeChat QR code popup on click / touch
     const qrTriggers = document.querySelectorAll<HTMLElement>(".ds-qr-trigger");
     qrTriggers.forEach((trig) => {
       trig.addEventListener("click", (e) => {
@@ -232,5 +310,3 @@ export function HarnessInteractiveBridge() {
 
   return null;
 }
-
-
