@@ -1,7 +1,13 @@
-# Smoooth v0.1.0 — Controlled Developer Beta (Release Candidate 1)
+# Smoooth v0.1.1 — Controlled Developer Beta (Release Candidate 2)
 
-**Release Date:** October 17, 2026  
+**Release Date:** October 19, 2026  
 **Target Platform:** Linux x86_64 (Baseline: Ubuntu 24.04 LTS / Debian 12 / Docker Engine >= 24.0)
+
+> [!NOTE]
+> **Patch Highlights (v0.1.1):**
+> - **Security Patch (`SEC-03`):** Immediate agent credential revocation synchronization. Eliminates in-memory caching desynchronization and ensures CLI revocation takes effect immediately across all active REST and MCP sessions.
+> - **Pre-Beta Acceptance Verified:** 15 live workload and governance scenarios verified on live Linux VPS infrastructure.
+> - **Documented Capability Boundaries:** UDP socket listeners and standalone Cron scheduler explicitly documented as unsupported for v0.1.x.
 
 ---
 

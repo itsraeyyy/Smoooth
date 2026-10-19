@@ -284,7 +284,7 @@ async fn health_handler() -> impl IntoResponse {
     Json(HealthResponse {
         status: "ok",
         service: "smoooth-control-plane",
-        version: "0.1.0",
+        version: "0.1.1",
     })
 }
 

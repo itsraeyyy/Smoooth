@@ -492,7 +492,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
         <span class="dot"></span>
         <span>Smoooth</span>
       </div>
-      <span class="version-tag">Beta 0.1.0</span>
+      <span class="version-tag">Beta 0.1.1</span>
       <span id="daemon-indicator" class="badge badge-green" style="font-size: 10px;">CONNECTED</span>
     </div>
     <div class="topbar-actions">
@@ -813,7 +813,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
             </div>
             <table class="data-table">
               <tbody>
-                <tr><td>Daemon Version</td><td><span class="badge badge-grey">0.1.0 Beta</span></td></tr>
+                <tr><td>Daemon Version</td><td><span class="badge badge-grey">0.1.1 Beta</span></td></tr>
                 <tr><td>Network Exposure</td><td><span class="badge badge-green">Private Loopback (127.0.0.1:4040)</span></td></tr>
                 <tr><td>Storage Engine</td><td><span class="badge badge-blue">Atomic JSON Snapshot (sync_all + .bak)</span></td></tr>
                 <tr><td>Encryption at Rest</td><td><span class="badge badge-purple">AES-256-GCM Dual-Credential</span></td></tr>

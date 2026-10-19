@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SMOOOTH_VERSION="0.1.0"
+SMOOOTH_VERSION="0.1.1"
 SMOOOTH_USER="smoooth"
 SMOOOTH_GROUP="smoooth"
 INSTALL_BIN_DIR="/usr/local/bin"

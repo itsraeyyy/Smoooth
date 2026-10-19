@@ -293,7 +293,7 @@ impl Doctor {
             failure_count: failures,
             os,
             arch,
-            version: "0.1.0",
+            version: "0.1.1",
             checks,
         }
     }

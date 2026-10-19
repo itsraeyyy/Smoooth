@@ -15,7 +15,7 @@ use smoooth::storage::LocalStorage;
 #[derive(Parser, Debug)]
 #[command(name = "smoooth")]
 #[command(author = "Smoooth Contributors")]
-#[command(version = "0.1.0")]
+#[command(version = "0.1.1")]
 #[command(about = "Infrastructure freedom, built for AI agents (Developer Beta)", long_about = None)]
 struct Cli {
     #[command(subcommand)]
