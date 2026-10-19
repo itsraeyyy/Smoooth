@@ -1,5 +1,6 @@
 pub mod adapters;
 pub mod api;
+pub mod build;
 pub mod dashboard;
 pub mod doctor;
 pub mod engine;

@@ -1045,6 +1045,10 @@ impl Orchestrator {
             .unwrap_or_default()
     }
 
+    pub async fn delete_resource(&self, id: &str) -> Result<()> {
+        self.storage.delete_resource(id).await
+    }
+
     /// Reconcile state on process startup: mark orphaned running operations as interrupted
     pub async fn reconcile_on_startup(&self) -> Result<usize> {
         let mut count = 0;

@@ -71,6 +71,31 @@ enum Commands {
         #[command(subcommand)]
         command: IngressCommands,
     },
+    /// Build container images using Nixpacks (zero Dockerfile) from local path or Git repository
+    Build {
+        #[command(subcommand)]
+        command: BuildCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BuildCommands {
+    /// Inspect source directory or Git repository and generate a zero-Dockerfile build plan
+    Plan {
+        /// Local directory path or Git clone URL
+        source: String,
+    },
+    /// Build and tag an optimized production container image from source or Git repository
+    Image {
+        /// Local directory path or Git clone URL
+        source: String,
+        /// Target image tag name (e.g. "my-app:v1")
+        #[arg(short, long)]
+        name: String,
+        /// Environment variable in KEY=VALUE format (can be specified multiple times)
+        #[arg(short, long)]
+        env: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -603,6 +628,60 @@ async fn main() -> anyhow::Result<()> {
                             print!("{}", cfg);
                         }
                         Err(e) => eprintln!("\n❌ Failed to export ingress config: {}\n", e),
+                    }
+                }
+            }
+        }
+
+        Some(Commands::Build { command }) => {
+            match command {
+                BuildCommands::Plan { source } => {
+                    println!("\n📦 Inspecting source for zero-Dockerfile Nixpacks plan: {}\n", source);
+                    match smoooth::build::NixpacksBuilder::plan(&source).await {
+                        Ok(plan_json) => {
+                            let providers = plan_json.get("providers")
+                                .and_then(|p| p.as_array())
+                                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
+                                .unwrap_or_else(|| "generic".to_string());
+                            let start_cmd = plan_json.get("start")
+                                .and_then(|s| s.get("cmd"))
+                                .and_then(|c| c.as_str())
+                                .unwrap_or("none");
+                            println!("Detected Providers : {}", providers);
+                            println!("Start Command      : {}", start_cmd);
+                            println!("\nDetailed Plan Structure:\n{}", serde_json::to_string_pretty(&plan_json).unwrap_or_default());
+                        }
+                        Err(e) => {
+                            eprintln!("\n❌ Nixpacks plan failed: {}\n", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                BuildCommands::Image { source, name, env } => {
+                    println!("\n🔨 Building container image '{}' from '{}' via Nixpacks...\n", name, source);
+                    let mut env_map = HashMap::new();
+                    for item in env {
+                        if let Some((k, v)) = item.split_once('=') {
+                            env_map.insert(k.to_string(), v.to_string());
+                        }
+                    }
+                    let env_opt = if env_map.is_empty() { None } else { Some(env_map) };
+                    match smoooth::build::NixpacksBuilder::build(&source, &name, env_opt).await {
+                        Ok(out) => {
+                            for line in &out.logs {
+                                println!("{}", line);
+                            }
+                            if out.success {
+                                println!("\n✅ Build succeeded! Tagged image: {}\n", out.image_tag);
+                            } else {
+                                eprintln!("\n❌ Build failed: {}\n", out.error.unwrap_or_default());
+                                std::process::exit(1);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("\n❌ Nixpacks build execution failed: {}\n", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             }

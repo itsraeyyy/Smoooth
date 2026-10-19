@@ -6,7 +6,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
         Html, IntoResponse, Response,
     },
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use futures_util::stream::Stream;
@@ -96,6 +96,27 @@ pub struct AuditQuery {
     pub workspace: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct BuildPlanRequest {
+    pub source: String,
+}
+
+#[derive(Deserialize)]
+pub struct BuildNixpacksRequest {
+    pub source: String,
+    pub image_tag: String,
+    pub env_vars: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Deserialize)]
+pub struct AddIngressRequest {
+    pub domain: String,
+    pub target_resource: String,
+    pub target_port: u16,
+    pub tls: Option<bool>,
+    pub path_prefix: Option<String>,
+}
+
 /// Build the API application router and associated AppState
 pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router, AppState) {
     let mcp_server = Arc::new(McpServer::new(orchestrator.clone()));
@@ -152,6 +173,19 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/agents/:id/rotate", post(rotate_agent_handler))
         .route("/api/audit", get(audit_handler))
         .route("/api/doctor", get(doctor_handler))
+        // Nixpacks Automated Build Engine
+        .route("/api/build/plan", post(build_plan_handler))
+        .route("/api/build/nixpacks", post(build_nixpacks_handler))
+        // Ingress & Custom Domains
+        .route("/api/ingress", get(list_ingress_handler).post(add_ingress_handler))
+        .route("/api/ingress/:domain", delete(remove_ingress_handler))
+        .route("/api/ingress/export/:format", get(export_ingress_handler))
+        // Real-Time Container Logs (Overseer Drawer)
+        .route("/api/resources/:id/logs", get(resource_logs_handler))
+        // 1-Click Workload Deployment & Lifecycle (UI & Operators)
+        .route("/api/workloads/deploy", post(deploy_workload_handler))
+        .route("/api/workloads/:id", delete(delete_workload_handler))
+        .route("/api/workloads/:id/restart", post(restart_workload_handler))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -740,6 +774,329 @@ async fn doctor_handler(State(_state): State<AppState>) -> impl IntoResponse {
         std::env::var("SMOOOTH_STORAGE_PATH").unwrap_or_else(|_| "smoooth_state.json".to_string());
     let report = crate::doctor::Doctor::run_diagnostics(&storage_path, "127.0.0.1", 4040).await;
     Json(report)
+}
+
+/// Nixpacks Plan Generation Handler
+async fn build_plan_handler(
+    State(_state): State<AppState>,
+    Json(body): Json<BuildPlanRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    match crate::build::NixpacksBuilder::plan(&body.source).await {
+        Ok(plan) => Ok(Json(plan)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Nixpacks Automated Image Build Handler
+async fn build_nixpacks_handler(
+    State(_state): State<AppState>,
+    Json(body): Json<BuildNixpacksRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    match crate::build::NixpacksBuilder::build(&body.source, &body.image_tag, body.env_vars).await {
+        Ok(result) => Ok(Json(result)),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Ingress Routes List Handler
+async fn list_ingress_handler(State(_state): State<AppState>) -> impl IntoResponse {
+    let ingress = crate::ingress::IngressManager::default_local();
+    let routes = ingress.list_routes().unwrap_or_default();
+    let mode = crate::ingress::IngressManager::detect_mode();
+    Json(serde_json::json!({
+        "ingress_mode": mode,
+        "routes": routes,
+    }))
+}
+
+/// Ingress Route Add Handler
+async fn add_ingress_handler(
+    State(_state): State<AppState>,
+    Json(body): Json<AddIngressRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let ingress = crate::ingress::IngressManager::default_local();
+    match ingress.add_route(
+        &body.domain,
+        &body.target_resource,
+        body.target_port,
+        body.tls.unwrap_or(true),
+        body.path_prefix,
+    ) {
+        Ok(route) => Ok(Json(route)),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Ingress Route Remove Handler
+async fn remove_ingress_handler(
+    State(_state): State<AppState>,
+    Path(domain): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let ingress = crate::ingress::IngressManager::default_local();
+    match ingress.remove_route(&domain) {
+        Ok(true) => Ok(Json(serde_json::json!({ "success": true, "domain": domain }))),
+        Ok(false) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("Route for domain '{}' not found", domain) })),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Ingress Route Config Export Handler (Caddyfile, Nginx, Traefik)
+async fn export_ingress_handler(
+    State(_state): State<AppState>,
+    Path(format): Path<String>,
+) -> impl IntoResponse {
+    let ingress = crate::ingress::IngressManager::default_local();
+    let config = ingress.render_upstream_snippet(&format).unwrap_or_else(|e| format!("# Error generating config: {}", e));
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        config,
+    )
+}
+
+/// Real-Time Container Logs Handler for Overseer Drawer
+async fn resource_logs_handler(
+    State(_state): State<AppState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let logs_cmd = tokio::process::Command::new("docker")
+        .args(["logs", "--tail", "150", &id])
+        .output()
+        .await;
+
+    match logs_cmd {
+        Ok(output) => {
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            Json(serde_json::json!({
+                "resource_id": id,
+                "logs": combined,
+            }))
+        }
+        Err(e) => Json(serde_json::json!({
+            "resource_id": id,
+            "logs": format!("Unable to fetch container logs: {}", e),
+        })),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeployWorkloadRequest {
+    pub name: String,
+    pub image: String,
+    pub port: Option<u16>,
+    pub env_vars: Option<HashMap<String, String>>,
+    pub service_type: Option<String>,
+    pub workspace: Option<String>,
+    pub domain: Option<String>,
+}
+
+/// 1-Click Workload Deployment Handler for UI & Operators
+async fn deploy_workload_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Json(body): Json<DeployWorkloadRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Deploy scope required to deploy workloads"
+            })),
+        ));
+    }
+
+    let clean_name = body.name.trim().to_lowercase().replace(' ', "-");
+    let clean_image = body.image.trim().to_string();
+
+    if clean_name.is_empty() || clean_image.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Bad Request",
+                "message": "Both 'name' and 'image' are required."
+            })),
+        ));
+    }
+
+    let ws = body.workspace.unwrap_or_else(|| "default".to_string());
+    let service_type = body.service_type.unwrap_or_else(|| "web".to_string());
+    let port = body.port.unwrap_or(8080);
+    let env_vars = body.env_vars.unwrap_or_default();
+
+    let mut ports_map = serde_json::Map::new();
+    ports_map.insert(port.to_string(), serde_json::json!(port));
+
+    let action = crate::models::CanonicalActionSpec {
+        action_type: "create".to_string(),
+        provider: "docker".to_string(),
+        resource_name: clean_name.clone(),
+        service_type: service_type.clone(),
+        is_persistent: false,
+        exposes_network_publicly: true,
+        config: serde_json::json!({
+            "image": clean_image,
+            "port": port,
+            "ports": ports_map,
+            "env": env_vars,
+            "workspace_id": ws
+        }),
+    };
+
+    let spec = crate::models::CanonicalExecutionSpec {
+        schema_version: 1,
+        workspace_id: ws.clone(),
+        environment: "production".to_string(),
+        target_id: "local_docker_node".to_string(),
+        actions: vec![action],
+        dependencies: Vec::new(),
+        immutable_artifacts: HashMap::new(),
+        policy_envelope: crate::models::PolicyConstraints {
+            allow_public_network: true,
+            allow_data_destruction: false,
+            max_monthly_budget_usd: Some(150),
+        },
+    };
+
+    let plan_id = format!("plan_{}", uuid::Uuid::new_v4().simple());
+    let mut plan = crate::models::Plan::new(plan_id, spec, crate::models::RiskTier::Low, Some(10.0));
+    plan.approve_with_ttl("operator_dashboard".to_string(), 3600);
+
+    state.orchestrator.save_plan(plan.clone()).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+
+    let idemp_key = format!("ui_deploy_{}", uuid::Uuid::new_v4().simple());
+    let op = state
+        .orchestrator
+        .execute_plan_sync(plan.clone(), idemp_key)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
+
+    // If domain specified, register ingress route automatically
+    if let Some(domain) = body.domain {
+        let trimmed_dom = domain.trim();
+        if !trimmed_dom.is_empty() {
+            let ingress = crate::ingress::IngressManager::default_local();
+            let _ = ingress.add_route(trimmed_dom, &clean_name, port, true, None);
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "resource_id": clean_name,
+        "operation_id": op.id,
+        "status": format!("{:?}", op.status),
+        "plan_id": plan.id,
+        "port": port
+    })))
+}
+
+/// Restart Workload Container Handler
+async fn restart_workload_handler(
+    State(_state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Deploy scope required" })),
+        ));
+    }
+
+    let output = tokio::process::Command::new("docker")
+        .args(["restart", &id])
+        .output()
+        .await;
+
+    match output {
+        Ok(o) if o.status.success() => Ok(Json(serde_json::json!({
+            "success": true,
+            "resource_id": id,
+            "message": "Container restarted successfully."
+        }))),
+        Ok(o) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Restart failed",
+                "message": String::from_utf8_lossy(&o.stderr).to_string()
+            })),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Delete Workload Container Handler
+async fn delete_workload_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Deploy scope required" })),
+        ));
+    }
+
+    // Stop and remove container via docker CLI
+    let _ = tokio::process::Command::new("docker")
+        .args(["rm", "-f", &id])
+        .output()
+        .await;
+
+    // Delete from state storage
+    let _ = state.orchestrator.delete_resource(&id).await;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "resource_id": id
+    })))
 }
 
 /// Resolve the authentication token using environment, CLI arguments, or configuration files

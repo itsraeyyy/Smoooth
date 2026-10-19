@@ -3,20 +3,29 @@ const fs = require('fs');
 const path = require('path');
 
 const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const htmlUrl = 'http://localhost:3000';
+const htmlUrl = 'http://127.0.0.1:3000';
 const outputPath = path.resolve(__dirname, '../nextjs_screenshot.png');
+const outputCapabilitiesPath = path.resolve(__dirname, '../nextjs_capabilities.png');
 
 async function capture() {
+  console.log('Pre-warming Next.js dev server...');
+  try {
+    const res = await fetch(htmlUrl);
+    console.log('Pre-warm response:', res.status);
+  } catch (e) {
+    console.log('Pre-warm failed, continuing anyway...');
+  }
+
   console.log('Launching Edge for Next.js screenshot...');
-  const port = 9338;
+  const port = 9339;
   const edge = spawn(edgePath, [
     `--remote-debugging-port=${port}`,
     '--headless=new',
     '--disable-gpu',
     '--no-first-run',
     '--no-default-browser-check',
-    '--user-data-dir=' + path.resolve(__dirname, 'edge-profile-next'),
-    '--window-size=1440,1200',
+    '--user-data-dir=' + path.resolve(__dirname, 'edge-profile-next-v2'),
+    '--window-size=1440,1100',
     htmlUrl
   ]);
 
@@ -77,13 +86,22 @@ async function capture() {
     });
   }
 
-  // Wait 2s for page to settle and canvas to render
-  await new Promise(r => setTimeout(r, 2000));
+  // Wait 4s for page to settle, fonts to render
+  await new Promise(r => setTimeout(r, 4000));
 
-  console.log('Capturing screenshot of Next.js app...');
-  const { data } = await sendPage('Page.captureScreenshot', { format: 'png' });
-  fs.writeFileSync(outputPath, Buffer.from(data, 'base64'));
-  console.log('Screenshot saved to', outputPath);
+  console.log('Capturing hero screenshot of Next.js app...');
+  const { data: heroData } = await sendPage('Page.captureScreenshot', { format: 'png' });
+  fs.writeFileSync(outputPath, Buffer.from(heroData, 'base64'));
+  console.log('Hero screenshot saved to', outputPath);
+
+  // Scroll to capabilities section
+  await sendPage('Runtime.evaluate', { expression: 'document.getElementById("capabilities")?.scrollIntoView()' });
+  await new Promise(r => setTimeout(r, 1000));
+
+  console.log('Capturing capabilities screenshot...');
+  const { data: capData } = await sendPage('Page.captureScreenshot', { format: 'png' });
+  fs.writeFileSync(outputCapabilitiesPath, Buffer.from(capData, 'base64'));
+  console.log('Capabilities screenshot saved to', outputCapabilitiesPath);
 
   ws.close();
   edge.kill();

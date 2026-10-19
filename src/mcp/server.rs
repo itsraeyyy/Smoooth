@@ -709,6 +709,34 @@ impl McpServer {
                 }))
             }
 
+            "build_with_nixpacks" => {
+                let source = args
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'source'".to_string()))?;
+                let image_tag = args
+                    .get("image_tag")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'image_tag'".to_string()))?;
+
+                let env_vars = args.get("env_vars").and_then(|v| {
+                    if let Some(map) = v.as_object() {
+                        let mut envs = std::collections::HashMap::new();
+                        for (k, val) in map {
+                            if let Some(s) = val.as_str() {
+                                envs.insert(k.clone(), s.to_string());
+                            }
+                        }
+                        Some(envs)
+                    } else {
+                        None
+                    }
+                });
+
+                let result = crate::build::NixpacksBuilder::build(source, image_tag, env_vars).await?;
+                Ok(serde_json::to_value(result).unwrap_or_default())
+            }
+
             "verify_connection" => {
                 let resource_id = args
                     .get("resource_id")

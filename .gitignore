@@ -7,7 +7,8 @@ Cargo.lock.bak
 node_modules/
 .next/
 out/
-build/
+/build/
+!src/build/
 # dist/ (tracked for zero-build Cloudflare Pages deployment)
 *.tsbuildinfo
 next-env.d.ts
@@ -29,3 +30,8 @@ desktop.ini
 scratch/
 *.token
 release-dist/
+/*.png
+*.tar.gz
+__pycache__/
+scripts/__pycache__/
+

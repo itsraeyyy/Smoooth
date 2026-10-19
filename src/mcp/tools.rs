@@ -129,6 +129,21 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
             }),
         },
 
+        McpToolDefinition {
+            name: "build_with_nixpacks".to_string(),
+            description: "Zero-Dockerfile automated build: takes a local directory or Git repo URL, auto-detects language and framework (Node, Python, Go, Rust, PHP, etc.), generates a build plan, and builds a production Docker image.".to_string(),
+            step: "04 Provision".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["source", "image_tag"],
+                "properties": {
+                    "source": { "type": "string", "description": "Local directory path or Git clone URL (e.g. https://github.com/user/repo)" },
+                    "image_tag": { "type": "string", "description": "Target Docker image name and tag (e.g. my-app:v1)" },
+                    "env_vars": { "type": "object", "description": "Optional build environment variables" }
+                }
+            }),
+        },
+
         // 06 Verify
         McpToolDefinition {
             name: "verify_connection".to_string(),
