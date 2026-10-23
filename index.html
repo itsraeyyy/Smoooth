@@ -68,51 +68,6 @@
         "sameAs": [
           "https://github.com/itsraeyyy/Smoooth"
         ]
-      },
-      {
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "How do AI coding agents like Claude Code or Cursor interact with Smoooth?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth implements the Model Context Protocol (MCP) standard. AI agents pair over stdio or streamable HTTP/SSE using a 256-bit bearer token. Instead of running unsafe shell scripts as root, agents invoke structured, typed tools like create_plan, execute_plan, verify_connection, and configure_ingress."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is giving an AI coding agent Docker daemon access secure?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth confines operations via private loopback binding (127.0.0.1:4040), granular role-based scopes (read_only, plan, deploy, admin), systemd sandboxing with NoNewPrivileges, and append-only signed audit logging."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What databases and Linux distributions are supported?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth is verified on Ubuntu 24.04 LTS and Debian 12 (x86_64 and ARM64). It provides native stateful adapters for PostgreSQL, Redis, MongoDB, and SQLite with automated persistent volume management and health probes."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How does Smoooth compare to Coolify or Dokku?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Coolify requires 2 CPUs and 2 GB RAM minimum, running a full web dashboard, Fastify backend, and Traefik proxy. Smoooth is a single static Rust binary consuming under 28MB RAM idle, purpose-built for autonomous AI agents over MCP with transactional 2-phase DAG deployments and automatic rollbacks."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Can I run Smoooth on a low-cost $5/mo VPS or homelab?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. Minimum requirements are 1 vCPU, 1 GB RAM, and 10 GB disk space. Because Smoooth is compiled in Rust with zero background Node.js/PHP runtime overhead, your VPS resources remain 100% dedicated to your actual application workloads."
-            }
-          }
-        ]
       }
     ]
   }
@@ -131,23 +86,106 @@
     </svg>
     <span class="font-bold text-[19px] tracking-tight text-white font-['Host_Grotesk']">Smoooth</span>
     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-mono font-medium bg-white/10 text-[#73a3d2] border border-white/10">v0.1.0</span>
-  </a><div class="hidden md:flex shrink-0 items-center gap-ds-3 lg:gap-ds-5 text-[14px] font-medium text-white/80">
-    <a href="#features" class="hover:text-white transition-colors">Features</a>
-    <a href="#how-it-works" class="hover:text-white transition-colors">How It Works</a>
-    <a href="#migration" class="hover:text-white transition-colors">Migration</a>
+  </a><nav class="hidden md:flex shrink-0 items-center gap-ds-3 lg:gap-ds-5 text-[14px] font-medium text-white/80">
+    <!-- Features Dropdown -->
+    <div class="relative group" id="header-features-dropdown">
+      <button type="button" class="hover:text-white transition-colors flex items-center gap-1.5 py-2 cursor-pointer bg-transparent border-0 text-white/80 group-hover:text-white" aria-haspopup="true" aria-expanded="false">
+        <span>Features</span>
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" class="transition-transform duration-200 group-hover:rotate-180 text-white/60 group-hover:text-white"><path d="M11.85 5.5L8.7 8.65c-.7.7-1.7.7-2.4 0L3.15 5.5 2.15 6.5l3.15 3.15c1.25 1.25 3.25 1.25 4.5 0L12.85 6.5l-1-1z" fill="currentColor"/></svg>
+      </button>
+      <div class="absolute top-full left-0 pt-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 z-50">
+        <div class="w-[300px] p-2 bg-[#12161f]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl">
+          <a href="/features/mcp-runtime" class="flex flex-col gap-0.5 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+            <span class="text-[13px] font-medium text-white flex items-center justify-between">
+              <span>MCP Server Runtime</span>
+              <span class="text-[10px] font-mono text-[#73a3d2]">v0.1.0</span>
+            </span>
+            <span class="text-[11px] text-white/50 leading-snug">Autonomous agent interface for Claude Code &amp; Cursor</span>
+          </a>
+          <a href="/features/transactional-deployments" class="flex flex-col gap-0.5 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+            <span class="text-[13px] font-medium text-white">Transactional 2-Phase DAG</span>
+            <span class="text-[11px] text-white/50 leading-snug">Atomic execution plans with automatic rollback</span>
+          </a>
+          <a href="/features/stateful-databases" class="flex flex-col gap-0.5 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+            <span class="text-[13px] font-medium text-white">Stateful Database Adapters</span>
+            <span class="text-[11px] text-white/50 leading-snug">Postgres, Redis, Mongo &amp; SQLite volume locks</span>
+          </a>
+          <a href="/features/reverse-proxy" class="flex flex-col gap-0.5 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+            <span class="text-[13px] font-medium text-white">Embedded Caddy Ingress</span>
+            <span class="text-[11px] text-white/50 leading-snug">Sub-millisecond route reloads &amp; automated TLS</span>
+          </a>
+          <a href="/features/sandbox-security" class="flex flex-col gap-0.5 p-2.5 rounded-xl hover:bg-white/10 transition-colors">
+            <span class="text-[13px] font-medium text-white">Scoped Bearer Security</span>
+            <span class="text-[11px] text-white/50 leading-snug">Granular RBAC scopes &amp; systemd isolation</span>
+          </a>
+          <div class="border-t border-white/10 mt-1 pt-1">
+            <a href="/features/" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[12px] font-mono text-[#73a3d2] hover:bg-white/5 transition-colors">
+              <span>Explore all features &rarr;</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <a href="/guides/" class="hover:text-white transition-colors">Guides</a>
     <a href="/compare/smoooth-vs-coolify" class="hover:text-white transition-colors">Compare</a>
-    <a href="#security" class="hover:text-white transition-colors">Security</a>
-    <a href="#quickstart" class="hover:text-white transition-colors">Quickstart</a>
-    <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors flex items-center gap-1.5">
+    <a href="/migration/" class="hover:text-white transition-colors">Migration</a>
+    <a href="/guides/" class="hover:text-white transition-colors">Docs</a>
+
+    <div class="h-4 w-px bg-white/20 mx-1"></div>
+
+    <!-- Server Run Command Pill -->
+    <button type="button" class="group flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-mono rounded-full bg-white/5 hover:bg-white/10 border border-white/15 text-white/90 hover:border-white/30 transition-all cursor-pointer" onclick="navigator.clipboard.writeText('curl -fsSL https://smoooth.dev/install.sh | bash'); const t = this.querySelector('.cmd-copy-text'); if(t){ t.innerText='Copied!'; setTimeout(()=>t.innerText='curl -fsSL smoooth.dev | bash', 2000); }" title="Click to copy server install command">
+      <span class="text-[#73a3d2]">$</span>
+      <span class="cmd-copy-text">curl -fsSL smoooth.dev | bash</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="opacity-60 group-hover:opacity-100"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+    </button>
+
+    <!-- GitHub on top right -->
+    <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-medium rounded-full bg-white text-black hover:bg-white/90 transition-all">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-      GitHub
+      <span>GitHub</span>
     </a>
-    <a href="#quickstart" class="ds-btn-primary px-3.5 py-1.5 text-[13px] font-medium rounded-full bg-white text-black hover:bg-white/90 transition-all">Install v0.1.0</a>
-  </div><button class="md:hidden flex items-center justify-center w-10 h-10 text-ds-primary" aria-label="Open menu" aria-controls="harness-mobile-menu" aria-expanded="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button></div></div><div id="harness-mobile-menu" class="ds-mobile-menu " aria-hidden="true" style="visibility:hidden"><div class="ds-mobile-menu-header"><a class="flex items-center text-[var(--ds-color-brand-medium-reverse)]" href="/en/harness/"><svg width="187" height="24" viewBox="0 0 187 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="h-6 w-auto" aria-hidden="true"><path d="M68.4157 18.2447H67.0499V16.1272H68.4157C69.2617 16.1272 70.1163 15.9163 70.6668 15.3304C71.2178 14.7444 71.4258 13.8455 71.4258 12.9471C71.4258 12.0487 71.2266 11.1498 70.6668 10.5643C70.1081 9.97831 69.2617 9.76744 68.4157 9.76744C67.5698 9.76744 66.7151 9.97831 66.1636 10.5643C65.6127 11.1503 65.4047 12.0487 65.4047 12.9471V21.6435H63.0088V7.6582H65.4047V8.54883H65.8439C65.8916 8.49393 65.9392 8.44728 65.9873 8.40064C66.5869 7.85353 67.5047 7.6582 68.407 7.6582C69.8209 7.6582 71.2339 8.00998 72.1605 8.98662C73.0866 9.96325 73.4141 11.4632 73.4141 12.9558C73.4141 14.4485 73.0783 15.9406 72.1605 16.925C71.2421 17.9094 69.8209 18.2457 68.4157 18.2457V18.2447Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M31.9549 8.03497H33.3202V10.1525H31.9549C31.1084 10.1525 30.2543 10.3633 29.7033 10.9493C29.1523 11.5353 28.9448 12.4342 28.9448 13.3326C28.9448 14.231 29.1445 15.1294 29.7033 15.7154C30.262 16.3014 31.1084 16.5122 31.9549 16.5122C32.8013 16.5122 33.6559 16.3014 34.2069 15.7154C34.7579 15.1294 34.9654 14.231 34.9654 13.3326V4.62842H37.3608V18.6219H34.9654V17.7313H34.5262C34.4781 17.7857 34.4304 17.8329 34.3823 17.8795C33.7832 18.4261 32.8649 18.6219 31.9626 18.6219C30.5492 18.6219 29.1357 18.2707 28.2096 17.294C27.2835 16.3174 26.9561 14.817 26.9561 13.3248C26.9561 11.8327 27.2913 10.34 28.2096 9.35561C29.1357 8.37898 30.5492 8.03497 31.9549 8.03497Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M49.3784 13.1434V13.9952H42.9982V12.2999H47.2303C47.1345 11.6828 46.911 11.1046 46.5116 10.6824C45.9368 10.0731 45.0501 9.85445 44.1721 9.85445C43.2941 9.85445 42.4074 10.0731 41.8326 10.6824C41.2577 11.2917 41.0498 12.2217 41.0498 13.1439C41.0498 14.0661 41.2573 15.0034 41.8326 15.6049C42.4074 16.2064 43.2936 16.4334 44.1721 16.4334C45.0506 16.4334 45.9368 16.2147 46.5116 15.6049C46.5913 15.5189 46.6632 15.4251 46.7351 15.3314H49.099C48.8915 16.066 48.564 16.7302 48.0689 17.2458C47.1107 18.2535 45.6336 18.6208 44.1721 18.6208C42.7105 18.6208 41.2335 18.2613 40.2753 17.2458C39.3171 16.2303 38.9658 14.6832 38.9658 13.1439C38.9658 11.6046 39.3093 10.0498 40.2753 9.04205C41.2417 8.03432 42.7105 7.66699 44.1721 7.66699C45.6336 7.66699 47.1107 8.02655 48.0689 9.04205C49.0348 10.0576 49.3784 11.6046 49.3784 13.1439V13.1434Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M61.4042 13.1434V13.9952H55.0241V12.2999H59.2561C59.1599 11.6828 58.9369 11.1046 58.5375 10.6824C57.9627 10.0731 57.076 9.85445 56.198 9.85445C55.32 9.85445 54.4332 10.0731 53.8584 10.6824C53.2836 11.2917 53.0757 12.2217 53.0757 13.1439C53.0757 14.0661 53.2831 15.0034 53.8584 15.6049C54.4332 16.2064 55.32 16.4334 56.198 16.4334C57.076 16.4334 57.9627 16.2147 58.5375 15.6049C58.6177 15.5189 58.6891 15.4251 58.7605 15.3314H61.1249C60.9169 16.066 60.5894 16.7302 60.0943 17.2458C59.1361 18.2535 57.659 18.6208 56.198 18.6208C54.7369 18.6208 53.2593 18.2613 52.3012 17.2458C51.343 16.2303 50.9917 14.6832 50.9917 13.1439C50.9917 11.6046 51.3352 10.0498 52.3012 9.04205C53.2676 8.03432 54.7364 7.66699 56.198 7.66699C57.6595 7.66699 59.1361 8.02655 60.0943 9.04205C61.0607 10.0576 61.4042 11.6046 61.4042 13.1439V13.1434Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M80.242 18.6218C81.7035 18.6218 83.1801 18.4109 84.1383 17.8094C85.0965 17.2079 85.4482 16.2934 85.4482 15.3872C85.4482 14.4811 85.1042 13.5589 84.1383 12.9651C83.1801 12.3713 81.703 12.1522 80.242 12.1522C79.6186 12.1522 79.0438 12.0662 78.6366 11.8398C78.2294 11.6051 78.0778 11.2538 78.0778 10.902C78.0778 10.5502 78.2216 10.1912 78.6366 9.96426C79.0438 9.72958 79.6749 9.65184 80.2973 9.65184C80.9198 9.65184 81.5509 9.73784 81.9591 9.96426C82.3663 10.1989 82.5179 10.5502 82.5179 10.902H84.9531C84.9531 9.99536 84.6421 9.07363 83.7719 8.47988C82.9017 7.88613 81.5679 7.66699 80.2424 7.66699C78.9169 7.66699 77.5837 7.87787 76.713 8.47988C75.8427 9.08141 75.5308 9.99536 75.5308 10.902C75.5308 11.8087 75.8423 12.7304 76.713 13.3242C77.5832 13.9179 78.9165 14.1371 80.2424 14.1371C80.929 14.1371 81.688 14.2231 82.1428 14.4495C82.5985 14.6764 82.7579 15.0355 82.7579 15.3872C82.7579 15.739 82.5985 16.0981 82.1428 16.325C81.688 16.5514 80.9931 16.6374 80.3066 16.6374C79.62 16.6374 78.9169 16.5514 78.4694 16.325C78.0224 16.0986 77.8543 15.739 77.8543 15.3872H75.0435C75.0435 16.2939 75.3865 17.2156 76.3534 17.8094C77.3194 18.4031 78.7809 18.6218 80.2424 18.6218H80.242Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M97.4731 13.1434V13.9952H91.0929V12.2999H95.325C95.2298 11.6828 95.0058 11.1046 94.6068 10.6824C94.0311 10.0731 93.1453 9.85445 92.2663 9.85445C91.3874 9.85445 90.5016 10.0731 89.9268 10.6824C89.352 11.2917 89.145 12.2217 89.145 13.1439C89.145 14.0661 89.352 15.0034 89.9268 15.6049C90.5016 16.2064 91.3883 16.4334 92.2663 16.4334C93.1443 16.4334 94.0311 16.2147 94.6068 15.6049C94.686 15.5189 94.7585 15.4251 94.8299 15.3314H97.1932C96.9853 16.066 96.6583 16.7302 96.1636 17.2458C95.2055 18.2535 93.7279 18.6208 92.2663 18.6208C90.8048 18.6208 89.3282 18.2613 88.37 17.2458C87.4118 16.2303 87.061 14.6832 87.061 13.1439C87.061 11.6046 87.4041 10.0498 88.37 9.04205C89.3364 8.03432 90.8058 7.66699 92.2663 7.66699C93.7269 7.66699 95.2055 8.02655 96.1636 9.04205C97.1296 10.0576 97.4726 11.6046 97.4726 13.1439L97.4731 13.1434Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M109.499 13.1434V13.9952H103.119V12.2999H107.351C107.256 11.6828 107.032 11.1046 106.632 10.6824C106.057 10.0731 105.172 9.85445 104.293 9.85445C103.414 9.85445 102.528 10.0731 101.953 10.6824C101.378 11.2917 101.17 12.2217 101.17 13.1439C101.17 14.0661 101.378 15.0034 101.953 15.6049C102.528 16.2064 103.415 16.4334 104.293 16.4334C105.171 16.4334 106.057 16.2147 106.632 15.6049C106.712 15.5189 106.784 15.4251 106.856 15.3314H109.22C109.012 16.066 108.685 16.7302 108.19 17.2458C107.231 18.2535 105.754 18.6208 104.293 18.6208C102.831 18.6208 101.355 18.2613 100.396 17.2458C99.4382 16.2303 99.0864 14.6832 99.0864 13.1439C99.0864 11.6046 99.4295 10.0498 100.396 9.04205C101.362 8.03432 102.832 7.66699 104.293 7.66699C105.754 7.66699 107.231 8.02655 108.19 9.04205C109.156 10.0576 109.499 11.6046 109.499 13.1439V13.1434Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M113.499 4.62842H111.104V18.622H113.499V4.62842Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><path d="M117.588 12.8154L121.516 18.6208H118.554L114.625 12.8154L118.554 8.15088H121.516L117.588 12.8154Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path><g clip-path="url(#harness-logo-whale)"><path d="M23.0584 4.95215C22.8129 4.83215 22.7074 5.06116 22.5639 5.17716C22.5149 5.21466 22.4734 5.26366 22.4319 5.30866C22.0734 5.69167 21.6543 5.94318 21.1073 5.91318C20.3073 5.86818 19.6243 6.11969 19.0203 6.73171C18.8918 5.97718 18.4652 5.52667 17.8162 5.23766C17.4767 5.08766 17.1332 4.93715 16.8952 4.61064C16.7292 4.37814 16.6837 4.11913 16.6007 3.86362C16.5477 3.70962 16.4952 3.55211 16.3177 3.52561C16.1252 3.49561 16.0497 3.65711 15.9742 3.79212C15.6722 4.34413 15.5552 4.95215 15.5667 5.56817C15.5932 6.95371 16.1782 8.05725 17.3407 8.84227C17.4727 8.93227 17.5067 9.02227 17.4652 9.15378C17.3857 9.42429 17.2917 9.68679 17.2087 9.9573C17.1557 10.1298 17.0767 10.1678 16.8917 10.0923C16.2537 9.8258 15.7027 9.43129 15.2156 8.95477C14.3891 8.15525 13.6416 7.27272 12.7096 6.5817C12.4906 6.4202 12.2716 6.27019 12.045 6.12719C11.094 5.20366 12.1696 4.44514 12.4186 4.35513C12.6791 4.26113 12.5091 3.93812 11.6675 3.94212C10.826 3.94562 10.056 4.22763 9.07446 4.60314C8.93096 4.65964 8.77995 4.70065 8.62545 4.73465C7.73492 4.56564 6.80989 4.52814 5.84386 4.63714C4.02481 4.83965 2.57177 5.69967 1.50373 7.16772C0.220694 8.93227 -0.0813148 10.9373 0.288196 13.0284C0.676708 15.2325 1.80174 17.057 3.53029 18.4836C5.32285 19.9626 7.38741 20.6876 9.74298 20.5486C11.1735 20.4661 12.7661 20.2746 14.5626 18.7541C15.0156 18.9796 15.4912 19.0696 16.2797 19.1371C16.8872 19.1936 17.4722 19.1071 17.9252 19.0131C18.6347 18.8631 18.5857 18.2061 18.3292 18.0855C16.2497 17.117 16.7062 17.511 16.2912 17.192C17.3477 15.942 18.9618 13.7199 19.4598 10.6943C19.5088 10.3603 19.5713 9.8898 19.5638 9.61929C19.5598 9.45429 19.5978 9.39029 19.7863 9.37129C20.3073 9.31128 20.8128 9.16878 21.2773 8.91327C22.6249 8.17725 23.1684 6.96821 23.2964 5.51917C23.3154 5.29766 23.2924 5.06866 23.0584 4.95215ZM11.3165 17.9955C9.30097 16.411 8.32344 15.8895 7.91992 15.912C7.54241 15.9345 7.61042 16.3665 7.69342 16.648C7.78042 16.926 7.89342 17.1175 8.05193 17.3615C8.16143 17.523 8.23694 17.763 7.94243 17.9435C7.29341 18.3451 6.16487 17.8085 6.11187 17.782C4.79833 17.0085 3.7003 15.9875 2.92628 14.5909C2.17875 13.2469 1.74474 11.8049 1.67324 10.2658C1.65424 9.8943 1.76374 9.7628 2.13375 9.69529C2.62077 9.60529 3.12278 9.58629 3.6093 9.65779C5.66636 9.9583 7.41741 10.8778 8.88545 12.3349C9.72348 13.1644 10.3575 14.1559 11.0105 15.1245C11.705 16.153 12.4521 17.133 13.4036 17.9365C13.7396 18.2181 14.0076 18.4321 14.2641 18.5901C13.4906 18.6766 12.1996 18.6951 11.3165 17.9965V17.9955ZM12.2826 11.7819C12.2826 11.6169 12.4146 11.4853 12.5806 11.4853C12.6181 11.4853 12.6521 11.4928 12.6826 11.5038C12.7241 11.5188 12.7621 11.5414 12.7921 11.5754C12.8451 11.6279 12.8751 11.7029 12.8751 11.7819C12.8751 11.9469 12.7431 12.0784 12.5771 12.0784C12.4111 12.0784 12.2826 11.9469 12.2826 11.7819ZM15.2831 13.3209C15.0906 13.3999 14.8981 13.4674 14.7131 13.4749C14.4261 13.4899 14.1131 13.3734 13.9431 13.2309C13.6791 13.0094 13.4901 12.8854 13.4111 12.4989C13.3771 12.3339 13.3961 12.0784 13.4261 11.9319C13.4941 11.6164 13.4186 11.4138 13.1961 11.2298C13.0151 11.0798 12.7846 11.0383 12.5316 11.0383C12.4371 11.0383 12.3506 10.9968 12.2861 10.9633C12.1806 10.9108 12.0936 10.7793 12.1766 10.6178C12.2031 10.5653 12.3316 10.4378 12.3616 10.4153C12.7051 10.2198 13.1011 10.2838 13.4676 10.4303C13.8071 10.5693 14.0641 10.8243 14.4336 11.1848C14.8111 11.6204 14.8791 11.7404 15.0941 12.0674C15.2641 12.3229 15.4186 12.5854 15.5247 12.8859C15.5887 13.0734 15.5057 13.2269 15.2831 13.3209Z" fill="var(--harness-logo-foreground, #F9FAFB)"></path></g><rect x="129.348" y="5.5" width="52" height="14" rx="2" fill="var(--harness-logo-foreground, #F9FAFB)"></rect><g clip-path="url(#harness-logo-chip)"><path d="M132.848 8.9318H134.08V16.1368H132.848V8.9318ZM136.5 8.9318H137.732V16.1368H136.5V8.9318ZM133.365 13.0238V11.9898H137.193V13.0238H133.365Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M140.396 14.4318L140.671 13.4528H143.201L143.531 14.4318H140.396ZM140.286 16.1368H139.054L141.276 8.9318H142.2L142.145 9.7458L140.946 13.9148H140.968L140.286 16.1368ZM145.038 16.1368H143.74L143.069 13.9478L143.08 13.9368L141.87 9.7458L141.925 8.9318H142.816L145.038 16.1368Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M146.845 8.9318H149.067C149.852 8.9318 150.442 9.11514 150.838 9.48181C151.234 9.84114 151.432 10.3325 151.432 10.9558C151.432 11.2198 151.396 11.4655 151.322 11.6928C151.249 11.9201 151.124 12.1255 150.948 12.3088C150.772 12.4921 150.53 12.6498 150.222 12.7818C149.922 12.9065 149.54 13.0055 149.078 13.0788V13.3208H146.845V12.6388L148.022 12.4848C148.631 12.4041 149.089 12.2978 149.397 12.1658C149.705 12.0338 149.914 11.8761 150.024 11.6928C150.134 11.5021 150.189 11.2931 150.189 11.0658C150.189 10.6991 150.083 10.4168 149.87 10.2188C149.658 10.0208 149.324 9.92181 148.869 9.92181H146.845V8.9318ZM146.394 8.9318H147.626V16.1368H146.394V8.9318ZM151.916 16.0928V16.1368H150.365L149.023 14.3218C148.869 14.1091 148.73 13.9405 148.605 13.8158C148.481 13.6838 148.345 13.5885 148.198 13.5298C148.052 13.4638 147.872 13.4198 147.659 13.3978C147.447 13.3685 147.175 13.3501 146.845 13.3428V13.1448H149.078C149.232 13.2108 149.368 13.2841 149.485 13.3648C149.61 13.4455 149.735 13.5445 149.859 13.6618C149.991 13.7791 150.138 13.9368 150.299 14.1348L151.916 16.0928Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M153.58 9.56981L153.591 8.9318H154.46L157.584 15.5098V16.1368H156.704L153.58 9.56981ZM158.024 16.1368H156.968L156.88 8.9318H158.024V16.1368ZM154.24 16.1368H153.096V8.9318H154.152L154.24 16.1368Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M159.963 8.9318H161.206V16.1368H159.963V8.9318ZM160.095 9.9658V8.9318H164.858V9.9658H160.095ZM160.095 16.1368V15.1028H164.902V16.1368H160.095ZM160.095 13.0128V11.9898H164.374V13.0128H160.095Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M169.052 15.2568C169.543 15.2568 169.895 15.1651 170.108 14.9818C170.328 14.7985 170.438 14.5455 170.438 14.2228C170.438 14.0468 170.405 13.8965 170.339 13.7718C170.273 13.6471 170.152 13.5335 169.976 13.4308C169.807 13.3208 169.558 13.2145 169.228 13.1118L168.491 12.8808C167.846 12.6755 167.38 12.4041 167.094 12.0668C166.808 11.7295 166.665 11.3005 166.665 10.7798C166.665 10.4278 166.76 10.1015 166.951 9.8008C167.142 9.50014 167.428 9.25814 167.809 9.07481C168.19 8.89147 168.663 8.7998 169.228 8.7998C169.631 8.7998 169.998 8.82914 170.328 8.8878C170.665 8.93914 171.039 9.01614 171.45 9.11881L171.274 10.1748C170.834 10.0501 170.442 9.96214 170.097 9.9108C169.76 9.85214 169.463 9.82281 169.206 9.82281C168.737 9.82281 168.403 9.90714 168.205 10.0758C168.007 10.2371 167.908 10.4388 167.908 10.6808C167.908 10.8568 167.941 11.0145 168.007 11.1538C168.073 11.2858 168.19 11.4068 168.359 11.5168C168.535 11.6268 168.784 11.7331 169.107 11.8358L169.866 12.0778C170.526 12.2758 170.995 12.5325 171.274 12.8478C171.553 13.1558 171.692 13.5848 171.692 14.1348C171.692 14.5601 171.589 14.9341 171.384 15.2568C171.179 15.5795 170.878 15.8325 170.482 16.0158C170.093 16.1991 169.609 16.2908 169.03 16.2908C168.627 16.2908 168.212 16.2468 167.787 16.1588C167.362 16.0708 166.9 15.9425 166.401 15.7738L166.665 14.7178C167.156 14.8938 167.6 15.0295 167.996 15.1248C168.399 15.2128 168.751 15.2568 169.052 15.2568Z" fill="var(--harness-logo-chip-text, #353638)"></path><path d="M175.809 15.2568C176.3 15.2568 176.652 15.1651 176.865 14.9818C177.085 14.7985 177.195 14.5455 177.195 14.2228C177.195 14.0468 177.162 13.8965 177.096 13.7718C177.03 13.6471 176.909 13.5335 176.733 13.4308C176.564 13.3208 176.315 13.2145 175.985 13.1118L175.248 12.8808C174.602 12.6755 174.137 12.4041 173.851 12.0668C173.565 11.7295 173.422 11.3005 173.422 10.7798C173.422 10.4278 173.517 10.1015 173.708 9.8008C173.898 9.50014 174.184 9.25814 174.566 9.07481C174.947 8.89147 175.42 8.7998 175.985 8.7998C176.388 8.7998 176.755 8.82914 177.085 8.8878C177.422 8.93914 177.796 9.01614 178.207 9.11881L178.031 10.1748C177.591 10.0501 177.198 9.96214 176.854 9.9108C176.516 9.85214 176.219 9.82281 175.963 9.82281C175.493 9.82281 175.16 9.90714 174.962 10.0758C174.764 10.2371 174.665 10.4388 174.665 10.6808C174.665 10.8568 174.698 11.0145 174.764 11.1538C174.83 11.2858 174.947 11.4068 175.116 11.5168C175.292 11.6268 175.541 11.7331 175.864 11.8358L176.623 12.0778C177.283 12.2758 177.752 12.5325 178.031 12.8478C178.309 13.1558 178.449 13.5848 178.449 14.1348C178.449 14.5601 178.346 14.9341 178.141 15.2568C177.935 15.5795 177.635 15.8325 177.239 16.0158C176.85 16.1991 176.366 16.2908 175.787 16.2908C175.383 16.2908 174.969 16.2468 174.544 16.1588C174.118 16.0708 173.656 15.9425 173.158 15.7738L173.422 14.7178C173.913 14.8938 174.357 15.0295 174.753 15.1248C175.156 15.2128 175.508 15.2568 175.809 15.2568Z" fill="var(--harness-logo-chip-text, #353638)"></path></g><defs><clipPath id="harness-logo-whale"><rect width="23.16" height="17.0435" fill="white" transform="translate(0.141602 3.52197)"></rect></clipPath><clipPath id="harness-logo-chip"><rect width="46" height="14" fill="white" transform="translate(132.348 5.5)"></rect></clipPath></defs></svg></a><button class="flex items-center justify-center w-10 h-10 text-ds-primary" aria-label="Close menu"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button></div><nav class="ds-mobile-menu-body"><div class="harness-mobile-download" data-open="false"><button type="button" class="ds-mobile-menu-item harness-mobile-download-trigger" aria-expanded="false" aria-controls="harness-mobile-download-options">Download Desktop<span aria-hidden="true" class="harness-mobile-download-arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg></span></button><div id="harness-mobile-download-options" class="harness-mobile-download-panel" aria-hidden="true"><div class="harness-mobile-download-clip"><div class="harness-mobile-download-options"><a tabindex="-1" href="https://github.com/itsraeyyy/Smoooth/releases" target="_blank" rel="noopener noreferrer">macOS (Apple silicon)</a><a tabindex="-1" href="#quickstart" target="_blank" rel="noopener noreferrer">Windows (64-bit)</a></div></div></div></div><a href="#migration" class="ds-mobile-menu-item">Migration Guide</a>
-  <a href="/guides/" class="ds-mobile-menu-item">Guides</a>
-  <a href="/compare/smoooth-vs-coolify" class="ds-mobile-menu-item">Compare</a>
-<a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="ds-mobile-menu-item">GitHub</a><a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="ds-mobile-menu-item">Developer docs</a><a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/BRAND_GUIDELINES.md" target="_blank" rel="noopener noreferrer" class="ds-mobile-menu-item">Architecture Spec</a><a href="https://github.com/itsraeyyy/Smoooth#security-model" target="_blank" rel="noopener noreferrer" class="ds-mobile-menu-item">Security Model</a></nav><div class="flex py-ds-4 pl-ds-5"><div class="ds-locale-toggle"><button type="button" class="ds-locale-toggle-item ">中文</button><button type="button" class="ds-locale-toggle-item is-active">EN</button></div></div></div><main class="relative flex flex-col w-full"><section class="relative flex items-center w-full"><div class="absolute inset-0 z-0 overflow-hidden" style="mask:linear-gradient(#000000fc 0%, #000000e8 8.98%, transparent 100%);-webkit-mask:linear-gradient(#000000fc 0%, #000000e8 8.98%, transparent 100%);"><canvas style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div><div class="relative z-10 ds-container flex flex-col items-center gap-ds-7 md:gap-ds-8 pt-ds-11 pb-ds-9"><div class="flex w-full max-w-[800px] flex-col items-center gap-ds-6 pt-ds-4 text-center"><div class="ds-hero-enter flex flex-col items-center gap-ds-4" style="--enter-y:24px;--enter-blur:10px;animation-duration:0.9s"><span data-hero-preview-label="true" class="inline-flex"><span class="inline-flex items-center gap-[7px] font-mono text-[12px] font-medium uppercase leading-none tracking-[0.22em] text-[#73a3d2]" aria-label="Smoooth v0.1.0 Beta" title="Smoooth v0.1.0 Beta">
+  </nav><button class="md:hidden flex items-center justify-center w-10 h-10 text-ds-primary" aria-label="Open menu" aria-controls="harness-mobile-menu" aria-expanded="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button></div></div><div id="harness-mobile-menu" class="ds-mobile-menu" aria-hidden="true" style="visibility:hidden">
+  <div class="ds-mobile-menu-header flex items-center justify-between px-6 py-4 border-b border-white/10">
+    <a class="flex items-center gap-[10px] text-white" href="/">
+      <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#1c3c66" />
+        <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14C21 17.866 17.866 21 14 21" stroke="#6799fe" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="3.5" fill="#ffffff" />
+      </svg>
+      <span class="font-bold text-[18px] tracking-tight text-white font-['Host_Grotesk']">Smoooth</span>
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-white/10 text-[#73a3d2] border border-white/10">v0.1.0</span>
+    </a>
+    <button class="flex items-center justify-center w-10 h-10 text-white/70 hover:text-white" aria-label="Close menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+    </button>
+  </div>
+  <nav class="ds-mobile-menu-body p-6 flex flex-col gap-3">
+    <!-- Quick command -->
+    <div class="p-3 rounded-xl bg-white/5 border border-white/10 text-[12px] font-mono mb-2 cursor-pointer" onclick="navigator.clipboard.writeText('curl -fsSL https://smoooth.dev/install.sh | bash'); alert('Copied install command!');">
+      <div class="text-[10px] text-white/40 uppercase mb-1">Server Install (Tap to copy)</div>
+      <div class="text-[#73a3d2] truncate">$ curl -fsSL https://smoooth.dev/install.sh | bash</div>
+    </div>
+    <div class="text-[11px] font-mono uppercase tracking-wider text-white/40 mt-1">Platform</div>
+    <a href="/features/" class="ds-mobile-menu-item !py-1 text-[15px]">All Features</a>
+    <div class="pl-3 flex flex-col gap-2 border-l border-white/10 text-[13px] text-white/70 my-1">
+      <a href="/features/mcp-runtime" class="hover:text-white">MCP Server Runtime</a>
+      <a href="/features/transactional-deployments" class="hover:text-white">Transactional 2-Phase DAG</a>
+      <a href="/features/stateful-databases" class="hover:text-white">Stateful Database Adapters</a>
+      <a href="/features/reverse-proxy" class="hover:text-white">Embedded Caddy Ingress</a>
+      <a href="/features/sandbox-security" class="hover:text-white">Scoped Bearer Security</a>
+    </div>
+    <div class="text-[11px] font-mono uppercase tracking-wider text-white/40 mt-2">Resources</div>
+    <a href="/guides/" class="ds-mobile-menu-item !py-1 text-[15px]">Guides &amp; Docs</a>
+    <a href="/compare/smoooth-vs-coolify" class="ds-mobile-menu-item !py-1 text-[15px]">Smoooth vs Coolify</a>
+    <a href="/migration/" class="ds-mobile-menu-item !py-1 text-[15px]">Migration Hub</a>
+    <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="ds-mobile-menu-item !py-1 text-[15px] flex items-center justify-between">
+      <span>GitHub</span>
+      <span class="text-white/40 font-mono text-[11px]">&nearr;</span>
+    </a>
+  </nav>
+</div></div><main class="relative flex flex-col w-full"><section class="relative flex items-center w-full"><div class="absolute inset-0 z-0 overflow-hidden" style="mask:linear-gradient(#000000fc 0%, #000000e8 8.98%, transparent 100%);-webkit-mask:linear-gradient(#000000fc 0%, #000000e8 8.98%, transparent 100%);"><canvas style="position:absolute;top:0;left:0;width:100%;height:100%"></canvas></div><div class="relative z-10 ds-container flex flex-col items-center gap-ds-7 md:gap-ds-8 pt-ds-11 pb-ds-9"><div class="flex w-full max-w-[800px] flex-col items-center gap-ds-6 pt-ds-4 text-center"><div class="ds-hero-enter flex flex-col items-center gap-ds-4" style="--enter-y:24px;--enter-blur:10px;animation-duration:0.9s"><span data-hero-preview-label="true" class="inline-flex"><span class="inline-flex items-center gap-[7px] font-mono text-[12px] font-medium uppercase leading-none tracking-[0.22em] text-[#73a3d2]" aria-label="Smoooth v0.1.0 Beta" title="Smoooth v0.1.0 Beta">
   <span class="w-1.5 h-1.5 rounded-full bg-[#6799fe] animate-pulse"></span>
   V0.1.0 BETA · INFRASTRUCTURE RUNTIME FOR AI AGENTS
 </span></span><h1 class="harness-heading ds-text-hero text-ds-primary text-[34px] md:text-[44px] font-semibold tracking-tight">
@@ -160,44 +198,20 @@
   <p class="ds-text-body text-ds-description text-[15px] leading-relaxed">
     Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP — provisioning Docker containers, persistent databases, and secure networks on demand.
   </p>
-</div><div class="ds-hero-enter relative z-20 mt-ds-2" style="--enter-y:16px;animation-duration:0.7s;animation-delay:0.3s"><div class="relative inline-flex items-center">
-  <div class="HarnessDownloadMenu_split__148cc ds-btn-primary rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.45)]">
-    <a class="ds-btn-primary ds-btn-m HarnessDownloadMenu_action__Qe9nK !rounded-r-none !pr-ds-3 flex items-center gap-ds-2" href="#quickstart" target="_blank" rel="noopener noreferrer">
-      <span aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.3695 11.411L15.1234 12.8866C14.8869 14.3042 13.6603 15.3436 12.223 15.3436H3.77673C2.33958 15.3434 1.1128 14.3042 0.876343 12.8866L0.630249 11.411L2.05408 11.1747L2.29919 12.6493C2.41973 13.3713 3.04475 13.9001 3.77673 13.9003H12.223C12.9551 13.9002 13.58 13.3713 13.7006 12.6493L13.9457 11.1747L15.3695 11.411ZM8.72205 8.994C8.77717 8.93934 8.83792 8.88106 8.90271 8.81627L12.4828 5.23424L13.5043 6.25572L9.92224 9.8358C9.6395 10.1185 9.38763 10.3732 9.15857 10.5575C8.91892 10.7503 8.63953 10.9224 8.2865 10.9784C8.09711 11.0083 7.90363 11.0083 7.71423 10.9784C7.36106 10.9224 7.0809 10.7503 6.84119 10.5575C6.61215 10.3732 6.36022 10.1185 6.07751 9.8358L2.49646 6.25572L3.51697 5.23424L7.09705 8.81627C7.16219 8.88142 7.22331 8.94006 7.27869 8.99498V1.3065H8.72205V8.994Z" fill="currentColor"></path></svg>
-      </span>
-      <span>Install on Linux</span>
-    </a>
-    <button type="button" class="HarnessDownloadMenu_arrow__60_9L ds-btn-primary ds-btn-m !rounded-l-none !pl-ds-3 !pr-[14px]" aria-label="Desktop downloads" aria-haspopup="menu" aria-expanded="false">
-      <span aria-hidden="true" class="HarnessDownloadMenu_divider__Dao4X pointer-events-none absolute left-0 border-l border-[var(--dsw-alias-border-l2)]"></span>
-      <span aria-hidden="true" class="HarnessDownloadMenu_arrowIcon__lFxE3">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.8486 5.5L11.4238 5.92383L8.69727 8.65137C8.44157 8.90706 8.21562 9.13382 8.01172 9.29785C7.79912 9.46883 7.55595 9.61756 7.25 9.66602C7.08435 9.69222 6.91565 9.69222 6.75 9.66602C6.44405 9.61756 6.20088 9.46883 5.98828 9.29785C5.78438 9.13382 5.55843 8.90706 5.30273 8.65137L2.57617 5.92383L2.15137 5.5L3 4.65137L3.42383 5.07617L6.15137 7.80273C6.42595 8.07732 6.59876 8.24849 6.74023 8.3623C6.87291 8.46904 6.92272 8.47813 6.9375 8.48047C6.97895 8.48703 7.02105 8.48703 7.0625 8.48047C7.07728 8.47813 7.12709 8.46904 7.25977 8.3623C7.40124 8.24849 7.57405 8.07732 7.84863 7.80273L10.5762 5.07617L11 4.65137L11.8486 5.5Z" fill="currentColor"></path></svg>
-      </span>
+</div><div class="ds-hero-enter relative z-20 mt-ds-2 flex flex-wrap items-center justify-center gap-3" style="--enter-y:16px;animation-duration:0.7s;animation-delay:0.3s">
+  <div class="group relative flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#161b22] border border-white/15 text-[13px] font-mono shadow-[0_8px_30px_rgb(0,0,0,0.45)] hover:border-white/30 transition-all cursor-pointer" onclick="navigator.clipboard.writeText('curl -fsSL https://smoooth.dev/install.sh | bash'); const t = this.querySelector('.copy-label'); if(t){ t.innerText='Copied!'; setTimeout(()=>t.innerText='Copy', 2000); }" title="Click to copy server install command">
+    <span class="text-[#73a3d2] select-none">$</span>
+    <span class="text-white/90 select-all font-mono">curl -fsSL https://smoooth.dev/install.sh | bash</span>
+    <button type="button" class="ml-1.5 px-2.5 py-1 rounded-full text-[11px] font-sans font-medium text-white/80 hover:text-white bg-white/10 group-hover:bg-white/20 transition-all flex items-center gap-1.5" aria-label="Copy server install command">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+      <span class="copy-label">Copy</span>
     </button>
   </div>
-  <div id="hero-download-dropdown" class="ds-dropdown-menu absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 min-w-[320px] p-2 bg-[#1b1c20]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 transition-all duration-200" style="display:none;opacity:0;transform:translate(-50%, -6px)">
-  <div class="px-3 py-2 border-b border-white/10 mb-1">
-    <div class="text-[11px] font-mono uppercase tracking-wider text-[#73a3d2]">Quick Setup Commands</div>
-  </div>
-  <a class="flex flex-col gap-0.5 px-3 py-2 text-left rounded-xl hover:bg-white/10 transition-colors cursor-pointer group" onclick="navigator.clipboard.writeText('curl -fsSL https://smoooth.dev/install.sh | bash'); alert('Copied installer command!');">
-    <div class="flex items-center justify-between">
-      <span class="font-medium text-[13px] text-white">Ubuntu 24.04 / Debian 12</span>
-      <span class="text-[10px] font-mono text-white/40 group-hover:text-white/70">Click to Copy</span>
-    </div>
-    <span class="text-[11px] font-mono text-[#73a3d2]">curl -fsSL https://smoooth.dev/install.sh | bash</span>
+  <a href="/guides/" class="ds-btn-secondary px-5 py-2.5 text-[13px] font-medium rounded-full border border-white/15 bg-white/5 text-white hover:bg-white/10 hover:border-white/30 transition-all flex items-center gap-2 shadow-[0_8px_30px_rgb(0,0,0,0.35)]">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+    <span>Documentation</span>
   </a>
-  <a class="flex flex-col gap-0.5 px-3 py-2 text-left rounded-xl hover:bg-white/10 transition-colors cursor-pointer group" onclick="navigator.clipboard.writeText('claude mcp add --transport sse smoooth http://127.0.0.1:4040/sse'); alert('Copied MCP command!');">
-    <div class="flex items-center justify-between">
-      <span class="font-medium text-[13px] text-white">Claude Code MCP Pairing</span>
-      <span class="text-[10px] font-mono text-white/40 group-hover:text-white/70">Click to Copy</span>
-    </div>
-    <span class="text-[11px] font-mono text-[#73a3d2]">claude mcp add --transport sse smoooth http://127.0.0.1:4040/sse</span>
-  </a>
-  <a class="flex flex-col gap-0.5 px-3 py-2 text-left rounded-xl hover:bg-white/10 transition-colors" href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer">
-    <span class="font-medium text-[13px] text-white">View on GitHub (v0.1.0 Tarball)</span>
-    <span class="text-[11px] text-white/50">Full source code & documentation</span>
-  </a>
-</div></div></div></div><div class="ds-hero-preview-enter max-w-[1020px] w-full"><div class="HarnessHero_previewSurface__aqS1m" style="transform:none"><div class="HarnessDesktopPreview_viewport__3ixGZ" role="region" aria-label="Smoooth runtime execution preview: beside a frosted sidebar, a user asks for an introduction and DSH describes itself and five areas of work, with the composer at the bottom."><div class="HarnessDesktopPreview_window__H_Vvy"><aside class="HarnessDesktopPreview_sidebar__Y6Rwg"><div class="HarnessDesktopPreview_windowBar__V3FSs"><div class="HarnessDesktopPreview_trafficLights__Z2Ncj"><i></i><i></i><i></i></div><svg data-preview-icon="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true" focusable="false"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path></svg></div><div class="HarnessDesktopPreview_brand__tHvSk flex items-center gap-2 px-1">
+</div></div><div class="ds-hero-preview-enter max-w-[1020px] w-full"><div class="HarnessHero_previewSurface__aqS1m" style="transform:none"><div class="HarnessDesktopPreview_viewport__3ixGZ" role="region" aria-label="Smoooth runtime execution preview: beside a frosted sidebar, a user asks for an introduction and DSH describes itself and five areas of work, with the composer at the bottom."><div class="HarnessDesktopPreview_window__H_Vvy"><aside class="HarnessDesktopPreview_sidebar__Y6Rwg"><div class="HarnessDesktopPreview_windowBar__V3FSs"><div class="HarnessDesktopPreview_trafficLights__Z2Ncj"><i></i><i></i><i></i></div><svg data-preview-icon="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true" focusable="false"><path d="M13.5 1.5H2.5C1.94772 1.5 1.5 1.94772 1.5 2.5V13.5C1.5 14.0523 1.94772 14.5 2.5 14.5H13.5C14.0523 14.5 14.5 14.0523 14.5 13.5V2.5C14.5 1.94772 14.0523 1.5 13.5 1.5Z"></path><path d="M5.5 1.5V14.5"></path></svg></div><div class="HarnessDesktopPreview_brand__tHvSk flex items-center gap-2 px-1">
   <svg width="22" height="22" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="#1c3c66" /><path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14C21 17.866 17.866 21 14 21" stroke="#6799fe" stroke-width="2.5" stroke-linecap="round"/><circle cx="14" cy="14" r="3.5" fill="#ffffff" /></svg>
   <span class="font-bold text-[16px] tracking-tight text-white font-['Host_Grotesk']">Smoooth</span>
   <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-white/10 text-[#73a3d2] border border-white/10">v0.1.0</span>
@@ -224,307 +238,78 @@
 </span><span class="HarnessWorkflowPreview_argument__DQUlR">  <span class="HarnessWorkflowPreview_argumentKey__l9jay">&quot;weekly&quot;</span>: <span>{&quot;time&quot;:&quot;17:00:00&quot;,&quot;time_zone&quot;:&quot;Asia/Shanghai&quot;,&quot;weekdays&quot;:[5]}</span>
 </span>}</code></pre></div><div class="HarnessWorkflowPreview_result__K6zbj"><div class="HarnessWorkflowPreview_resultTitle__hZwSr">Weekly project report</div><dl class="HarnessWorkflowPreview_resultFields__lezzs"><dt>Scheduled for</dt><dd></dd><dt>Repeat</dt><dd>Weekly on Fri at 17:00 (Asia/Shanghai)</dd><dt>Status</dt><dd>Scheduled</dd></dl></div></div></div></div></div></div><div class="HarnessWorkflowPreview_completion__MaAG1"><p class="HarnessWorkflowPreview_confirmation__F72XA">Production rollback checkpoint saved. Zero downtime traffic switchover confirmed.</p><div class="HarnessWorkflowPreview_taskCard__dCv_q"><span class="HarnessWorkflowPreview_clockWell__FNEiC"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z"></path><path d="M8 4.31V8.46L11 10.08"></path></svg></span><span class="HarnessWorkflowPreview_taskCopy___fVOr"><span class="HarnessWorkflowPreview_taskTitle__Nfcnb">Weekly project report</span><span class="HarnessWorkflowPreview_frequency__3kpwX">Weekly on Fri at 17:00 (UTC+08:00 · China Standard Time)</span></span><span class="HarnessWorkflowPreview_openLabel__X5Dsl">Open</span></div></div></div></div></figure></div></article><article class="HarnessCapabilitiesSection_card__Yf6o5 HarnessCapabilitiesSection_entrance__EZAWd" ><div class="HarnessCapabilitiesSection_copy__l0rC4"><h3 class="harness-heading ds-text-subtitle text-ds-primary"><span class="harness-heading-latin">Execution</span> <span class="harness-heading-latin">Audit</span> <span class="harness-heading-latin">Stream</span></h3><p class="ds-text-body text-ds-description">Inspect topological DAG steps, container log streams, and environment health probes directly from your agent conversation or terminal.</p></div><div class="HarnessCapabilitiesSection_media__3QRiO HarnessCapabilitiesSection_elementMedia__WjCk_ HarnessCapabilitiesSection_mediaGrow__OjAtU"><button class="HarnessCapabilitiesSection_pauseControl__SbfPK" type="button" aria-label="Pause demo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 3.5V12.5M10.5 3.5V12.5"></path></svg></button><figure class="HarnessTracePreview_frame__JM97g" data-ready="false" data-running="false" aria-label="Execution trace illustration: the trajectory toolbar, the Input, Model and Tools timeline lanes, then system, user, context, assistant and tool records, ending with the event details and timing of one bash call. This demo runs no commands."><span class="HarnessTracePreview_floor__KqvWl" aria-hidden="true"></span><img class="HarnessTracePreview_fallback__BtXNy" src="/harness/images/feat-trace-en.webp" alt="Smoooth 2-phase transactional deployment trajectory view, tool calls, and execution details" width="2590" height="1619" loading="lazy"/><div class="HarnessTracePreview_canvas__ZedKT" aria-hidden="true"><div class="HarnessTracePreview_toolbar__Xou39"><span class="HarnessTracePreview_toggle__i7Zq5 HarnessTracePreview_toggleOn__6NPzf"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z"></path><path d="M8 4.31V8.46L11 10.08"></path></svg>Duration</span><span class="HarnessTracePreview_toggle__i7Zq5">Turns<span class="HarnessTracePreview_toggleGlyph__sFT22">⊟</span></span><span class="HarnessTracePreview_toggle__i7Zq5">Calls<span class="HarnessTracePreview_toggleGlyph__sFT22">⊟</span></span><span class="HarnessTracePreview_search__pjOWc"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M6.58727 11.8586C9.55061 11.8586 11.9529 9.45637 11.9529 6.49304C11.9529 3.5297 9.55061 1.12744 6.58727 1.12744C3.62394 1.12744 1.22168 3.5297 1.22168 6.49304C1.22168 9.45637 3.62394 11.8586 6.58727 11.8586Z"></path><path d="M10.2991 10.3933L14.7783 14.8725"></path></svg>Search</span></div><div class="HarnessTracePreview_timeline__Zlbuy"><div class="HarnessTracePreview_laneLabels__V_Oy_"><span>Input</span><span>Model</span><span>Tools</span></div><div class="HarnessTracePreview_track__ZfbMt"><span data-lane="0" class="HarnessTracePreview_span__kFSoQ undefined" style="--span-left:0.5%;--span-width:2.6%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanUser__UqRNS" style="--span-left:4.6%;--span-width:3.4%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanContext__32tGo" style="--span-left:9.4%;--span-width:2.2%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:3.2%;--span-width:3%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:8.6%;--span-width:4.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:1.8%;--span-width:2.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:5.2%;--span-width:3.6%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:10%;--span-width:2%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanContext__32tGo" style="--span-left:14.2%;--span-width:3.8%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:15.4%;--span-width:2.8%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:14%;--span-width:5.2%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:21%;--span-width:3.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:21.4%;--span-width:2.6%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanUser__UqRNS" style="--span-left:27.2%;--span-width:2.2%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:26.6%;--span-width:4%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:32%;--span-width:3.6%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:32.4%;--span-width:2.2%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanContext__32tGo" style="--span-left:37.4%;--span-width:2.8%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:39.2%;--span-width:3.2%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:37.8%;--span-width:3.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:43%;--span-width:1.8%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:46.4%;--span-width:3.8%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:46%;--span-width:2.6%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanUser__UqRNS" style="--span-left:52%;--span-width:3%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:51.4%;--span-width:4.4%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:57.6%;--span-width:2.8%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:57%;--span-width:3.2%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:62.2%;--span-width:2.2%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:66%;--span-width:3.4%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanContext__32tGo" style="--span-left:71%;--span-width:2.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:71.2%;--span-width:3.8%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:77.2%;--span-width:3%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:77.6%;--span-width:2.4%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:82.4%;--span-width:3.6%"></span><span data-lane="1" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanMessage__NUdlV" style="--span-left:87.4%;--span-width:3.2%"></span><span data-lane="0" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanUser__UqRNS" style="--span-left:92.4%;--span-width:2.6%"></span><span data-lane="2" class="HarnessTracePreview_span__kFSoQ HarnessTracePreview_spanTool__wgkmA" style="--span-left:92%;--span-width:4.2%"></span></div></div><div class="HarnessTracePreview_body__BekXs"><div class="HarnessTracePreview_listViewport__llpPv"><div class="HarnessTracePreview_listTrack__jfXRz"><div class="HarnessTracePreview_row__IQaoe" data-row="system"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindSystem__ueR1g">SYSTEM</span></span><span class="HarnessTracePreview_content__eQelE">Initial System Prompt</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="user"><span class="HarnessTracePreview_turnLabel__Sdq_l">Turn 1</span><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindUser__ayBX_">USER</span></span><span class="HarnessTracePreview_content__eQelE">First run bash to print exactly NAVIGATION_OK, then read nav-a.md and nav-b.md with two read calls, then reply with the single word FIRST_DONE.</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="context"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindContext__FX_j_">CONTEXT</span></span><span class="HarnessTracePreview_content__eQelE">Current runtime context: workspace policy, available skills, and this turn&#x27;s environment snapshot.</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="assistant"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindAssistant__yxhja">ASSISTANT</span></span><span class="HarnessTracePreview_content__eQelE">Run bash to confirm the output, then read both navigation files.</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="bash"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">bash</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;command&quot;: &quot;echo NAVIGATION_OK&quot;, &quot;description&quot;: &quot;Print NAVIGATION_OK&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">NAVIGATION_OK</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="read"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">read</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;file_path&quot;: &quot;nav-a.md&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">nav-a.md</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="read"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">read</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;file_path&quot;: &quot;nav-b.md&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">nav-b.md</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="assistant"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindAssistant__yxhja">ASSISTANT</span></span><span class="HarnessTracePreview_content__eQelE">FIRST_DONE</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="user"><span class="HarnessTracePreview_turnLabel__Sdq_l">Turn 2</span><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindUser__ayBX_">USER</span></span><span class="HarnessTracePreview_content__eQelE">Reply in markdown with a level-2 heading “Navigation Summary” and summarize both files.</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="assistant"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindAssistant__yxhja">ASSISTANT</span></span><span class="HarnessTracePreview_content__eQelE">Navigation summary: alpha nav, beta nav, and the NAVIGATION_OK output.</span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="bash"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">bash</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;command&quot;: &quot;ls -la&quot;, &quot;description&quot;: &quot;List workspace files&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">nav-a.md  nav-b.md  README.md</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="grep"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">grep</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;pattern&quot;: &quot;NAVIGATION&quot;, &quot;path&quot;: &quot;.&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">2 matches</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="tool" data-tool="read"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span></span><span class="HarnessTracePreview_content__eQelE"><span class="HarnessTracePreview_toolName__mhVyk">read</span><span class="HarnessTracePreview_toolArgs__csmS5">{&quot;file_path&quot;: &quot;README.md&quot;}</span><span class="HarnessTracePreview_arrow__LIDIa">→</span><span class="HarnessTracePreview_toolResult__RXm_t">README.md</span></span></div><div class="HarnessTracePreview_row__IQaoe" data-row="assistant"><span class="HarnessTracePreview_kindSlot__PFNP5"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindAssistant__yxhja">ASSISTANT</span></span><span class="HarnessTracePreview_content__eQelE">Verified the workspace listing and grep results; the task is complete.</span></div></div></div><div class="HarnessTracePreview_details__W_Mjw" data-panel="true"><div class="HarnessTracePreview_detailsHead__lqlTl"><span class="HarnessTracePreview_kindTag__J3w6E HarnessTracePreview_kindTool__QpLUt">TOOL</span><span class="HarnessTracePreview_detailsTitle__ZVESb">Turn 1<!-- --> · <!-- -->Step 1</span><span class="HarnessTracePreview_detailsClose__rc1qe">×</span></div><div class="HarnessTracePreview_detailsTabs__6GNMN"><span class="HarnessTracePreview_detailsTab__zttxt" data-tab="summary">Summary</span><span class="HarnessTracePreview_detailsTab__zttxt" data-tab="payload">Payload</span><span class="HarnessTracePreview_detailsTab__zttxt" data-tab="result">Result</span><span class="HarnessTracePreview_detailsTab__zttxt" data-tab="schema">Schema</span><span class="HarnessTracePreview_detailsTab__zttxt" data-tab="timing">Timing</span></div><div class="HarnessTracePreview_detailsBody__jqLfp HarnessTracePreview_tabResult__6Orpe"><span class="HarnessTracePreview_resultValue___7DlN">NAVIGATION_OK</span></div><div class="HarnessTracePreview_detailsBody__jqLfp HarnessTracePreview_tabTiming__64hkI"><dl class="HarnessTracePreview_timingFields__zM6hn"><dt>Started</dt><dd>2026-08-12 17:30:52.637</dd><dt>Duration</dt><dd>34 ms</dd><dt>Timing source</dt><dd>Session timestamps</dd><dt>Hierarchy</dt><dd>Assistant Message</dd></dl></div></div></div></div></figure></div></article></div></section><section id="how-it-works" class="ds-container py-ds-10 scroll-mt-[80px]"><div ><h2 class="harness-heading ds-text-heading1 text-ds-primary mb-ds-9 max-w-[600px]"><span class="harness-heading-latin">From</span> <span class="harness-heading-latin">VPS</span> <span class="harness-heading-latin">to</span> <span class="harness-heading-latin">Agent-Operated</span></h2></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-ds-6 items-stretch"><div class="min-w-0 flex flex-col rounded-ds-panel bg-ds-surface-3 border border-ds-border-default" ><div class="min-w-0 flex flex-col gap-ds-3 p-ds-7"><h3 class="harness-heading ds-text-subtitle text-ds-primary"><span class="harness-heading-latin">1.</span> <span class="harness-heading-latin">Install</span> <span class="harness-heading-latin">Daemon</span></h3><p class="ds-text-body text-ds-description leading-[1.7]">Run the idempotent installer on Ubuntu 24.04 or Debian 12. Sets up sandboxed systemd daemon and Docker bridge.</p><div class="mt-ds-2 flex items-center justify-between gap-ds-3 rounded-[10px] border border-ds-border-default bg-ds-surface-1 px-ds-4 py-[14px] font-mono text-[14px] text-ds-primary"><code class="min-w-0 whitespace-pre-wrap break-all"><span class="select-none text-ds-brand">$ </span>curl -fsSL https://smoooth.dev/install.sh | bash</code><button type="button" class="shrink-0 font-sans text-[12px] text-ds-description hover:text-ds-primary transition-colors">Copy</button></div></div></div><div class="min-w-0 flex flex-col rounded-ds-panel bg-ds-surface-3 border border-ds-border-default" ><div class="min-w-0 flex flex-col gap-ds-3 p-ds-7"><h3 class="harness-heading ds-text-subtitle text-ds-primary"><span class="harness-heading-latin">2.</span> <span class="harness-heading-latin">Pair</span> <span class="harness-heading-latin">Coding</span> <span class="harness-heading-latin">Agent</span></h3><p class="ds-text-body text-ds-description leading-[1.7]">Pair Claude Code, Cursor, or Windsurf directly over local loopback using your 256-bit scoped bearer token.</p><div class="mt-ds-2 flex items-center justify-between gap-ds-3 rounded-[10px] border border-ds-border-default bg-ds-surface-1 px-ds-4 py-[14px] font-mono text-[14px] text-ds-primary"><code class="min-w-0 whitespace-pre-wrap break-all"><span class="select-none text-ds-brand">$ </span>git clone https://github.com/itsraeyyy/Smoooth</code><button type="button" class="shrink-0 font-sans text-[12px] text-ds-description hover:text-ds-primary transition-colors">Copy</button></div></div></div></div></section>
 
-<section id="migration" class="ds-container py-ds-11 scroll-mt-[80px]">
-  <div class="max-w-[820px] mb-ds-8">
-    <h2 class="harness-heading ds-text-heading1 text-ds-primary tracking-tight">
-      <span class="harness-heading-latin">Moving from Coolify</span> <br class="hidden sm:inline"/>
-      <span class="harness-heading-latin text-white">or Docker Compose.</span>
-    </h2>
-    <p class="ds-text-body text-ds-description text-[16px] leading-relaxed mt-ds-3">
-      Migrate production stacks in seconds with zero downtime, automatic database volume safeguards, and over 1.3 GB of RAM instantly reclaimed on your VPS.
-    </p>
-  </div>
-
-  <!-- Persona Switcher -->
-  <div class="flex flex-col gap-ds-6">
-    <div class="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3" role="tablist" aria-label="Migration scenarios by user persona">
-      <button type="button" class="migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-white/20 bg-white/10 text-white shadow-sm" data-persona="indie" role="tab" aria-selected="true">
-        01 // Indie Hacker
-      </button>
-      <button type="button" class="migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5" data-persona="agency" role="tab" aria-selected="false">
-        02 // Digital Agency
-      </button>
-      <button type="button" class="migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5" data-persona="ai" role="tab" aria-selected="false">
-        03 // AI-First Engineer
-      </button>
-      <button type="button" class="migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5" data-persona="devops" role="tab" aria-selected="false">
-        04 // DevOps Purist
-      </button>
-    </div>
-
-    <!-- Active Persona Showcase Panel -->
-    <div id="migration-persona-content" class="rounded-ds-panel bg-ds-surface-3 border border-ds-border-default p-ds-6 md:p-ds-8">
-      <!-- 01 Indie Hacker Panel -->
-      <div class="persona-panel" data-persona-panel="indie">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-ds-6">
-          <div class="lg:col-span-5 flex flex-col justify-between">
-            <div>
-              <div class="text-[12px] font-mono text-[#73a3d2] uppercase tracking-wider mb-1">Scenario // Solo SaaS & Indie Founders</div>
-              <h3 class="text-[20px] font-semibold text-white tracking-tight mb-2">Eliminate OOM build crashes on $5/mo VPS nodes</h3>
-              <p class="text-[14px] text-ds-description leading-relaxed mb-4">
-                Coolify consumes 1.4 GB RAM just idling with PHP, Laravel Horizon, and internal daemons. When Next.js builds trigger on a 2 GB VPS, the Linux kernel terminates your Postgres database.
-              </p>
-              <div class="space-y-2 mb-6">
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>1.35 GB RAM Reclaimed:</strong> Smoooth idles at under 28 MB.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Volume Lock:</strong> Automatic <code class="font-mono text-[11px] bg-black/40 px-1 py-0.5 rounded text-[#73a3d2]">pgdata</code> retention prevents data loss.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Zero-Downtime TLS:</strong> Embedded Caddy with sub-second ACME.</span>
-                </div>
-              </div>
-            </div>
-            <a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/coolify_migration_playbook.md#scenario-1-the-indie-hacker--bootstrapped-founder-alex" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-[#6799fe] hover:underline font-mono">
-              View complete Indie Hacker playbook &rarr;
-            </a>
-          </div>
-          <div class="lg:col-span-7 rounded-xl bg-[#0d1117] border border-white/10 p-4 font-mono text-[13px] text-white/90 overflow-x-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3 text-[11px] text-white/40">
-              <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-white/20"></span>
-                <span>terminal &mdash; smoooth migrate coolify</span>
-              </span>
-              <span>bash</span>
-            </div>
-            <div class="space-y-1.5 leading-relaxed">
-              <div class="text-white/40"># 1. Preview detected Coolify Next.js + Postgres stack</div>
-              <div class="text-white"><span class="text-[#73a3d2]">$</span> smoooth migrate coolify /data/coolify/services/saas-prod</div>
-              <div class="text-[#59ca84] pl-2">&check; Detected Coolify Service: Next.js 15 App + Postgres 16 + Redis</div>
-              <div class="text-white/70 pl-2">&bull; Target Ingress: https://app.indiesaas.com (auto Caddy route)</div>
-              <div class="text-white/70 pl-2">&bull; Volume: /var/lib/postgresql/data &rarr; is_persistent: true [LOCKED]</div>
-              <div class="text-white/40 mt-2"># 2. Apply transactional migration</div>
-              <div class="text-white"><span class="text-[#73a3d2]">$</span> smoooth migrate coolify /data/coolify/services/saas-prod --apply</div>
-              <div class="text-[#59ca84] pl-2">&check; PostgreSQL 16 ready (port 5432 healthy)</div>
-              <div class="text-[#59ca84] pl-2">&check; Redis 7 ready (in-memory caching layer active)</div>
-              <div class="text-[#59ca84] pl-2">&check; Next.js 15 container healthy (HTTP 200 on /)</div>
-              <div class="text-[#6799fe] pl-2">&check; Ingress route cutover successful. Reclaimed 1,380 MB RAM.</div>
-            </div>
-          </div>
+<div class="relative overflow-hidden" style="max-height:720px"><div class="absolute -inset-[30%] z-0 pointer-events-none hidden md:block" style="mix-blend-mode:screen;transform:translateY(-8%);mask:radial-gradient(ellipse 60% 60% at center, black 0%, transparent 70%);-webkit-mask:radial-gradient(ellipse 60% 60% at center, black 0%, transparent 70%)"><!--$!--><template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template><!--/$--></div><div class="absolute top-[80px] left-0 w-full h-[500px] pointer-events-none z-0" ><div class="absolute inset-0" style="mask:linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%), linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);mask-composite:intersect;-webkit-mask-composite:source-in"><canvas style="position:absolute;top:0;left:0;width:100%;height:100%;background:transparent"></canvas></div><div class="absolute bottom-[-100px] left-[10%] w-[500px] h-[500px] opacity-30" style="background:radial-gradient(circle, #1A3870 0%, transparent 70%);filter:blur(80px)"></div><div class="absolute bottom-[-50px] left-[50%] -translate-x-1/2 w-[700px] h-[400px] opacity-40" style="background:radial-gradient(ellipse at center, #2D5F9E 0%, #1A3870 40%, transparent 70%);filter:blur(100px)"></div><div class="absolute bottom-[-80px] right-[10%] w-[400px] h-[400px] opacity-20" style="background:radial-gradient(circle, #4A8AC4 0%, #2D5F9E 30%, transparent 70%);filter:blur(60px)"></div></div><section id="quickstart" class="relative z-10 ds-container flex flex-col items-center text-center scroll-mt-[100px] pt-ds-11 pb-ds-13" style="min-height:min(60vh, 720px);"><h2 class="harness-heading ds-text-heading1 text-ds-primary"><span class="harness-heading-latin">Take</span> <span class="harness-heading-latin">Control</span> <span class="harness-heading-latin">of</span> <span class="harness-heading-latin">Your</span> <span class="harness-heading-latin">Infrastructure</span></h2><p class="ds-text-body text-ds-description max-w-[652px] mt-ds-5">Smoooth is in Developer Beta (v0.1.0). Give your AI coding agents safe, structured tools to manage Docker containers, persistent databases, and local loopback networking with zero cloud markups.</p><div class="harness-cta-actions flex w-full sm:w-auto flex-wrap items-center justify-center gap-ds-4 mt-ds-6 max-sm:[&amp;&gt;a]:w-full md:grid md:grid-cols-2 md:w-fit"><a class="ds-btn-primary ds-btn-m harness-github-button" href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer"><span class="harness-button-content"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>View on GitHub</span></a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.2426 4.75493V6.15532H4.75819V4.75493H11.2426Z" fill="currentColor"></path><path d="M9.40858 7.79498V9.19537H4.75819V7.79498H9.40858Z" fill="currentColor"></path><path d="M9.23437 0.590332C10.1936 0.590332 10.9696 0.589649 11.5889 0.656739C12.2212 0.725273 12.773 0.871816 13.2539 1.22119C13.5339 1.42469 13.7809 1.67064 13.9844 1.95068C14.3336 2.43146 14.4793 2.98356 14.5478 3.61572C14.6149 4.23495 14.6143 5.0112 14.6143 5.97022V10.0308C14.6143 10.9899 14.6149 11.766 14.5478 12.3853C14.4793 13.0174 14.3336 13.5696 13.9844 14.0503C13.7809 14.3303 13.534 14.5773 13.2539 14.7808C12.7731 15.1299 12.221 15.2757 11.5889 15.3442C10.9696 15.4113 10.1935 15.4106 9.23437 15.4106H6.76562C5.80648 15.4106 5.03039 15.4113 4.41113 15.3442C3.77896 15.2757 3.22686 15.13 2.74609 14.7808C2.46607 14.5773 2.22009 14.3303 2.0166 14.0503C1.66728 13.5695 1.52069 13.0175 1.45214 12.3853C1.38505 11.766 1.38574 10.9899 1.38574 10.0308V5.97022C1.38574 5.01121 1.38509 4.23495 1.45214 3.61572C1.52067 2.98356 1.6674 2.43146 2.0166 1.95068C2.21996 1.67084 2.46627 1.42458 2.74609 1.22119C3.22689 0.871868 3.7789 0.725286 4.41113 0.656739C5.03039 0.589646 5.80648 0.590332 6.76562 0.590332H9.23437ZM6.76562 1.99072C5.77546 1.99072 5.08883 1.99133 4.5625 2.04834C4.04951 2.10393 3.77179 2.20603 3.56933 2.35303C3.40814 2.47018 3.26556 2.61271 3.14843 2.77393C3.00154 2.97638 2.89931 3.25426 2.84375 3.76709C2.78678 4.2934 2.78613 4.98022 2.78613 5.97022V10.0308C2.78613 11.0208 2.78676 11.7076 2.84375 12.2339C2.89934 12.7467 3.00149 13.0246 3.14843 13.2271C3.2656 13.3883 3.40809 13.5308 3.56933 13.6479C3.7718 13.7949 4.04949 13.897 4.5625 13.9526C5.08883 14.0096 5.77545 14.0103 6.76562 14.0103H9.23437C10.2245 14.0103 10.9112 14.0096 11.4375 13.9526C11.9504 13.8971 12.2282 13.7949 12.4307 13.6479C12.5919 13.5308 12.7344 13.3882 12.8516 13.2271C12.9985 13.0246 13.1007 12.7467 13.1562 12.2339C13.2132 11.7076 13.2139 11.0208 13.2139 10.0308V5.97022C13.2139 4.9802 13.2132 4.2934 13.1562 3.76709C13.1007 3.25411 12.9985 2.9764 12.8516 2.77393C12.7344 2.61266 12.5919 2.47021 12.4307 2.35303C12.2282 2.20604 11.9505 2.10392 11.4375 2.04834C10.9111 1.99135 10.2245 1.99072 9.23437 1.99072H6.76562Z" fill="currentColor"></path></svg>Developer docs</a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/BRAND_GUIDELINES.md" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5L13.5 4.5V11.5L8 14.5L2.5 11.5V4.5L8 1.5Z" stroke="currentColor" stroke-width="1.2"></path><path d="M2.8 4.7L8 7.6L13.2 4.7M8 7.6V14.1" stroke="currentColor" stroke-width="1.2"></path></svg>Architecture Spec</a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth#security-model" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.25C6.75 2.25 4.8 1.95 2.25 2.25V12.75C4.8 12.45 6.75 12.75 8 13.75C9.25 12.75 11.2 12.45 13.75 12.75V2.25C11.2 1.95 9.25 2.25 8 3.25Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path><path d="M8 3.25V13.75" stroke="currentColor" stroke-width="1.2"></path></svg>Security Model</a></div></section></div><footer class="relative z-10 w-full border-t border-white/10 bg-[#080C14] pt-16 pb-12 px-6">
+  <div class="max-w-[1280px] mx-auto flex flex-col gap-12">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+      <!-- Col 1: Brand -->
+      <div class="lg:col-span-2 flex flex-col gap-4">
+        <a class="flex items-center gap-[10px] text-white" href="/">
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="7" fill="#1c3c66" />
+            <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14C21 17.866 17.866 21 14 21" stroke="#6799fe" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="14" cy="14" r="3.5" fill="#ffffff" />
+          </svg>
+          <span class="font-bold text-[19px] tracking-tight text-white font-['Host_Grotesk']">Smoooth</span>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-white/10 text-[#73a3d2] border border-white/10">v0.1.0</span>
+        </a>
+        <p class="text-[14px] text-white/60 leading-relaxed max-w-[340px]">
+          Autonomous infrastructure runtime for AI coding agents. Run stateful Docker workloads on your own Linux VPS with zero cloud markups.
+        </p>
+        <div class="flex items-center gap-2 text-[12px] font-mono text-white/40 mt-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
+          <span>Verified on Ubuntu 24.04 LTS &amp; Debian 12</span>
         </div>
       </div>
 
-      <!-- 02 Digital Agency Panel -->
-      <div class="persona-panel hidden" data-persona-panel="agency">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-ds-6">
-          <div class="lg:col-span-5 flex flex-col justify-between">
-            <div>
-              <div class="text-[12px] font-mono text-[#73a3d2] uppercase tracking-wider mb-1">Scenario // Multi-Tenant Client Workspaces</div>
-              <h3 class="text-[20px] font-semibold text-white tracking-tight mb-2">Partition 15+ client sites without Traefik SSL collisions</h3>
-              <p class="text-[14px] text-ds-description leading-relaxed mb-4">
-                Managing dozens of WordPress, Ghost, PocketBase, and Strapi instances on shared VPS nodes frequently breaks when Traefik experiences certificate renewal race conditions.
-              </p>
-              <div class="space-y-2 mb-6">
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Workspace Isolation:</strong> Encapsulate containers by client ID.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Host Container Adoption:</strong> Adopt live containers with zero downtime.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Immutable Audit Logs:</strong> Cryptographic operation history.</span>
-                </div>
-              </div>
-            </div>
-            <a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/coolify_migration_playbook.md#scenario-2-the-digital-agency-lead--freelancer-maya" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-[#6799fe] hover:underline font-mono">
-              View complete Agency playbook &rarr;
-            </a>
-          </div>
-          <div class="lg:col-span-7 rounded-xl bg-[#0d1117] border border-white/10 p-4 font-mono text-[13px] text-white/90 overflow-x-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3 text-[11px] text-white/40">
-              <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-white/20"></span>
-                <span>terminal &mdash; smoooth migrate scan-host</span>
-              </span>
-              <span>bash</span>
-            </div>
-            <div class="space-y-1.5 leading-relaxed">
-              <div class="text-white/40"># Adopt live containers into a dedicated client workspace</div>
-              <div class="text-white"><span class="text-[#73a3d2]">$</span> smoooth migrate scan-host --adopt-live --workspace client-nike</div>
-              <div class="text-[#59ca84] pl-2">&check; Discovered 4 running containers on host docker.sock:</div>
-              <div class="text-white/70 pl-2">  [1] wordpress:6.5-php8.2 &rarr; port 80 &rarr; nike-campaign.com</div>
-              <div class="text-white/70 pl-2">  [2] mysql:8.0 &rarr; volume /var/lib/mysql [is_persistent: true]</div>
-              <div class="text-white/70 pl-2">  [3] redis:alpine &rarr; in-memory cache</div>
-              <div class="text-[#59ca84] pl-2">&check; Assigned to Workspace 'client-nike' with isolated Caddy domain block</div>
-              <div class="text-[#59ca84] pl-2">&check; Zero-downtime routing cutover complete. Existing sockets uninterrupted.</div>
-            </div>
-          </div>
-        </div>
+      <!-- Col 2: Features -->
+      <div class="flex flex-col gap-3 text-[13px]">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-white/40 mb-1">Features</div>
+        <a href="/features/mcp-runtime" class="text-white/70 hover:text-white transition-colors">MCP Server Runtime</a>
+        <a href="/features/transactional-deployments" class="text-white/70 hover:text-white transition-colors">Transactional 2-Phase DAG</a>
+        <a href="/features/stateful-databases" class="text-white/70 hover:text-white transition-colors">Stateful Databases</a>
+        <a href="/features/reverse-proxy" class="text-white/70 hover:text-white transition-colors">Embedded Caddy Ingress</a>
+        <a href="/features/sandbox-security" class="text-white/70 hover:text-white transition-colors">Scoped Bearer Security</a>
+        <a href="/features/" class="text-[#73a3d2] hover:underline font-mono text-[12px] mt-1">All Features &rarr;</a>
       </div>
 
-      <!-- 03 AI-First Engineer Panel -->
-      <div class="persona-panel hidden" data-persona-panel="ai">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-ds-6">
-          <div class="lg:col-span-5 flex flex-col justify-between">
-            <div>
-              <div class="text-[12px] font-mono text-[#73a3d2] uppercase tracking-wider mb-1">Scenario // AI Coding Agents (Claude Code, Cursor)</div>
-              <h3 class="text-[20px] font-semibold text-white tracking-tight mb-2">Migrate and deploy via natural language in your editor</h3>
-              <p class="text-[14px] text-ds-description leading-relaxed mb-4">
-                Coolify traps you in a browser dashboard. Smoooth provides native Model Context Protocol (MCP) tools so Claude Code, Cursor, and Windsurf migrate stacks straight from your chat conversation.
-              </p>
-              <div class="space-y-2 mb-6">
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Native MCP Server:</strong> Built-in <code class="font-mono text-[11px] bg-black/40 px-1 py-0.5 rounded text-[#73a3d2]">migrate_stack</code> tool.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Least-Privilege Token:</strong> 256-bit cryptographically scoped auth.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Zero Context Switching:</strong> Stay focused in your IDE.</span>
-                </div>
-              </div>
-            </div>
-            <a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/coolify_migration_playbook.md#scenario-3-the-ai-native-engineer-devon" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-[#6799fe] hover:underline font-mono">
-              View complete AI-First playbook &rarr;
-            </a>
-          </div>
-          <div class="lg:col-span-7 rounded-xl bg-[#0d1117] border border-white/10 p-4 font-mono text-[13px] text-white/90 overflow-x-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3 text-[11px] text-white/40">
-              <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-white/20"></span>
-                <span>Claude Code &mdash; MCP Tool Execution</span>
-              </span>
-              <span>claude-mcp</span>
-            </div>
-            <div class="space-y-2 leading-relaxed">
-              <div class="text-white/40">&gt; Claude, migrate my docker-compose.yml into Smoooth and verify database safety.</div>
-              <div class="text-[#73a3d2] text-[12px]">&bull; Invoking MCP Tool: scan_foreign_workloads({ target_path: "./docker-compose.yml" })</div>
-              <div class="text-white/60 text-[12px] bg-black/50 p-2 rounded">
-                {"format":"compose","workloads":["postgres","fastapi","celery"],"volumes_safeguarded":["pgdata"]}
-              </div>
-              <div class="text-[#73a3d2] text-[12px]">&bull; Invoking MCP Tool: migrate_stack({ manifest_content: "...", apply: true })</div>
-              <div class="text-[#59ca84] pl-2">&check; Applied DAG: [postgres] &rarr; [celery] &rarr; [fastapi]</div>
-              <div class="text-white/80 pl-2">I have successfully migrated your stack into Smoooth. Persistent volumes are locked, health probes passed, and rollback checkpoint #1 was generated.</div>
-            </div>
-          </div>
-        </div>
+      <!-- Col 3: Resources -->
+      <div class="flex flex-col gap-3 text-[13px]">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-white/40 mb-1">Resources</div>
+        <a href="/guides/" class="text-white/70 hover:text-white transition-colors">Documentation &amp; Guides</a>
+        <a href="/guides/deploy-docker-application-claude-code" class="text-white/70 hover:text-white transition-colors">Deploying with Claude Code</a>
+        <a href="/migration/" class="text-white/70 hover:text-white transition-colors">Migration Hub</a>
+        <a href="/compare/smoooth-vs-coolify" class="text-white/70 hover:text-white transition-colors">Smoooth vs Coolify</a>
+        <a href="/compare/" class="text-white/70 hover:text-white transition-colors">Comparison Matrix</a>
       </div>
 
-      <!-- 04 DevOps Purist Panel -->
-      <div class="persona-panel hidden" data-persona-panel="devops">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-ds-6">
-          <div class="lg:col-span-5 flex flex-col justify-between">
-            <div>
-              <div class="text-[12px] font-mono text-[#73a3d2] uppercase tracking-wider mb-1">Scenario // Homelab & DevOps Minimalists</div>
-              <h3 class="text-[20px] font-semibold text-white tracking-tight mb-2">Single 25MB static binary. Zero telemetry. Transparent JSON state.</h3>
-              <p class="text-[14px] text-ds-description leading-relaxed mb-4">
-                Tired of massive black-box management platforms with hidden SQL tables, automatic telemetry, and fragile daemon updates.
-              </p>
-              <div class="space-y-2 mb-6">
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Zero Bloat:</strong> Single Rust binary, no external runtime needed.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Git-Friendly State:</strong> Human-readable <code class="font-mono text-[11px] bg-black/40 px-1 py-0.5 rounded text-[#73a3d2]">smoooth_state.json</code>.</span>
-                </div>
-                <div class="flex items-center gap-2 text-[13px] text-white/80">
-                  <span class="w-1.5 h-1.5 rounded-full bg-[#59ca84]"></span>
-                  <span><strong>Air-Gapped & Offline:</strong> Runs purely on local loopback without phone-home code.</span>
-                </div>
-              </div>
-            </div>
-            <a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/coolify_migration_playbook.md#scenario-4-the-homelab-enthusiast--devops-minimalist-sam" target="_blank" class="inline-flex items-center gap-1.5 text-[13px] text-[#6799fe] hover:underline font-mono">
-              View complete DevOps Minimalist playbook &rarr;
-            </a>
-          </div>
-          <div class="lg:col-span-7 rounded-xl bg-[#0d1117] border border-white/10 p-4 font-mono text-[13px] text-white/90 overflow-x-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-white/10 mb-3 text-[11px] text-white/40">
-              <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-white/20"></span>
-                <span>terminal &mdash; smoooth migrate compose</span>
-              </span>
-              <span>bash</span>
-            </div>
-            <div class="space-y-1.5 leading-relaxed">
-              <div class="text-white/40"># Direct Compose file migration with plain JSON audit output</div>
-              <div class="text-white"><span class="text-[#73a3d2]">$</span> smoooth migrate compose /opt/homelab/compose.yaml --apply</div>
-              <div class="text-[#59ca84] pl-2">&check; Verified 6 services: vaultwarden, pihole, gitea, syncthing, minio, caddy</div>
-              <div class="text-[#59ca84] pl-2">&check; Host bind mounts verified and preserved (/opt/data/*)</div>
-              <div class="text-[#59ca84] pl-2">&check; Written atomic state to ./smoooth_state.json (size: 4.2 KB)</div>
-              <div class="text-white/70 pl-2">&bull; Active memory footprint: 24.8 MB RSS</div>
-              <div class="text-[#59ca84] pl-2">&check; All containers running under systemd service smoooth.service</div>
-            </div>
-          </div>
-        </div>
+      <!-- Col 4: Open Source -->
+      <div class="flex flex-col gap-3 text-[13px]">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-white/40 mb-1">Open Source</div>
+        <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="text-white/70 hover:text-white transition-colors flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+          <span>GitHub Repository</span>
+        </a>
+        <a href="https://github.com/itsraeyyy/Smoooth/releases" target="_blank" rel="noopener noreferrer" class="text-white/70 hover:text-white transition-colors">Releases &amp; Checksums</a>
+        <a href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/BRAND_GUIDELINES.md" target="_blank" rel="noopener noreferrer" class="text-white/70 hover:text-white transition-colors">Brand Guidelines</a>
+        <a href="https://github.com/itsraeyyy/Smoooth#security-model" target="_blank" rel="noopener noreferrer" class="text-white/70 hover:text-white transition-colors">Security Model</a>
+        <a href="https://opensource.org/licenses/Apache-2.0" target="_blank" rel="noopener noreferrer" class="text-white/70 hover:text-white transition-colors">Apache-2.0 / MIT License</a>
       </div>
     </div>
-  </div>
 
-  <!-- Resource Comparison Table -->
-  <div class="mt-ds-9 rounded-ds-panel bg-ds-surface-3 border border-ds-border-default overflow-hidden">
-    <div class="p-ds-6 border-b border-white/10">
-      <h3 class="text-[18px] font-semibold text-white tracking-tight">Technical Architecture & Efficiency Comparison</h3>
-      <p class="text-[14px] text-ds-description mt-1">Verified on Ubuntu 24.04 LTS (x86_64, 2 vCPU, 4GB RAM).</p>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-left text-[13px]">
-        <thead>
-          <tr class="border-b border-white/10 bg-black/20 text-white/60 font-mono text-[11px] uppercase tracking-wider">
-            <th class="py-3 px-4 md:px-6">Dimension</th>
-            <th class="py-3 px-4 md:px-6">Coolify v4</th>
-            <th class="py-3 px-4 md:px-6 text-white font-semibold">Smoooth Runtime</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-white/5 font-mono">
-          <tr class="hover:bg-white/[0.02]">
-            <td class="py-3.5 px-4 md:px-6 text-white/80 font-sans font-medium">Idle Memory Overhead</td>
-            <td class="py-3.5 px-4 md:px-6 text-[#f87171]">1,200 &ndash; 1,800 MB RAM</td>
-            <td class="py-3.5 px-4 md:px-6 text-[#59ca84] font-semibold">&lt; 28 MB RAM (98% reduction)</td>
-          </tr>
-          <tr class="hover:bg-white/[0.02]">
-            <td class="py-3.5 px-4 md:px-6 text-white/80 font-sans font-medium">AI Agent Native Access</td>
-            <td class="py-3.5 px-4 md:px-6 text-white/50">None (Web dashboard only)</td>
-            <td class="py-3.5 px-4 md:px-6 text-[#6799fe] font-semibold">Native Model Context Protocol (MCP)</td>
-          </tr>
-          <tr class="hover:bg-white/[0.02]">
-            <td class="py-3.5 px-4 md:px-6 text-white/80 font-sans font-medium">Reverse Proxy &amp; TLS</td>
-            <td class="py-3.5 px-4 md:px-6 text-white/50">Traefik (label parsing, file race risks)</td>
-            <td class="py-3.5 px-4 md:px-6 text-white">Embedded Caddy (sub-ms route reload)</td>
-          </tr>
-          <tr class="hover:bg-white/[0.02]">
-            <td class="py-3.5 px-4 md:px-6 text-white/80 font-sans font-medium">Stateful Volume Safeguards</td>
-            <td class="py-3.5 px-4 md:px-6 text-white/50">Generic Docker volumes</td>
-            <td class="py-3.5 px-4 md:px-6 text-white">Dedicated Database Adapters + Volume Locks</td>
-          </tr>
-          <tr class="hover:bg-white/[0.02]">
-            <td class="py-3.5 px-4 md:px-6 text-white/80 font-sans font-medium">Zero-Downtime Host Adoption</td>
-            <td class="py-3.5 px-4 md:px-6 text-white/50">Requires container restart</td>
-            <td class="py-3.5 px-4 md:px-6 text-[#59ca84]">Live Container Scanner (in-flight adoption)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<div class="relative overflow-hidden" style="max-height:720px"><div class="absolute -inset-[30%] z-0 pointer-events-none hidden md:block" style="mix-blend-mode:screen;transform:translateY(-8%);mask:radial-gradient(ellipse 60% 60% at center, black 0%, transparent 70%);-webkit-mask:radial-gradient(ellipse 60% 60% at center, black 0%, transparent 70%)"><!--$!--><template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template><!--/$--></div><div class="absolute top-[80px] left-0 w-full h-[500px] pointer-events-none z-0" ><div class="absolute inset-0" style="mask:linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%), linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);mask-composite:intersect;-webkit-mask-composite:source-in"><canvas style="position:absolute;top:0;left:0;width:100%;height:100%;background:transparent"></canvas></div><div class="absolute bottom-[-100px] left-[10%] w-[500px] h-[500px] opacity-30" style="background:radial-gradient(circle, #1A3870 0%, transparent 70%);filter:blur(80px)"></div><div class="absolute bottom-[-50px] left-[50%] -translate-x-1/2 w-[700px] h-[400px] opacity-40" style="background:radial-gradient(ellipse at center, #2D5F9E 0%, #1A3870 40%, transparent 70%);filter:blur(100px)"></div><div class="absolute bottom-[-80px] right-[10%] w-[400px] h-[400px] opacity-20" style="background:radial-gradient(circle, #4A8AC4 0%, #2D5F9E 30%, transparent 70%);filter:blur(60px)"></div></div><section id="quickstart" class="relative z-10 ds-container flex flex-col items-center text-center scroll-mt-[100px] pt-ds-11 pb-ds-13" style="min-height:min(60vh, 720px);"><h2 class="harness-heading ds-text-heading1 text-ds-primary"><span class="harness-heading-latin">Take</span> <span class="harness-heading-latin">Control</span> <span class="harness-heading-latin">of</span> <span class="harness-heading-latin">Your</span> <span class="harness-heading-latin">Infrastructure</span></h2><p class="ds-text-body text-ds-description max-w-[652px] mt-ds-5">Smoooth is in Developer Beta (v0.1.0). Give your AI coding agents safe, structured tools to manage Docker containers, persistent databases, and local loopback networking with zero cloud markups.</p><div class="harness-cta-actions flex w-full sm:w-auto flex-wrap items-center justify-center gap-ds-4 mt-ds-6 max-sm:[&amp;&gt;a]:w-full md:grid md:grid-cols-2 md:w-fit"><a class="ds-btn-primary ds-btn-m harness-github-button" href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer"><span class="harness-button-content"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>View on GitHub</span></a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11.2426 4.75493V6.15532H4.75819V4.75493H11.2426Z" fill="currentColor"></path><path d="M9.40858 7.79498V9.19537H4.75819V7.79498H9.40858Z" fill="currentColor"></path><path d="M9.23437 0.590332C10.1936 0.590332 10.9696 0.589649 11.5889 0.656739C12.2212 0.725273 12.773 0.871816 13.2539 1.22119C13.5339 1.42469 13.7809 1.67064 13.9844 1.95068C14.3336 2.43146 14.4793 2.98356 14.5478 3.61572C14.6149 4.23495 14.6143 5.0112 14.6143 5.97022V10.0308C14.6143 10.9899 14.6149 11.766 14.5478 12.3853C14.4793 13.0174 14.3336 13.5696 13.9844 14.0503C13.7809 14.3303 13.534 14.5773 13.2539 14.7808C12.7731 15.1299 12.221 15.2757 11.5889 15.3442C10.9696 15.4113 10.1935 15.4106 9.23437 15.4106H6.76562C5.80648 15.4106 5.03039 15.4113 4.41113 15.3442C3.77896 15.2757 3.22686 15.13 2.74609 14.7808C2.46607 14.5773 2.22009 14.3303 2.0166 14.0503C1.66728 13.5695 1.52069 13.0175 1.45214 12.3853C1.38505 11.766 1.38574 10.9899 1.38574 10.0308V5.97022C1.38574 5.01121 1.38509 4.23495 1.45214 3.61572C1.52067 2.98356 1.6674 2.43146 2.0166 1.95068C2.21996 1.67084 2.46627 1.42458 2.74609 1.22119C3.22689 0.871868 3.7789 0.725286 4.41113 0.656739C5.03039 0.589646 5.80648 0.590332 6.76562 0.590332H9.23437ZM6.76562 1.99072C5.77546 1.99072 5.08883 1.99133 4.5625 2.04834C4.04951 2.10393 3.77179 2.20603 3.56933 2.35303C3.40814 2.47018 3.26556 2.61271 3.14843 2.77393C3.00154 2.97638 2.89931 3.25426 2.84375 3.76709C2.78678 4.2934 2.78613 4.98022 2.78613 5.97022V10.0308C2.78613 11.0208 2.78676 11.7076 2.84375 12.2339C2.89934 12.7467 3.00149 13.0246 3.14843 13.2271C3.2656 13.3883 3.40809 13.5308 3.56933 13.6479C3.7718 13.7949 4.04949 13.897 4.5625 13.9526C5.08883 14.0096 5.77545 14.0103 6.76562 14.0103H9.23437C10.2245 14.0103 10.9112 14.0096 11.4375 13.9526C11.9504 13.8971 12.2282 13.7949 12.4307 13.6479C12.5919 13.5308 12.7344 13.3882 12.8516 13.2271C12.9985 13.0246 13.1007 12.7467 13.1562 12.2339C13.2132 11.7076 13.2139 11.0208 13.2139 10.0308V5.97022C13.2139 4.9802 13.2132 4.2934 13.1562 3.76709C13.1007 3.25411 12.9985 2.9764 12.8516 2.77393C12.7344 2.61266 12.5919 2.47021 12.4307 2.35303C12.2282 2.20604 11.9505 2.10392 11.4375 2.04834C10.9111 1.99135 10.2245 1.99072 9.23437 1.99072H6.76562Z" fill="currentColor"></path></svg>Developer docs</a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth/blob/main/docs/BRAND_GUIDELINES.md" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5L13.5 4.5V11.5L8 14.5L2.5 11.5V4.5L8 1.5Z" stroke="currentColor" stroke-width="1.2"></path><path d="M2.8 4.7L8 7.6L13.2 4.7M8 7.6V14.1" stroke="currentColor" stroke-width="1.2"></path></svg>Architecture Spec</a><a class="ds-btn-secondary ds-btn-m" href="https://github.com/itsraeyyy/Smoooth#security-model" target="_blank" rel="noopener noreferrer"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.25C6.75 2.25 4.8 1.95 2.25 2.25V12.75C4.8 12.45 6.75 12.75 8 13.75C9.25 12.75 11.2 12.45 13.75 12.75V2.25C11.2 1.95 9.25 2.25 8 3.25Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"></path><path d="M8 3.25V13.75" stroke="currentColor" stroke-width="1.2"></path></svg>Security Model</a></div></section></div><footer class="relative z-10 w-full border-t border-white/10 bg-[#0a0a0a] py-12 px-6">
-  <div class="max-w-[1280px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-    <div class="flex items-center gap-3">
-      <svg width="24" height="24" viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="7" fill="#1c3c66" /><path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14C21 17.866 17.866 21 14 21" stroke="#6799fe" stroke-width="2.5" stroke-linecap="round"/><circle cx="14" cy="14" r="3.5" fill="#ffffff" /></svg>
-      <span class="font-bold text-[18px] tracking-tight text-white font-['Host_Grotesk']">Smoooth</span>
-      <span class="text-white/40 text-[13px] ml-2">© 2026 Smoooth. Open-source under Apache-2.0 / MIT.</span>
-    </div>
-    <div class="flex items-center gap-6 text-[13px] font-medium text-white/60">
-      <a href="#features" class="hover:text-white transition-colors">Features</a>
-      <a href="#how-it-works" class="hover:text-white transition-colors">How It Works</a>
-      <a href="#security" class="hover:text-white transition-colors">Security</a>
-      <a href="#quickstart" class="hover:text-white transition-colors">Quickstart</a>
-      <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub</a>
+    <!-- Bottom subfooter -->
+    <div class="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-[12px] text-white/50">
+      <div>&copy; 2026 Smoooth. Autonomous infrastructure runtime for AI coding agents.</div>
+      <div class="flex items-center gap-4">
+        <a href="/features/" class="hover:text-white transition-colors">Features</a>
+        <a href="/guides/" class="hover:text-white transition-colors">Guides</a>
+        <a href="/compare/" class="hover:text-white transition-colors">Compare</a>
+        <a href="/migration/" class="hover:text-white transition-colors">Migration</a>
+        <a href="https://github.com/itsraeyyy/Smoooth" target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">GitHub</a>
+      </div>
     </div>
   </div>
 </footer>
+</div>
   
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -589,31 +374,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // 4. Hero Dropdown Toggle
-  const toggleBtn = document.querySelector(".HarnessDownloadMenu_arrow__60_9L");
-  const dropdown = document.getElementById("hero-download-dropdown");
-  if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isVisible = dropdown.style.display !== "none";
-      dropdown.style.display = isVisible ? "none" : "block";
-      toggleBtn.setAttribute("aria-expanded", isVisible ? "false" : "true");
-      setTimeout(() => {
-        dropdown.style.opacity = isVisible ? "0" : "1";
-        dropdown.style.transform = isVisible ? "translate(-50%, -6px)" : "translate(-50%, 0)";
-      }, 10);
-    });
-    document.addEventListener("click", () => {
-      if (dropdown.style.display !== "none") {
-        dropdown.style.opacity = "0";
-        dropdown.style.transform = "translate(-50%, -6px)";
-        toggleBtn.setAttribute("aria-expanded", "false");
-        setTimeout(() => { dropdown.style.display = "none"; }, 200);
-      }
-    });
-  }
-
-  // 5. Copy buttons feedback
+  // 4. Copy buttons feedback
   document.querySelectorAll("button").forEach(btn => {
     if (btn.textContent?.trim() === "Copy") {
       btn.addEventListener("click", () => {
@@ -634,7 +395,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // 6. Mobile drawer
+  // 5. Mobile drawer
   const mobileMenuBtn = document.querySelector('button[aria-label="Open menu"]');
   const mobileMenu = document.getElementById("harness-mobile-menu");
   const mobileCloseBtn = mobileMenu?.querySelector('button[aria-label="Close menu"]');
@@ -662,33 +423,6 @@ document.addEventListener("DOMContentLoaded", function () {
       document.body.style.overflow = "";
     });
   });
-
-  // 7. Migration persona tabs switcher
-  const personaTabs = document.querySelectorAll(".migration-persona-tab");
-  const personaPanels = document.querySelectorAll(".persona-panel");
-  if (personaTabs.length > 0 && personaPanels.length > 0) {
-    personaTabs.forEach(tab => {
-      tab.addEventListener("click", () => {
-        const target = tab.getAttribute("data-persona");
-        personaTabs.forEach(t => {
-          const isActive = t === tab;
-          t.setAttribute("aria-selected", isActive ? "true" : "false");
-          if (isActive) {
-            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-white/20 bg-white/10 text-white shadow-sm";
-          } else {
-            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5";
-          }
-        });
-        personaPanels.forEach(panel => {
-          if (panel.getAttribute("data-persona-panel") === target) {
-            panel.classList.remove("hidden");
-          } else {
-            panel.classList.add("hidden");
-          }
-        });
-      });
-    });
-  }
 });
 </script>
 

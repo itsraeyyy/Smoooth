@@ -83,31 +83,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // 4. Hero Dropdown Toggle
-  const toggleBtn = document.querySelector(".HarnessDownloadMenu_arrow__60_9L");
-  const dropdown = document.getElementById("hero-download-dropdown");
-  if (toggleBtn && dropdown) {
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isVisible = dropdown.style.display !== "none";
-      dropdown.style.display = isVisible ? "none" : "block";
-      toggleBtn.setAttribute("aria-expanded", isVisible ? "false" : "true");
-      setTimeout(() => {
-        dropdown.style.opacity = isVisible ? "0" : "1";
-        dropdown.style.transform = isVisible ? "translate(-50%, -6px)" : "translate(-50%, 0)";
-      }, 10);
-    });
-    document.addEventListener("click", () => {
-      if (dropdown.style.display !== "none") {
-        dropdown.style.opacity = "0";
-        dropdown.style.transform = "translate(-50%, -6px)";
-        toggleBtn.setAttribute("aria-expanded", "false");
-        setTimeout(() => { dropdown.style.display = "none"; }, 200);
-      }
-    });
-  }
-
-  // 5. Copy buttons feedback
+  // 4. Copy buttons feedback
   document.querySelectorAll("button").forEach(btn => {
     if (btn.textContent?.trim() === "Copy") {
       btn.addEventListener("click", () => {
@@ -128,7 +104,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // 6. Mobile drawer
+  // 5. Mobile drawer
   const mobileMenuBtn = document.querySelector('button[aria-label="Open menu"]');
   const mobileMenu = document.getElementById("harness-mobile-menu");
   const mobileCloseBtn = mobileMenu?.querySelector('button[aria-label="Close menu"]');
@@ -156,33 +132,6 @@ document.addEventListener("DOMContentLoaded", function () {
       document.body.style.overflow = "";
     });
   });
-
-  // 7. Migration persona tabs switcher
-  const personaTabs = document.querySelectorAll(".migration-persona-tab");
-  const personaPanels = document.querySelectorAll(".persona-panel");
-  if (personaTabs.length > 0 && personaPanels.length > 0) {
-    personaTabs.forEach(tab => {
-      tab.addEventListener("click", () => {
-        const target = tab.getAttribute("data-persona");
-        personaTabs.forEach(t => {
-          const isActive = t === tab;
-          t.setAttribute("aria-selected", isActive ? "true" : "false");
-          if (isActive) {
-            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-white/20 bg-white/10 text-white shadow-sm";
-          } else {
-            t.className = "migration-persona-tab px-4 py-2 rounded-lg text-[13px] font-medium font-mono transition-all border border-transparent text-white/60 hover:text-white hover:bg-white/5";
-          }
-        });
-        personaPanels.forEach(panel => {
-          if (panel.getAttribute("data-persona-panel") === target) {
-            panel.classList.remove("hidden");
-          } else {
-            panel.classList.add("hidden");
-          }
-        });
-      });
-    });
-  }
 });
 </script>
 `;
@@ -261,51 +210,6 @@ const fullHtml = `<!DOCTYPE html>
         "sameAs": [
           "https://github.com/itsraeyyy/Smoooth"
         ]
-      },
-      {
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "How do AI coding agents like Claude Code or Cursor interact with Smoooth?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth implements the Model Context Protocol (MCP) standard. AI agents pair over stdio or streamable HTTP/SSE using a 256-bit bearer token. Instead of running unsafe shell scripts as root, agents invoke structured, typed tools like create_plan, execute_plan, verify_connection, and configure_ingress."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is giving an AI coding agent Docker daemon access secure?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth confines operations via private loopback binding (127.0.0.1:4040), granular role-based scopes (read_only, plan, deploy, admin), systemd sandboxing with NoNewPrivileges, and append-only signed audit logging."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What databases and Linux distributions are supported?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Smoooth is verified on Ubuntu 24.04 LTS and Debian 12 (x86_64 and ARM64). It provides native stateful adapters for PostgreSQL, Redis, MongoDB, and SQLite with automated persistent volume management and health probes."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How does Smoooth compare to Coolify or Dokku?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Coolify requires 2 CPUs and 2 GB RAM minimum, running a full web dashboard, Fastify backend, and Traefik proxy. Smoooth is a single static Rust binary consuming under 28MB RAM idle, purpose-built for autonomous AI agents over MCP with transactional 2-phase DAG deployments and automatic rollbacks."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Can I run Smoooth on a low-cost $5/mo VPS or homelab?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. Minimum requirements are 1 vCPU, 1 GB RAM, and 10 GB disk space. Because Smoooth is compiled in Rust with zero background Node.js/PHP runtime overhead, your VPS resources remain 100% dedicated to your actual application workloads."
-            }
-          }
-        ]
       }
     ]
   }
@@ -345,6 +249,42 @@ const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://smoooth.dev/features/</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/features/mcp-runtime</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/features/transactional-deployments</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/features/stateful-databases</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/features/reverse-proxy</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/features/sandbox-security</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://smoooth.dev/guides/</loc>
     <lastmod>2026-10-23</lastmod>
     <changefreq>weekly</changefreq>
@@ -367,6 +307,12 @@ const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
     <lastmod>2026-10-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/migration/</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>
 `;
@@ -419,7 +365,7 @@ const notFoundHtml = `<!DOCTYPE html>
       letter-spacing: -0.02em;
     }
     p {
-      color: #94a3b8;
+      color: #94A3B8;
       font-size: 15px;
       line-height: 1.6;
       margin: 0 0 24px 0;
@@ -454,51 +400,36 @@ const notFoundHtml = `<!DOCTYPE html>
 fs.writeFileSync(path.join(rootDir, '404.html'), notFoundHtml, 'utf8');
 fs.writeFileSync(path.join(distDir, '404.html'), notFoundHtml, 'utf8');
 
-// 5. Build and sync Guides
-const guidesDir = path.join(rootDir, 'guides');
-const distGuidesDir = path.join(distDir, 'guides');
-if (fs.existsSync(guidesDir)) {
-  fs.mkdirSync(distGuidesDir, { recursive: true });
-  for (const file of fs.readdirSync(guidesDir)) {
-    if (file.endsWith('.html')) {
-      const srcFile = path.join(guidesDir, file);
-      const destFile = path.join(distGuidesDir, file);
-      fs.copyFileSync(srcFile, destFile);
+// Helper to copy and support clean routing
+function syncSection(sectionName) {
+  const srcDir = path.join(rootDir, sectionName);
+  const destDir = path.join(distDir, sectionName);
+  if (fs.existsSync(srcDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const file of fs.readdirSync(srcDir)) {
+      if (file.endsWith('.html')) {
+        const srcFile = path.join(srcDir, file);
+        const destFile = path.join(destDir, file);
+        fs.copyFileSync(srcFile, destFile);
 
-      // Support clean routing: /guides/foo -> /guides/foo/index.html
-      const slug = path.basename(file, '.html');
-      if (slug !== 'index') {
-        const slugDir = path.join(distGuidesDir, slug);
-        fs.mkdirSync(slugDir, { recursive: true });
-        fs.copyFileSync(srcFile, path.join(slugDir, 'index.html'));
+        const slug = path.basename(file, '.html');
+        if (slug !== 'index') {
+          const slugDir = path.join(destDir, slug);
+          fs.mkdirSync(slugDir, { recursive: true });
+          fs.copyFileSync(srcFile, path.join(slugDir, 'index.html'));
+        }
       }
     }
   }
 }
 
-// 6. Build and sync Comparisons
-const compareDir = path.join(rootDir, 'compare');
-const distCompareDir = path.join(distDir, 'compare');
-if (fs.existsSync(compareDir)) {
-  fs.mkdirSync(distCompareDir, { recursive: true });
-  for (const file of fs.readdirSync(compareDir)) {
-    if (file.endsWith('.html')) {
-      const srcFile = path.join(compareDir, file);
-      const destFile = path.join(distCompareDir, file);
-      fs.copyFileSync(srcFile, destFile);
+// 5. Build and sync Guides, Comparisons, Features, and Migration
+syncSection('guides');
+syncSection('compare');
+syncSection('features');
+syncSection('migration');
 
-      // Support clean routing: /compare/foo -> /compare/foo/index.html
-      const slug = path.basename(file, '.html');
-      if (slug !== 'index') {
-        const slugDir = path.join(distCompareDir, slug);
-        fs.mkdirSync(slugDir, { recursive: true });
-        fs.copyFileSync(srcFile, path.join(slugDir, 'index.html'));
-      }
-    }
-  }
-}
-
-// 7. Copy public assets (harness, fonts, favicon, og-image, _headers)
+// 6. Copy public assets (harness, fonts, favicon, og-image, _headers)
 function copyDirRecursive(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
@@ -533,4 +464,4 @@ if (fs.existsSync(path.join(rootDir, '_headers'))) {
   fs.copyFileSync(path.join(rootDir, '_headers'), path.join(distDir, '_headers'));
 }
 
-console.log('✓ Successfully synchronized Smoooth landing page, robots.txt, sitemap.xml, 404.html, and headers to root and dist/');
+console.log('✓ Successfully synchronized Smoooth landing page, robots.txt, sitemap.xml, 404.html, features, migration, and headers to root and dist/');
