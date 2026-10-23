@@ -1,5 +1,13 @@
 # SEO Changelog: Smoooth
 
+- **2026-10-23 (Sprint 03)**:
+  - **Published Comparison**: Created and published `https://smoooth.dev/compare/smoooth-vs-coolify` targeting developers evaluating agent-native runtimes against Coolify.
+  - **Evidence-Backed Feature Matrix**: Verified 7 core architectural dimensions (Primary use case, AI agent / MCP workflow, Deployment management & rollbacks, Databases & persistence, Security & attack surface, Migration tooling, and Documented system requirements) strictly against the Smoooth Rust implementation and official Coolify v4 documentation.
+  - **Balanced Editorial Standards**: Documented specific strengths where Coolify is the superior choice (rich web UI, 300+ one-click service templates, multi-server clustering, automated S3 database backups), while highlighting Smoooth's differentiation (agent-native MCP stdio/SSE, 2-phase transactional DAG rollbacks, deterministic volume isolation, <28MB idle memory footprint).
+  - **Directory Index & Internal Linking**: Created `/compare/index.html` directory index, updated `/guides/deploy-docker-application-claude-code` and the homepage FAQ with reciprocal contextual links.
+  - **Static Generator & Sitemap**: Configured `scripts/build-landing.js` and `frontend/app/sitemap.ts` to build clean routing structures (`/compare/smoooth-vs-coolify/index.html` and `.html`) and registered URLs in `dist/sitemap.xml`.
+  - **Testing**: Updated `scripts/verify-seo.js` with comprehensive checks for comparison title, description, H1, absence of kicker badges, TechArticle schema, and sitemap presence.
+
 - **2026-10-23 (Sprint 02)**:
   - **Live Production Audit**: Probed `https://smoooth.dev/` with curl across root, `/robots.txt`, `/sitemap.xml`, `/og-image.png`, and nonexistent 404 test path. Documented exact HTTP headers and content types: verified that Cloudflare Pages is currently serving the previous SPA deployment (200 OK `text/html`) because local Sprint 01 files have not yet been pushed to GitHub `origin/main`.
   - **Published Guide #1**: Authoritatively published `https://smoooth.dev/guides/deploy-docker-application-claude-code` addressing the emerging high-growth query "deploying docker applications with claude code".

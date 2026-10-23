@@ -25,8 +25,23 @@ if (hasGuide) {
   guideHasSchema = guideHtml.includes('"@type": "TechArticle"');
 }
 
+// Compare verification
+const compareHtmlPath = 'dist/compare/smoooth-vs-coolify.html';
+const hasCompare = fs.existsSync(compareHtmlPath);
+let compareTitle = '', compareDesc = '', compareH1 = '', compareHasKicker = false, compareHasSchema = false, compareInSitemap = false;
+
+if (hasCompare) {
+  const compareHtml = fs.readFileSync(compareHtmlPath, 'utf8');
+  compareTitle = compareHtml.match(/<title>(.*?)<\/title>/)?.[1] || '';
+  compareDesc = compareHtml.match(/<meta name="description" content="(.*?)"/)?.[1] || '';
+  compareH1 = compareHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || '';
+  compareHasKicker = compareHtml.includes('rounded-full') && (compareHtml.includes('uppercase') || compareHtml.includes('tracking-'));
+  compareHasSchema = compareHtml.includes('"@type": "TechArticle"');
+}
+
 const sitemapContent = hasSitemap ? fs.readFileSync('dist/sitemap.xml', 'utf8') : '';
 guideInSitemap = sitemapContent.includes('https://smoooth.dev/guides/deploy-docker-application-claude-code');
+compareInSitemap = sitemapContent.includes('https://smoooth.dev/compare/smoooth-vs-coolify');
 
 console.log('--- HOMEPAGE VERIFICATION ---');
 console.log(`Title (${title.length} chars): "${title}"`);
@@ -47,8 +62,18 @@ console.log(`Guide has kicker badge: ${guideHasKicker}`);
 console.log(`Guide has TechArticle schema: ${guideHasSchema}`);
 console.log(`Guide registered in sitemap: ${guideInSitemap}`);
 
+console.log('--- COMPARE VERIFICATION ---');
+console.log(`dist/compare/... exists: ${hasCompare}`);
+console.log(`Compare Title (${compareTitle.length} chars): "${compareTitle}"`);
+console.log(`Compare Description (${compareDesc.length} chars): "${compareDesc}"`);
+console.log(`Compare H1: "${compareH1}"`);
+console.log(`Compare has kicker badge: ${compareHasKicker}`);
+console.log(`Compare has TechArticle schema: ${compareHasSchema}`);
+console.log(`Compare registered in sitemap: ${compareInSitemap}`);
+
 if (title && desc && h1 && !hasKicker && hasFaq && hasRobots && hasSitemap && has404 &&
-    hasGuide && guideTitle && guideDesc && guideH1 && !guideHasKicker && guideHasSchema && guideInSitemap) {
+    hasGuide && guideTitle && guideDesc && guideH1 && !guideHasKicker && guideHasSchema && guideInSitemap &&
+    hasCompare && compareTitle && compareDesc && compareH1 && !compareHasKicker && compareHasSchema && compareInSitemap) {
   console.log('✓ All verification criteria passed!');
 } else {
   console.error('✗ Some checks failed.');

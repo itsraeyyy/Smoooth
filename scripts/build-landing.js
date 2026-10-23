@@ -294,7 +294,7 @@ const fullHtml = `<!DOCTYPE html>
             "name": "How does Smoooth compare to Coolify or Dokku?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Coolify requires 1.2-1.8 GB RAM idle and is designed around a human web UI. Smoooth is a single 25MB static binary consuming under 28MB RAM idle, purpose-built for autonomous AI agents over MCP with transactional 2-phase DAG deployments and automatic rollbacks."
+              "text": "Coolify requires 2 CPUs and 2 GB RAM minimum, running a full web dashboard, Fastify backend, and Traefik proxy. Smoooth is a single static Rust binary consuming under 28MB RAM idle, purpose-built for autonomous AI agents over MCP with transactional 2-phase DAG deployments and automatic rollbacks."
             }
           },
           {
@@ -352,6 +352,18 @@ const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
   </url>
   <url>
     <loc>https://smoooth.dev/guides/deploy-docker-application-claude-code</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/compare/</loc>
+    <lastmod>2026-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://smoooth.dev/compare/smoooth-vs-coolify</loc>
     <lastmod>2026-10-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -464,7 +476,29 @@ if (fs.existsSync(guidesDir)) {
   }
 }
 
-// 6. Copy public assets (harness, fonts, favicon, og-image, _headers)
+// 6. Build and sync Comparisons
+const compareDir = path.join(rootDir, 'compare');
+const distCompareDir = path.join(distDir, 'compare');
+if (fs.existsSync(compareDir)) {
+  fs.mkdirSync(distCompareDir, { recursive: true });
+  for (const file of fs.readdirSync(compareDir)) {
+    if (file.endsWith('.html')) {
+      const srcFile = path.join(compareDir, file);
+      const destFile = path.join(distCompareDir, file);
+      fs.copyFileSync(srcFile, destFile);
+
+      // Support clean routing: /compare/foo -> /compare/foo/index.html
+      const slug = path.basename(file, '.html');
+      if (slug !== 'index') {
+        const slugDir = path.join(distCompareDir, slug);
+        fs.mkdirSync(slugDir, { recursive: true });
+        fs.copyFileSync(srcFile, path.join(slugDir, 'index.html'));
+      }
+    }
+  }
+}
+
+// 7. Copy public assets (harness, fonts, favicon, og-image, _headers)
 function copyDirRecursive(src, dest) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });

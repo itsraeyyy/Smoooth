@@ -23,5 +23,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.9,
     },
+    {
+      url: `${baseUrl}/compare/`,
+      lastModified,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/compare/smoooth-vs-coolify`,
+      lastModified,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
   ];
 }

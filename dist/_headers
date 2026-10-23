@@ -19,6 +19,9 @@
 /guides/*
   Cache-Control: public, max-age=3600, must-revalidate
 
+/compare/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
 /*.css
   Cache-Control: public, max-age=0, must-revalidate
 

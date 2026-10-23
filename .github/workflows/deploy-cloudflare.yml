@@ -14,6 +14,7 @@ on:
       - '404.html'
       - 'dist/**'
       - 'guides/**'
+      - 'compare/**'
       - 'package.json'
       - 'scripts/**'
       - '.github/workflows/deploy-cloudflare.yml'
