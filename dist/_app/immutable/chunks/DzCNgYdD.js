@@ -1,0 +1,1 @@
+import{V as e,z as t}from"./cBdug0a_.js";import"./xihTtKlq.js";import"./BK8tric1.js";var n=e(`<div class="container-marketing" aria-hidden="true"><div class="h-px w-full bg-border"></div></div>`);function r(e){t(e,n())}export{r as t};

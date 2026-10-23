@@ -1,75 +1,225 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://smoooth.dev/</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/mcp-runtime</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/transactional-deployments</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/stateful-databases</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/reverse-proxy</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/features/sandbox-security</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/guides/</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/guides/deploy-docker-application-claude-code</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/compare/</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/compare/smoooth-vs-coolify</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://smoooth.dev/migration/</loc>
-    <lastmod>2026-10-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-</urlset>
+<?xml version="1.0" encoding="UTF-8" ?>
+		<urlset
+			xmlns="https://www.sitemaps.org/schemas/sitemap/0.9"
+			xmlns:xhtml="https://www.w3.org/1999/xhtml"
+			xmlns:mobile="https://www.google.com/schemas/sitemap-mobile/1.0"
+			xmlns:news="https://www.google.com/schemas/sitemap-news/0.9"
+			xmlns:image="https://www.google.com/schemas/sitemap-image/1.1"
+			xmlns:video="https://www.google.com/schemas/sitemap-video/1.1"
+		>
+<url><loc>https://ferndesk.com/</loc><lastmod>2026-06-10</lastmod></url>
+<url><loc>https://ferndesk.com/ai-documentation-agent</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/ai-faq-generator</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/ai-help-center</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/answers</loc><lastmod>2026-10-19</lastmod></url>
+<url><loc>https://ferndesk.com/answers/ai-help-center-platforms-comparison</loc><lastmod>2026-09-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/ai-powered-help-center-maintenance</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/ai-powered-search-and-chat-for-self-service</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/answers/ai-tools-that-write-and-update-help-center-articles-in-2026</loc><lastmod>2026-07-06</lastmod></url>
+<url><loc>https://ferndesk.com/answers/automated-content-audits-for-help-centers</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/automated-screenshot-generation-documentation</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/answers/building-a-documentation-workflow-that-automatically-syncs-with-your-codebase</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/answers/canonical-source-for-synced-help-content</loc><lastmod>2026-10-19</lastmod></url>
+<url><loc>https://ferndesk.com/answers/convert-product-release-notes-into-help-articles</loc><lastmod>2026-10-19</lastmod></url>
+<url><loc>https://ferndesk.com/answers/export-import-help-center-articles</loc><lastmod>2026-10-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/help-center-content-audit-tools</loc><lastmod>2026-09-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/help-center-onboarding-workflows</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/answers/helpdocs-vs-document360-vs-ferndesk</loc><lastmod>2026-10-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/how-support-ticket-analysis-exposes-documentation-gaps-after-a-help-center-migration</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/how-to-choose-automated-documentation-software-that-actually-keeps-docs-current</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/answers/how-to-keep-help-center-docs-up-to-date-in-a-fast-moving-product</loc><lastmod>2026-07-14</lastmod></url>
+<url><loc>https://ferndesk.com/answers/how-to-manage-product-documentation-without-a-technical-writer</loc><lastmod>2026-07-06</lastmod></url>
+<url><loc>https://ferndesk.com/answers/how-to-move-your-help-center-from-intercom-to-something-better</loc><lastmod>2026-07-06</lastmod></url>
+<url><loc>https://ferndesk.com/answers/hubspot-vs-zendesk-vs-freshdesk-ai-knowledge-base-comparison</loc><lastmod>2026-10-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/integrated-documentation-maintenance-tools</loc><lastmod>2026-09-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/knowledge-base-governance-assessment-criteria</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/answers/migrate-zendesk-help-center-to-another-platform</loc><lastmod>2026-10-19</lastmod></url>
+<url><loc>https://ferndesk.com/answers/no-code-help-center-migration</loc><lastmod>2026-10-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/scaling-customer-support-with-ai-and-automated-docs</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/self-service-widget-for-help-center</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/answers/support-ticket-analysis-for-documentation-gaps</loc><lastmod>2026-09-15</lastmod></url>
+<url><loc>https://ferndesk.com/answers/tools-to-host-a-help-center-on-a-custom-domain-with-good-seo</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/top-features-to-look-for-in-help-center-migration-tools-in-2026</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/what-are-people-using-instead-of-zendesk-for-help-center-docs</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/answers/what-are-the-best-freshdesk-alternatives-for-self-service-documentation</loc><lastmod>2026-07-14</lastmod></url>
+<url><loc>https://ferndesk.com/answers/what-are-the-best-intercom-alternatives-for-teams-that-want-smarter-help-center-search</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/answers/what-knowledge-base-tools-integrate-with-github-so-docs-stay-in-sync-with-code</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/answers/what-software-reduces-support-tickets-with-accurate-documentation</loc><lastmod>2026-07-06</lastmod></url>
+<url><loc>https://ferndesk.com/answers/which-api-documentation-platform-is-the-best-in-2026</loc><lastmod>2026-07-14</lastmod></url>
+<url><loc>https://ferndesk.com/answers/which-help-center-platforms-show-you-the-articles-that-aren-t-actually-helping-customers</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/answers/which-software-support-teams-use-to-turn-recurring-tickets-into-help-articles</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/api-documentation-software</loc><lastmod>2026-06-12</lastmod></url>
+<url><loc>https://ferndesk.com/automated-screenshots-for-docs</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/blog</loc><lastmod>2026-10-16</lastmod></url>
+<url><loc>https://ferndesk.com/blog/14-stunning-zendesk-help-center-examples</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/ai-agents-in-customer-service</loc><lastmod>2026-08-13</lastmod></url>
+<url><loc>https://ferndesk.com/blog/ai-documentation-generators-the-ultimate-guide</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/ai-knowledge-base</loc><lastmod>2026-07-02</lastmod></url>
+<url><loc>https://ferndesk.com/blog/ai-knowledge-base-examples</loc><lastmod>2026-10-15</lastmod></url>
+<url><loc>https://ferndesk.com/blog/automated-customer-service-guide</loc><lastmod>2026-07-02</lastmod></url>
+<url><loc>https://ferndesk.com/blog/automated-knowledge-base-the-complete-guide</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/automatic-documentation-made-easy-for-your-business</loc><lastmod>2026-05-04</lastmod></url>
+<url><loc>https://ferndesk.com/blog/benefits-of-knowledge-base</loc><lastmod>2026-10-16</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-customer-service-software-tools</loc><lastmod>2026-07-02</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-driven-knowledge-base-software</loc><lastmod>2026-07-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-knowledge-base-software</loc><lastmod>2026-07-13</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-powered-help-center-software-tools</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-tools-for-customer-success</loc><lastmod>2026-07-13</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-ai-tools-for-customer-support-scaling</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-api-documentation-tools</loc><lastmod>2026-07-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-archbee-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-automated-software-documentation</loc><lastmod>2026-09-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-document-automation-software</loc><lastmod>2026-07-28</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-document360-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-docusaurus-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-faq-software-tools-for-saas-teams</loc><lastmod>2026-07-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-free-knowledge-base-software</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-gitbook-alternatives</loc><lastmod>2026-07-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-help-center-software</loc><lastmod>2026-06-12</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-help-center-software-for-saas</loc><lastmod>2026-05-04</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-help-scout-alternatives</loc><lastmod>2026-10-08</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-helpdocs-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-helpjuice-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-in-app-help-widgets</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-it-documentation-software</loc><lastmod>2026-07-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-knowledge-base-examples</loc><lastmod>2026-09-14</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-knowledge-base-for-small-teams</loc><lastmod>2026-09-27</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-knowledge-base-software-for-support-teams</loc><lastmod>2026-09-27</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-knowledgeowl-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-mintlify-alternatives</loc><lastmod>2026-07-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-multilingual-knowledge-base-software</loc><lastmod>2026-08-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-practices-maintaining-knowledge-base</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-proprofs-knowledge-base-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-saas-help-desk-software</loc><lastmod>2026-09-10</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-self-service-knowledge-base-platforms</loc><lastmod>2026-09-14</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-self-updating-knowledge-base</loc><lastmod>2026-10-11</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-software-documentation-tools</loc><lastmod>2026-09-27</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-standalone-knowledge-base-software</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-stonly-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-technical-writing-tools</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/blog/best-zoho-desk-alternatives</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/building-embeddable-widgets-with-svelte</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/clickhelp-alternatives</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/customer-service-knowledge-base</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/customer-service-knowledge-management</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/blog/customer-service-kpis</loc><lastmod>2026-08-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/customer-support-knowledge-base</loc><lastmod>2026-07-12</lastmod></url>
+<url><loc>https://ferndesk.com/blog/documentation-drift</loc><lastmod>2026-01-25</lastmod></url>
+<url><loc>https://ferndesk.com/blog/documentation-management-system</loc><lastmod>2026-07-28</lastmod></url>
+<url><loc>https://ferndesk.com/blog/docusaurus-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/docusaurus-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/freshdesk-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/freshdesk-vs-zendesk-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/generative-ai-in-customer-service</loc><lastmod>2026-08-17</lastmod></url>
+<url><loc>https://ferndesk.com/blog/gitbook-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/gitbook-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/gitbook-vs-mintlify</loc><lastmod>2026-03-18</lastmod></url>
+<url><loc>https://ferndesk.com/blog/gorgias-help-center-examples</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/help-desk-providers</loc><lastmod>2026-03-18</lastmod></url>
+<url><loc>https://ferndesk.com/blog/help-documentation-software</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/help-scout-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpcrunch-alternatives</loc><lastmod>2026-09-20</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpdesk-metrics-that-actually-improve-support-performance</loc><lastmod>2026-09-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpdocs-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpdocs-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpjuice-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/helpjuice-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/hiver-alternatives</loc><lastmod>2026-09-19</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-build-a-knowledge-base</loc><lastmod>2026-08-13</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-create-a-user-manual</loc><lastmod>2026-09-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-hire-a-technical-writer</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-keep-knowledge-base-up-to-date-automatically</loc><lastmod>2026-03-18</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-price-your-ai-saas-2-mistakes-we-made</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-refresh-out-of-date-help-center</loc><lastmod>2026-01-25</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-scale-customer-support</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/how-to-talk-to-users-without-getting-overwhelmed-my-system</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/intercom-alternatives</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-automation-best-practices</loc><lastmod>2026-10-16</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-chatbot-guide</loc><lastmod>2026-09-14</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-for-saas-startups</loc><lastmod>2026-05-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-maintenance-best-practices</loc><lastmod>2026-09-14</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-maintenance-checklist</loc><lastmod>2026-01-25</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-platforms-with-analytics</loc><lastmod>2026-08-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-seo</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-software-features</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-base-templates</loc><lastmod>2026-09-07</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledge-gap-analysis</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledgeowl-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/knowledgeowl-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/madcap-flare-alternatives</loc><lastmod>2026-09-19</lastmod></url>
+<url><loc>https://ferndesk.com/blog/mintlify-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/mintlify-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/open-source-knowledge-base-software</loc><lastmod>2026-08-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/proprofs-kb-pricing</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/proprofs-kb-review</loc><lastmod>2026-10-05</lastmod></url>
+<url><loc>https://ferndesk.com/blog/readme-alternatives</loc><lastmod>2026-09-19</lastmod></url>
+<url><loc>https://ferndesk.com/blog/saas-self-service-strategies</loc><lastmod>2026-01-25</lastmod></url>
+<url><loc>https://ferndesk.com/blog/screenshot-size-for-documentation</loc><lastmod>2026-05-04</lastmod></url>
+<url><loc>https://ferndesk.com/blog/scribe-alternatives</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/self-service-knowledge-base-useful</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/self-updating-knowledge-base</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/seo-friendly-customer-knowledge-base</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/slite-alternatives</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/software-user-manual-template</loc><lastmod>2026-10-16</lastmod></url>
+<url><loc>https://ferndesk.com/blog/tango-alternatives</loc><lastmod>2026-09-19</lastmod></url>
+<url><loc>https://ferndesk.com/blog/technical-documentation-tool</loc><lastmod>2026-08-03</lastmod></url>
+<url><loc>https://ferndesk.com/blog/technical-writer-interview-questions</loc><lastmod>2026-05-04</lastmod></url>
+<url><loc>https://ferndesk.com/blog/technical-writer-job-description-template</loc><lastmod>2026-01-24</lastmod></url>
+<url><loc>https://ferndesk.com/blog/top-ai-helpdesk-software</loc><lastmod>2026-08-03</lastmod></url>
+<url><loc>https://ferndesk.com/blog/top-ai-tools-for-software-documentation</loc><lastmod>2026-10-11</lastmod></url>
+<url><loc>https://ferndesk.com/blog/user-manual-software</loc><lastmod>2026-07-21</lastmod></url>
+<url><loc>https://ferndesk.com/blog/web-based-knowledge-base-software</loc><lastmod>2026-08-13</lastmod></url>
+<url><loc>https://ferndesk.com/blog/what-is-a-self-service-knowledge-base</loc><lastmod>2026-09-14</lastmod></url>
+<url><loc>https://ferndesk.com/blog/write-knowledge-base-article</loc><lastmod>2026-10-09</lastmod></url>
+<url><loc>https://ferndesk.com/blog/zendesk-alternatives</loc><lastmod>2026-09-21</lastmod></url>
+<url><loc>https://ferndesk.com/book-a-demo</loc><lastmod>2026-05-18</lastmod></url>
+<url><loc>https://ferndesk.com/book-a-demo/success</loc><lastmod>2026-02-19</lastmod></url>
+<url><loc>https://ferndesk.com/chrome-extension-for-documentation</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/code-to-docs</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/compare/archbee</loc><lastmod>2026-09-25</lastmod></url>
+<url><loc>https://ferndesk.com/compare/document360</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/docusaurus</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/gitbook</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/help-scout</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/helpdocs</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/helpjuice</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/intercom</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/knowledgeowl</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/mintlify</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/proprofs</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/compare/stonly</loc><lastmod>2026-09-25</lastmod></url>
+<url><loc>https://ferndesk.com/compare/zendesk</loc><lastmod>2026-09-24</lastmod></url>
+<url><loc>https://ferndesk.com/customers</loc><lastmod>2026-02-19</lastmod></url>
+<url><loc>https://ferndesk.com/customers/cap</loc></url>
+<url><loc>https://ferndesk.com/customers/cleverific</loc></url>
+<url><loc>https://ferndesk.com/customers/client-portal</loc></url>
+<url><loc>https://ferndesk.com/customers/duplika</loc></url>
+<url><loc>https://ferndesk.com/customers/evergrove-labs</loc></url>
+<url><loc>https://ferndesk.com/customers/gummysearch</loc></url>
+<url><loc>https://ferndesk.com/customers/isms-copilot</loc></url>
+<url><loc>https://ferndesk.com/customers/mallow</loc></url>
+<url><loc>https://ferndesk.com/customers/metricool</loc></url>
+<url><loc>https://ferndesk.com/customers/pixelflow</loc></url>
+<url><loc>https://ferndesk.com/customers/rightmessage</loc></url>
+<url><loc>https://ferndesk.com/customers/seogets</loc></url>
+<url><loc>https://ferndesk.com/customers/trackflo</loc></url>
+<url><loc>https://ferndesk.com/customers/we-are-distributed</loc></url>
+<url><loc>https://ferndesk.com/customers/youform</loc></url>
+<url><loc>https://ferndesk.com/generative-ai-customer-service</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/help-center-software</loc><lastmod>2026-06-12</lastmod></url>
+<url><loc>https://ferndesk.com/integrations</loc><lastmod>2026-05-22</lastmod></url>
+<url><loc>https://ferndesk.com/internal-knowledge-base</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/legal/privacy-policy</loc></url>
+<url><loc>https://ferndesk.com/legal/privacy-request</loc><lastmod>2026-09-23</lastmod></url>
+<url><loc>https://ferndesk.com/legal/terms-of-service</loc></url>
+<url><loc>https://ferndesk.com/legal/vulnerability-disclosure</loc></url>
+<url><loc>https://ferndesk.com/lp/ai-help-center</loc><lastmod>2026-05-18</lastmod></url>
+<url><loc>https://ferndesk.com/migration</loc><lastmod>2026-09-04</lastmod></url>
+<url><loc>https://ferndesk.com/multilingual-knowledge-base</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/pricing</loc><lastmod>2026-02-19</lastmod></url>
+<url><loc>https://ferndesk.com/savings-calculator</loc><lastmod>2026-09-04</lastmod></url>
+<url><loc>https://ferndesk.com/self-service-help-widget</loc><lastmod>2026-06-11</lastmod></url>
+<url><loc>https://ferndesk.com/self-updating-help-center</loc><lastmod>2026-06-12</lastmod></url>
+<url><loc>https://ferndesk.com/tools/docs-debt-quiz</loc><lastmod>2026-02-19</lastmod></url>
+<url><loc>https://ferndesk.com/tools/openapi-validator</loc><lastmod>2026-05-18</lastmod></url>
+		</urlset>

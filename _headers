@@ -1,8 +1,11 @@
 /*
-  X-Frame-Options: DENY
+  X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/_app/immutable/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /robots.txt
   Content-Type: text/plain; charset=utf-8
@@ -12,21 +15,29 @@
   Content-Type: application/xml; charset=utf-8
   Cache-Control: public, max-age=86400
 
-/og-image.png
-  Content-Type: image/png
-  Cache-Control: public, max-age=604800
+/favicon.ico
+  Content-Type: image/x-icon
+  Cache-Control: public, max-age=18000
 
-/guides/*
+/favicon.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=18000
+
+/favicon-32.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=18000
+
+/answers/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/blog/*
   Cache-Control: public, max-age=3600, must-revalidate
 
 /compare/*
   Cache-Control: public, max-age=3600, must-revalidate
 
-/*.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/*.js
-  Cache-Control: public, max-age=0, must-revalidate
+/customers/*
+  Cache-Control: public, max-age=3600, must-revalidate
 
 /index.html
   Cache-Control: public, max-age=0, must-revalidate

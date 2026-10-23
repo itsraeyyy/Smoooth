@@ -1,0 +1,1 @@
+import{Ft as e,Ht as t,It as n,V as r,k as i,mt as a,s as o,z as s}from"./cBdug0a_.js";import"./xihTtKlq.js";var c=r(`<main class="bg-bg"><!></main>`);function l(r,l){n(l,!0),o(l,[`$$slots`,`$$events`,`$$legacy`]);var u=c();i(a(u),()=>l.children),t(u),s(r,u),e()}export{l as t};

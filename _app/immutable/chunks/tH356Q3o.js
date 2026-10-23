@@ -1,0 +1,1 @@
+var e=`ferndesk_subscribed`;function t(){return typeof window>`u`?!1:localStorage.getItem(e)!==null}function n(){return typeof window>`u`?null:localStorage.getItem(e)}function r(t){typeof window>`u`||localStorage.setItem(e,t)}export{t as n,r,n as t};

@@ -1,0 +1,1 @@
+function e(e,t={}){return e?new Intl.DateTimeFormat(`en-US`,{timeZone:`UTC`,year:`numeric`,month:`short`,day:`numeric`,...t}).format(new Date(e)):``}function t(e,t){if(!e||!t)return!1;let n=Date.parse(e),r=Date.parse(t);if(Number.isNaN(n)||Number.isNaN(r))return!1;let i=e=>new Date(e).toISOString().slice(0,10);return i(n)>i(r)}export{t as n,e as t};
