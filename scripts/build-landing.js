@@ -41,7 +41,7 @@ const interactionScript = fs.readFileSync(path.join(rootDir, 'scripts/ferndesk-i
 const scriptTag = `\n<script>\n${interactionScript}\n</script>\n</body>`;
 
 function injectScript(html) {
-  if (html.includes('id="ferndesk-interactive-runtime"')) return html;
+  html = html.replace(/<script\s+id="ferndesk-interactive-runtime">[\s\S]*?<\/script>/gi, '');
   return html.replace('</body>', `<script id="ferndesk-interactive-runtime">\n${interactionScript}\n</script>\n</body>`);
 }
 
@@ -92,16 +92,19 @@ function syncPages(dir, relativeDir = '') {
       const destFile = path.join(distDir, relativeDir, entry.name);
       fs.mkdirSync(path.dirname(destFile), { recursive: true });
 
-      const content = injectScript(fs.readFileSync(srcFile, 'utf8'));
-      fs.writeFileSync(srcFile, content, 'utf8');
-      fs.writeFileSync(destFile, content, 'utf8');
+      const origContent = fs.readFileSync(srcFile, 'utf8');
+      const content = injectScript(origContent);
+      if (origContent !== content) {
+        try { fs.writeFileSync(srcFile, content, 'utf8'); } catch (_) {}
+      }
+      try { fs.writeFileSync(destFile, content, 'utf8'); } catch (_) {}
 
       // Support directory index if it's a slug.html
       const slug = path.basename(entry.name, '.html');
       if (slug !== 'index') {
         const slugDirPath = path.join(distDir, relativeDir, slug, 'index.html');
         fs.mkdirSync(path.dirname(slugDirPath), { recursive: true });
-        fs.writeFileSync(slugDirPath, content, 'utf8');
+        try { fs.writeFileSync(slugDirPath, content, 'utf8'); } catch (_) {}
       }
     }
   }

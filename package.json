@@ -4,7 +4,7 @@
   "private": true,
   "description": "Smoooth - Infrastructure Freedom for AI Agents Landing Page",
   "scripts": {
-    "build": "node scripts/update-fonts-to-lexend.js && node scripts/build-brand-page.js && node scripts/build-landing.js",
+    "build": "node scripts/update-fonts-to-lexend.js && node scripts/build-brand-page.js && node scripts/patch-smoooth-clean.js && node scripts/build-landing.js",
     "build:brand": "node scripts/build-brand-page.js",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=smoooth",
     "preview": "npx serve dist"
