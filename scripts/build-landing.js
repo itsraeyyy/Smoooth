@@ -26,22 +26,17 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-// 1. Copy SvelteKit immutable assets (_app) and brand assets
-console.log('Copying _app assets and brand directory...');
+// 1. Copy SvelteKit immutable assets (_app)
+console.log('Copying _app assets...');
 copyDirRecursive(path.join(rootDir, '_app'), path.join(distDir, '_app'));
-if (fs.existsSync(path.join(rootDir, 'assets'))) {
-  copyDirRecursive(path.join(rootDir, 'assets'), path.join(distDir, 'assets'));
-}
-if (fs.existsSync(path.join(rootDir, 'fonts'))) {
-  copyDirRecursive(path.join(rootDir, 'fonts'), path.join(distDir, 'fonts'));
-}
 
 // 2. Read interaction runtime script
 const interactionScript = fs.readFileSync(path.join(rootDir, 'scripts/ferndesk-interaction.js'), 'utf8');
-const scriptTag = `\n<script>\n${interactionScript}\n</script>\n</body>`;
 
 function injectScript(html) {
-  html = html.replace(/<script\s+id="ferndesk-interactive-runtime">[\s\S]*?<\/script>/gi, '');
+  if (html.includes('id="ferndesk-interactive-runtime"')) {
+    return html.replace(/<script id="ferndesk-interactive-runtime">[\s\S]*?<\/script>/i, `<script id="ferndesk-interactive-runtime">\n${interactionScript}\n</script>`);
+  }
   return html.replace('</body>', `<script id="ferndesk-interactive-runtime">\n${interactionScript}\n</script>\n</body>`);
 }
 
@@ -55,8 +50,7 @@ const rootStaticFiles = [
   'favicon.svg',
   'favicon-32.png',
   '_headers',
-  'styles.css',
-  'BRAND_GUIDELINES.md'
+  'styles.css'
 ];
 
 for (const file of rootStaticFiles) {
@@ -92,19 +86,16 @@ function syncPages(dir, relativeDir = '') {
       const destFile = path.join(distDir, relativeDir, entry.name);
       fs.mkdirSync(path.dirname(destFile), { recursive: true });
 
-      const origContent = fs.readFileSync(srcFile, 'utf8');
-      const content = injectScript(origContent);
-      if (origContent !== content) {
-        try { fs.writeFileSync(srcFile, content, 'utf8'); } catch (_) {}
-      }
-      try { fs.writeFileSync(destFile, content, 'utf8'); } catch (_) {}
+      const content = injectScript(fs.readFileSync(srcFile, 'utf8'));
+      fs.writeFileSync(srcFile, content, 'utf8');
+      fs.writeFileSync(destFile, content, 'utf8');
 
       // Support directory index if it's a slug.html
       const slug = path.basename(entry.name, '.html');
       if (slug !== 'index') {
         const slugDirPath = path.join(distDir, relativeDir, slug, 'index.html');
         fs.mkdirSync(path.dirname(slugDirPath), { recursive: true });
-        try { fs.writeFileSync(slugDirPath, content, 'utf8'); } catch (_) {}
+        fs.writeFileSync(slugDirPath, content, 'utf8');
       }
     }
   }

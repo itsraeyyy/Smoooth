@@ -1,8 +1,9 @@
-// Smoooth Interactive Runtime for Homepage
-// High-performance, crisp interactive handlers for hero tabs, installer copy, and FAQ accordions
+// Ferndesk Interactive Runtime
+// Provides seamless interactivity for Ferndesk shell (header dropdowns, mobile menu, modals)
+// and Smoooth homepage hero components (installer copy, 4-stage terminal tabs, FAQ accordions).
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Copy installer button
+  // 1. Copy installer button (Smoooth Hero)
   const copyBtn = document.getElementById('copy-installer-btn');
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
@@ -19,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 2. Hero 4-Stage Showcase Tabs
+  // 2. Hero 4-Stage Showcase Tabs (Smoooth Hero)
   const heroTabPanes = [
     {
       agent: 'Claude Code via stdio',
@@ -119,50 +120,235 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 3. FAQ Accordion Interaction
-  const faqButtons = document.querySelectorAll('#faq button[aria-expanded]');
+  // 3. Ferndesk Header Dropdown Menus (Features & Resources)
+  const featuresBtn = document.querySelector('button[aria-controls="features-menu"]');
+  const resourcesBtn = document.querySelector('button[aria-controls="resources-menu"]');
+
+  let featuresMenu = document.getElementById('features-menu');
+  if (!featuresMenu && featuresBtn) {
+    featuresMenu = document.createElement('div');
+    featuresMenu.id = 'features-menu';
+    featuresMenu.className = 'border-border bg-bg-raised shadow-float absolute top-full left-1/2 z-50 mt-2 w-[900px] max-w-[calc(100vw-2.5rem)] -translate-x-1/2 overflow-hidden rounded-lg border hidden';
+    featuresMenu.innerHTML = `
+      <div class="grid grid-cols-3 gap-x-8 px-7 pt-7 pb-6">
+        <div class="flex flex-col gap-1">
+          <span class="eyebrow px-2 pb-2.5 text-xs font-semibold uppercase tracking-wider text-fg-3">Help center</span>
+          <a href="/ai-help-center" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Hosted help center</span><span class="text-fg-3 text-sm">Your domain or /help</span></span>
+          </a>
+          <a href="/generative-ai-customer-service" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">AI conversations</span><span class="text-fg-3 text-sm">Answers drawn from your docs</span></span>
+          </a>
+          <a href="/self-service-help-widget" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">In-app widget</span><span class="text-fg-3 text-sm">Help inside your product</span></span>
+          </a>
+          <a href="/multilingual-knowledge-base" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Multilingual</span><span class="text-fg-3 text-sm">Translated, kept in sync</span></span>
+          </a>
+          <a href="/internal-knowledge-base" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Private knowledge base</span><span class="text-fg-3 text-sm">Docs behind a login</span></span>
+          </a>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="eyebrow px-2 pb-2.5 text-xs font-semibold uppercase tracking-wider text-fg-3">AI & automation</span>
+          <a href="/self-updating-help-center" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Verification</span><span class="text-fg-3 text-sm">Every article checked</span></span>
+          </a>
+          <a href="/code-to-docs" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Code to docs</span><span class="text-fg-3 text-sm">Fixes from every PR</span></span>
+          </a>
+          <a href="/automated-screenshots-for-docs" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Automated screenshots</span><span class="text-fg-3 text-sm">Re-taken when UI changes</span></span>
+          </a>
+          <a href="/ai-documentation-agent" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">AI drafting</span><span class="text-fg-3 text-sm">Written from your codebase</span></span>
+          </a>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="eyebrow px-2 pb-2.5 text-xs font-semibold uppercase tracking-wider text-fg-3">Connect</span>
+          <a href="/integrations" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Integrations</span><span class="text-fg-3 text-sm">GitHub, Linear, Slack</span></span>
+          </a>
+          <a href="https://docs.ferndesk.com/mcp-hjgdc" target="_blank" rel="noopener noreferrer" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">MCP server</span><span class="text-fg-3 text-sm">Let Claude &amp; Cursor read your docs</span></span>
+          </a>
+          <a href="/chrome-extension-for-documentation" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Chrome extension</span><span class="text-fg-3 text-sm">Capture product changes</span></span>
+          </a>
+        </div>
+      </div>
+    `;
+    featuresBtn.parentElement?.appendChild(featuresMenu);
+  }
+
+  let resourcesMenu = document.getElementById('resources-menu');
+  if (!resourcesMenu && resourcesBtn) {
+    resourcesMenu = document.createElement('div');
+    resourcesMenu.id = 'resources-menu';
+    resourcesMenu.className = 'border-border bg-bg-raised shadow-float absolute top-full left-1/2 z-50 mt-2 w-[520px] max-w-[calc(100vw-2.5rem)] -translate-x-1/2 overflow-hidden rounded-lg border hidden';
+    resourcesMenu.innerHTML = `
+      <div class="grid grid-cols-2 gap-x-6 px-6 pt-6 pb-5">
+        <div class="flex flex-col gap-1">
+          <span class="eyebrow px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-fg-3">Learn</span>
+          <a href="/blog" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Blog</span><span class="text-fg-3 text-sm">Product, AI, and docs advice</span></span>
+          </a>
+          <a href="/answers" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">Answer hub</span><span class="text-fg-3 text-sm">Guides and deep dives</span></span>
+          </a>
+        </div>
+        <div class="flex flex-col gap-1">
+          <span class="eyebrow px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-fg-3">Compare</span>
+          <a href="/compare" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">All comparisons</span><span class="text-fg-3 text-sm">See how Ferndesk stacks up</span></span>
+          </a>
+          <a href="/compare/zendesk" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">vs Zendesk</span><span class="text-fg-3 text-sm">Modern, AI-first help center</span></span>
+          </a>
+          <a href="/compare/intercom" class="hover:bg-bg flex items-center gap-3 rounded px-2 py-2 transition-colors">
+            <span class="flex min-w-0 flex-col gap-px"><span class="text-fg text-base font-medium">vs Intercom</span><span class="text-fg-3 text-sm">Better self-service at lower cost</span></span>
+          </a>
+        </div>
+      </div>
+    `;
+    resourcesBtn.parentElement?.appendChild(resourcesMenu);
+  }
+
+  function toggleDropdown(btn, menu) {
+    if (!btn || !menu) return;
+    const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    closeAllDropdowns();
+    if (!isExpanded) {
+      btn.setAttribute('aria-expanded', 'true');
+      menu.classList.remove('hidden');
+    }
+  }
+
+  function closeAllDropdowns() {
+    if (featuresBtn) featuresBtn.setAttribute('aria-expanded', 'false');
+    if (resourcesBtn) resourcesBtn.setAttribute('aria-expanded', 'false');
+    if (featuresMenu) featuresMenu.classList.add('hidden');
+    if (resourcesMenu) resourcesMenu.classList.add('hidden');
+  }
+
+  if (featuresBtn && featuresMenu) {
+    featuresBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown(featuresBtn, featuresMenu);
+    });
+  }
+
+  if (resourcesBtn && resourcesMenu) {
+    resourcesBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown(resourcesBtn, resourcesMenu);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#features-menu') && !e.target.closest('button[aria-controls="features-menu"]') &&
+        !e.target.closest('#resources-menu') && !e.target.closest('button[aria-controls="resources-menu"]')) {
+      closeAllDropdowns();
+    }
+  });
+
+  // 4. Mobile Menu Drawer
+  const mobileBtn = document.querySelector('button[aria-controls="mobile-menu"]');
+  const header = document.querySelector('header');
+  let mobileMenu = document.getElementById('mobile-menu');
+
+  if (!mobileMenu && header) {
+    mobileMenu = document.createElement('div');
+    mobileMenu.id = 'mobile-menu';
+    mobileMenu.className = 'border-border bg-bg border-b px-5 pt-4 pb-8 lg:hidden hidden';
+    mobileMenu.innerHTML = `
+      <div class="flex flex-col gap-4">
+        <nav class="flex flex-col divide-y divide-border">
+          <a href="/pricing" class="focus-ring text-fg hover:bg-bg-muted -mx-2 rounded px-2 py-4 text-lg font-medium transition-colors">Pricing</a>
+          <a href="/customers" class="focus-ring text-fg hover:bg-bg-muted -mx-2 rounded px-2 py-4 text-lg font-medium transition-colors">Customers</a>
+          <a href="/migration" class="focus-ring text-fg hover:bg-bg-muted -mx-2 rounded px-2 py-4 text-lg font-medium transition-colors">Migrate</a>
+          <a href="/answers" class="focus-ring text-fg hover:bg-bg-muted -mx-2 rounded px-2 py-4 text-lg font-medium transition-colors">Answer hub</a>
+          <a href="/blog" class="focus-ring text-fg hover:bg-bg-muted -mx-2 rounded px-2 py-4 text-lg font-medium transition-colors">Blog</a>
+        </nav>
+        <div class="flex flex-col gap-2 pt-6">
+          <a href="https://ferndesk.com/app" class="focus-ring text-prose hover:bg-bg-muted hover:text-fg rounded border border-gray-300 px-3 py-2 text-center text-base font-medium transition-colors">Sign in</a>
+          <a href="https://ferndesk.com/app/signup" class="focus-ring bg-brand text-white hover:bg-brand/90 rounded px-3 py-2 text-center text-base font-medium transition-colors">Start free</a>
+        </div>
+      </div>
+    `;
+    header.appendChild(mobileMenu);
+  }
+
+  if (mobileBtn && mobileMenu) {
+    mobileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = !mobileMenu.classList.contains('hidden');
+      if (isOpen) {
+        mobileMenu.classList.add('hidden');
+        mobileBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        mobileMenu.classList.remove('hidden');
+        mobileBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  // 5. FAQ Accordion Interaction
+  const faqButtons = document.querySelectorAll('#faq button[aria-expanded], button[aria-expanded]');
   faqButtons.forEach((btn) => {
+    // Check if it's an FAQ button (has span with tabular-nums or inside #faq)
+    const isFaq = btn.closest('#faq') || btn.querySelector('span.tabular-nums');
+    if (!isFaq) return;
+
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const isExpanded = btn.getAttribute('aria-expanded') === 'true';
       const newExpanded = !isExpanded;
       btn.setAttribute('aria-expanded', newExpanded ? 'true' : 'false');
 
-      const parentContainer = btn.parentElement;
-      const answerDiv = parentContainer?.querySelector(':scope > div');
-      const icon = btn.querySelector('svg');
-
-      if (answerDiv) {
-        answerDiv.style.display = newExpanded ? 'block' : 'none';
-      }
+      const icon = btn.querySelector('svg, span[aria-hidden="true"]');
       if (icon) {
         icon.style.transform = newExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+
+      const parentContainer = btn.parentElement;
+      const answerDiv = parentContainer?.querySelector(':scope > div:not([class*="grid"])');
+      if (answerDiv) {
+        answerDiv.style.display = newExpanded ? 'block' : 'none';
       }
     });
   });
 
-  // 4. Mobile Menu Toggle
-  const mobileBtn = document.getElementById('mobile-menu-btn');
-  const mobileNav = document.getElementById('mobile-nav-panel');
-  if (mobileBtn && mobileNav) {
-    mobileBtn.addEventListener('click', (e) => {
+  // 6. Video Demo Modal
+  const videoBtn = document.querySelector('button[aria-label="Watch how Fern verifies your help center"]');
+  if (videoBtn) {
+    videoBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      const isExpanded = mobileBtn.getAttribute('aria-expanded') === 'true';
-      mobileBtn.setAttribute('aria-expanded', !isExpanded ? 'true' : 'false');
-      if (isExpanded) {
-        mobileNav.classList.add('hidden');
-      } else {
-        mobileNav.classList.remove('hidden');
+      let modal = document.getElementById('ferndesk-video-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ferndesk-video-modal';
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4';
+        modal.innerHTML = `
+          <div class="relative w-full max-w-4xl overflow-hidden rounded-xl bg-black border border-white/20 shadow-2xl">
+            <button type="button" id="close-video-modal" class="absolute top-4 right-4 z-10 flex size-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <div class="aspect-video w-full flex items-center justify-center text-white">
+              <video controls autoplay class="w-full h-full" src="https://static.ferndesk.com/assets/marketing/verification-demo.mp4" poster="https://static.ferndesk.com/cdn-cgi/image/format=webp,quality=80,width=1120/assets/marketing/home-hero-verification-2026-09.webp">
+                Your browser does not support video.
+              </video>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector('#close-video-modal')?.addEventListener('click', () => {
+          modal.remove();
+        });
+        modal.addEventListener('click', (ev) => {
+          if (ev.target === modal) modal.remove();
+        });
       }
-    });
-
-    // Close mobile nav when clicking a link inside it
-    const links = mobileNav.querySelectorAll('a');
-    links.forEach(l => {
-      l.addEventListener('click', () => {
-        mobileBtn.setAttribute('aria-expanded', 'false');
-        mobileNav.classList.add('hidden');
-      });
     });
   }
 });
