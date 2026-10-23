@@ -1,0 +1,46 @@
+/**
+ * Smoooth Brand Tokens (CSS Variables)
+ * Canonical Design System Tokens for web, embeds, and integrations.
+ * Primary Font: Lexend
+ */
+
+:root {
+  /* Accent Highlights */
+  --smoooth-spark: #c9f27a;
+  --smoooth-spark-ink: #4e7a14;
+  --smoooth-fern: #00f076;
+
+  /* Surfaces & Canvas */
+  --smoooth-ink-950: #0a0b0d;
+  --smoooth-ink-900: #121417;
+  --smoooth-ink-850: #181b20;
+  --smoooth-ink-800: #22262d;
+
+  /* Borders & Hairlines */
+  --smoooth-border-soft: rgba(255, 255, 255, 0.08);
+  --smoooth-border-strong: rgba(255, 255, 255, 0.16);
+  --smoooth-border-accent: rgba(201, 242, 122, 0.35);
+
+  /* Neutrals & Text */
+  --smoooth-bone: #f3f4f6;
+  --smoooth-stone-200: #e5e7eb;
+  --smoooth-stone-300: #d1d5db;
+  --smoooth-stone-400: #9ca3af;
+  --smoooth-stone-600: #4b5563;
+
+  /* Status Colors */
+  --smoooth-amber: #f59e0b;
+  --smoooth-red: #ef4444;
+  --smoooth-cyan: #06b6d4;
+
+  /* Typography */
+  --smoooth-font-display: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --smoooth-font-body: 'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --smoooth-font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  /* Radii */
+  --smoooth-radius-sm: 6px;
+  --smoooth-radius-md: 8px;
+  --smoooth-radius-lg: 12px;
+  --smoooth-radius-xl: 16px;
+}

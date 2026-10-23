@@ -26,9 +26,15 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-// 1. Copy SvelteKit immutable assets (_app)
-console.log('Copying _app assets...');
+// 1. Copy SvelteKit immutable assets (_app) and brand assets
+console.log('Copying _app assets and brand directory...');
 copyDirRecursive(path.join(rootDir, '_app'), path.join(distDir, '_app'));
+if (fs.existsSync(path.join(rootDir, 'assets'))) {
+  copyDirRecursive(path.join(rootDir, 'assets'), path.join(distDir, 'assets'));
+}
+if (fs.existsSync(path.join(rootDir, 'fonts'))) {
+  copyDirRecursive(path.join(rootDir, 'fonts'), path.join(distDir, 'fonts'));
+}
 
 // 2. Read interaction runtime script
 const interactionScript = fs.readFileSync(path.join(rootDir, 'scripts/ferndesk-interaction.js'), 'utf8');
@@ -49,7 +55,8 @@ const rootStaticFiles = [
   'favicon.svg',
   'favicon-32.png',
   '_headers',
-  'styles.css'
+  'styles.css',
+  'BRAND_GUIDELINES.md'
 ];
 
 for (const file of rootStaticFiles) {
