@@ -1,11 +1,12 @@
 query,intent,monthly_volume,difficulty,target_url,status,current_position,last_checked
-"infrastructure runtime for ai agents",commercial,1400,28,https://smoooth.dev,live,-,2026-10-19
-"mcp server docker deploy",transactional,2100,32,https://smoooth.dev#how-it-works,live,-,2026-10-19
-"self hosted paas for claude code",commercial,950,22,https://smoooth.dev,live,-,2026-10-19
-"ai agent vps deployment",informational,1800,35,https://smoooth.dev#quickstart,live,-,2026-10-19
-"cursor mcp server devops",transactional,1200,26,https://smoooth.dev#features,live,-,2026-10-19
-"deploy postgresql docker ai agent",transactional,880,18,https://smoooth.dev#features,live,-,2026-10-19
-"safe agent bash access vps",commercial,650,24,https://smoooth.dev#security,live,-,2026-10-19
-"self hosted coolify alternative for agents",comparison,1100,30,https://smoooth.dev#guarantees,live,-,2026-10-19
-"autonomous infrastructure runtime",commercial,750,20,https://smoooth.dev,live,-,2026-10-19
-"mcp database provisioning",transactional,520,15,https://smoooth.dev#features,live,-,2026-10-19
+"infrastructure runtime for ai agents",commercial,1400 (est),28,https://smoooth.dev,staged,-,2026-10-23
+"deploying docker applications with claude code",transactional,emerging-high-growth (est 800-2000),24,https://smoooth.dev/guides/deploy-docker-application-claude-code,published,-,2026-10-23
+"claude code mcp deployment",transactional,emerging-high-growth (est 500-1200),20,https://smoooth.dev/guides/deploy-docker-application-claude-code,published,-,2026-10-23
+"claude code mcp server docker deployment",transactional,2100 (est),32,https://smoooth.dev/mcp/docker-deployment-claude-code,planned,-,2026-10-23
+"self hosted paas for ai coding agents",commercial,950 (est),22,https://smoooth.dev/guides/self-hosted-ai-agent-vps,planned,-,2026-10-23
+"coolify alternative for ai agents",comparison,1100 (est),30,https://smoooth.dev/compare/smoooth-vs-coolify,planned,-,2026-10-23
+"cursor mcp server devops",transactional,1200 (est),26,https://smoooth.dev/mcp/cursor-ide-setup,planned,-,2026-10-23
+"deploy postgresql docker ai agent",transactional,880 (est),18,https://smoooth.dev/guides/postgresql-persistence-mcp,planned,-,2026-10-23
+"safe agent bash access vps",commercial,650 (est),24,https://smoooth.dev,staged,-,2026-10-23
+"autonomous infrastructure runtime",commercial,750 (est),20,https://smoooth.dev,staged,-,2026-10-23
+"mcp database provisioning",transactional,520 (est),15,https://smoooth.dev/mcp/tool-reference,planned,-,2026-10-23

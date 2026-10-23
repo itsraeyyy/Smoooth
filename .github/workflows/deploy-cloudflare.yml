@@ -9,9 +9,13 @@ on:
       - 'styles.css'
       - 'script.js'
       - '_headers'
+      - 'robots.txt'
+      - 'sitemap.xml'
+      - '404.html'
       - 'dist/**'
+      - 'guides/**'
       - 'package.json'
-      - 'scripts/build-landing.js'
+      - 'scripts/**'
       - '.github/workflows/deploy-cloudflare.yml'
   workflow_dispatch:
 

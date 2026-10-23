@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 const siteUrl = "https://smoooth.dev";
-const siteTitle = "Smoooth — Autonomous Infrastructure Runtime for AI Coding Agents";
+const siteTitle = "Smoooth — Infrastructure Runtime for AI Coding Agents";
 const siteDescription =
-  "Deploy and operate stateful applications on infrastructure you control. Smoooth connects Claude Code, Cursor, and Windsurf directly to your Linux VPS over MCP — provisioning Docker containers, persistent databases, and secure networks on demand.";
+  "Deploy stateful apps on your own Linux VPS with Claude Code, Cursor, and Windsurf over MCP. Sandboxed Docker, managed databases, zero cloud markups.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -23,8 +23,8 @@ export const metadata: Metadata = {
     "Claude Code",
     "Cursor",
     "Windsurf",
-    "Docker orchestration",
-    "PostgreSQL",
+    "Docker deployment",
+    "PostgreSQL VPS",
     "Redis",
     "self-hosted PaaS",
     "Linux VPS",
@@ -49,10 +49,10 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/harness/images/deepseek-harness-social.jpg",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Smoooth — Autonomous Infrastructure Runtime for AI Coding Agents",
+        alt: "Smoooth — Infrastructure Runtime for AI Coding Agents",
       },
     ],
   },
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     title: siteTitle,
     description: siteDescription,
     creator: "@smoooth_dev",
-    images: ["/harness/images/deepseek-harness-social.jpg"],
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,

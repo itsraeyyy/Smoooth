@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /private/
+
+Sitemap: https://smoooth.dev/sitemap.xml
+Host: https://smoooth.dev
