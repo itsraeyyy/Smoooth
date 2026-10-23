@@ -1449,6 +1449,7 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       <div class="drawer__tabs">
         <button class="drawer__tab-btn is-active" id="dtab-logs" onclick="switchDrawerTab('logs')">Live Logs</button>
         <button class="drawer__tab-btn" id="dtab-specs" onclick="switchDrawerTab('specs')">Specifications</button>
+        <button class="drawer__tab-btn" id="dtab-env" onclick="switchDrawerTab('env')">Environment (.env)</button>
         <button class="drawer__tab-btn" id="dtab-actions" onclick="switchDrawerTab('actions')">Actions</button>
       </div>
 
@@ -1474,6 +1475,42 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
               <tr><td>Loading specs...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Drawer Environment -->
+        <div id="dpane-env" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 11px; font-family: var(--mono); color: var(--text-bright); font-weight: 600;">RUNTIME CONFIGURATION</div>
+              <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Decrypted environment variables applied to container</div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn--secondary" style="height: 24px; font-size: 11px; padding: 0 8px;" onclick="addDrawerEnvRow('', '')">+ Add Variable</button>
+              <button class="btn btn--secondary" style="height: 24px; font-size: 11px; padding: 0 8px;" onclick="refreshDrawerEnv()">⟳ Reload</button>
+            </div>
+          </div>
+
+          <div id="drawer-env-status" style="display: none; margin-bottom: 10px; font-family: var(--mono); font-size: 11px; padding: 6px 8px; border: 1px solid var(--border);"></div>
+
+          <div id="drawer-env-table-container" style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); background: var(--bg-card); padding: 8px;">
+            <table style="width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim); text-align: left;">
+                  <th style="padding: 6px; width: 42%;">VARIABLE NAME</th>
+                  <th style="padding: 6px; width: 48%;">VALUE</th>
+                  <th style="padding: 6px; width: 10%; text-align: right;">ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="drawer-env-tbody">
+                <tr><td colspan="3" style="padding: 16px; text-align: center; color: var(--text-dim);">Loading environment variables...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">Recreates container with updated env & zero volume data loss.</span>
+            <button class="btn" id="btn-save-env" onclick="saveDrawerEnv()" style="height: 28px; font-size: 11px; padding: 0 12px;">Save & Apply Config</button>
+          </div>
         </div>
 
         <!-- Drawer Actions -->
@@ -1816,14 +1853,18 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       document.getElementById('app-shell').classList.remove('is-drawer-open');
     }
     function switchDrawerTab(tab) {
-      ['logs', 'specs', 'actions'].forEach(t => {
-        document.getElementById(`dpane-${t}`).style.display = t === tab ? 'block' : 'none';
+      ['logs', 'specs', 'env', 'actions'].forEach(t => {
+        const pane = document.getElementById(`dpane-${t}`);
+        if (pane) pane.style.display = t === tab ? 'block' : 'none';
         const b = document.getElementById(`dtab-${t}`);
         if (b) {
           if (t === tab) b.classList.add('is-active');
           else b.classList.remove('is-active');
         }
       });
+      if (tab === 'env') {
+        refreshDrawerEnv();
+      }
     }
 
     async function refreshDrawerLogs() {
@@ -1872,7 +1913,125 @@ const DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
         <tr><td>Service Type</td><td>${escapeHtml(w.service_type)}</td></tr>
         <tr><td>Persistence</td><td>${w.is_persistent ? 'Volume Protected' : 'Ephemeral'}</td></tr>
         <tr><td>Status</td><td><span class="tag tag--green">${escapeHtml(w.status)}</span></td></tr>
+        <tr><td>Environment</td><td><a href="javascript:void(0)" onclick="switchDrawerTab('env')" style="color:var(--text-bright); text-decoration:underline;">Inspect & Edit (.env)</a></td></tr>
       `;
+    }
+
+    let currentDrawerEnv = {};
+    async function refreshDrawerEnv() {
+      if (!currentDrawerId) return;
+      const tbody = document.getElementById('drawer-env-tbody');
+      const statusEl = document.getElementById('drawer-env-status');
+      if (statusEl) statusEl.style.display = 'none';
+      tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: var(--text-dim);">Loading environment variables...</td></tr>';
+      try {
+        const res = await apiFetch(`/api/workloads/${encodeURIComponent(currentDrawerId)}/env`);
+        if (res.ok) {
+          const data = await res.json();
+          currentDrawerEnv = data.env || {};
+          const keys = Object.keys(currentDrawerEnv).sort();
+          if (keys.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 16px; text-align: center; color: var(--text-dim);">No custom environment variables found. Click "+ Add Variable" to define one.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = '';
+          keys.forEach(k => {
+            addDrawerEnvRow(k, currentDrawerEnv[k]);
+          });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          tbody.innerHTML = `<tr><td colspan="3" style="padding: 16px; text-align: center; color: var(--red);">Failed to load environment: ${escapeHtml(err.message || err.error || 'Server error')}</td></tr>`;
+        }
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 16px; text-align: center; color: var(--red);">Error loading environment: ${escapeHtml(e.toString())}</td></tr>`;
+      }
+    }
+
+    function addDrawerEnvRow(key, value) {
+      const tbody = document.getElementById('drawer-env-tbody');
+      if (tbody.querySelector('td[colspan="3"]')) {
+        tbody.innerHTML = '';
+      }
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+      tr.innerHTML = `
+        <td style="padding: 4px;">
+          <input type="text" class="form-input env-key" value="${escapeHtml(key)}" placeholder="VARIABLE_NAME" style="height: 24px; font-size: 11px; font-family: var(--mono); width: 100%;">
+        </td>
+        <td style="padding: 4px;">
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <input type="password" class="form-input env-val" value="${escapeHtml(value)}" placeholder="VALUE" style="height: 24px; font-size: 11px; font-family: var(--mono); width: 100%;">
+            <button type="button" class="btn btn--secondary" style="height: 24px; padding: 0 6px; font-size: 10px;" onclick="toggleEnvMask(this)">👁</button>
+          </div>
+        </td>
+        <td style="padding: 4px; text-align: right;">
+          <button type="button" class="btn btn--danger" style="height: 24px; padding: 0 6px; font-size: 10px;" onclick="this.closest('tr').remove()">✕</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    function toggleEnvMask(btn) {
+      const input = btn.previousElementSibling;
+      if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+        btn.textContent = input.type === 'password' ? '👁' : '🔒';
+      }
+    }
+
+    async function saveDrawerEnv() {
+      if (!currentDrawerId) return;
+      const tbody = document.getElementById('drawer-env-tbody');
+      const rows = tbody.querySelectorAll('tr');
+      const newEnv = {};
+      rows.forEach(tr => {
+        const keyInput = tr.querySelector('.env-key');
+        const valInput = tr.querySelector('.env-val');
+        if (keyInput && valInput) {
+          const k = keyInput.value.trim();
+          if (k) {
+            newEnv[k] = valInput.value;
+          }
+        }
+      });
+
+      const saveBtn = document.getElementById('btn-save-env');
+      const statusEl = document.getElementById('drawer-env-status');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Applying...';
+      statusEl.style.display = 'block';
+      statusEl.style.color = 'var(--text-dim)';
+      statusEl.style.borderColor = 'var(--border)';
+      statusEl.textContent = 'Recreating container with updated environment variables...';
+
+      try {
+        const res = await apiFetch(`/api/workloads/${encodeURIComponent(currentDrawerId)}/env`, {
+          method: 'POST',
+          body: JSON.stringify({ env: newEnv })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          statusEl.style.color = 'var(--green-bright)';
+          statusEl.style.borderColor = 'rgba(74, 222, 128, 0.3)';
+          statusEl.textContent = `✓ Environment updated! Container '${data.container_name || currentDrawerId}' recreated with ${data.env_count || Object.keys(newEnv).length} variables.`;
+          setTimeout(() => {
+            refreshDrawerLogs();
+            loadResources();
+          }, 1200);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          statusEl.style.color = 'var(--red)';
+          statusEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+          statusEl.textContent = `✕ Update failed: ${err.message || err.error || 'Server error'}`;
+        }
+      } catch (e) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        statusEl.textContent = `✕ Network error: ${e.toString()}`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save & Apply Config';
+      }
     }
 
     function reconcileFromDrawer() {

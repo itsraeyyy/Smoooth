@@ -95,5 +95,7 @@ pub struct MigrationResult {
     pub operation_id: Option<String>,
     pub provisioned_resources: Vec<String>,
     pub ingress_routes_added: Vec<String>,
+    #[serde(default)]
+    pub bridged_proxy_networks: Vec<String>,
     pub message: String,
 }

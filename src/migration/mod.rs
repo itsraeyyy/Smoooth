@@ -232,6 +232,32 @@ impl MigrationEngine {
             }
         }
 
+        // Auto-bridge provisioned workload networks with host reverse proxy (e.g. coolify-proxy, traefik)
+        let mut networks_to_bridge = Vec::new();
+        for action in &preview.canonical_spec.actions {
+            if let Some(net) = action.config.get("network").and_then(|v| v.as_str()) {
+                if !networks_to_bridge.contains(&net.to_string()) {
+                    networks_to_bridge.push(net.to_string());
+                }
+            }
+        }
+        let workspace_net = format!("smoooth_net_{}", preview.workspace_id);
+        if !networks_to_bridge.contains(&workspace_net) {
+            networks_to_bridge.push(workspace_net);
+        }
+
+        let bridge_statuses = crate::ingress::bridge::ProxyBridgeManager::auto_bridge_networks(
+            None,
+            &networks_to_bridge,
+        ).unwrap_or_default();
+
+        let mut bridged_summary = Vec::new();
+        for bs in bridge_statuses {
+            if bs.connected {
+                bridged_summary.push(format!("{} -> {}", bs.proxy_container, bs.network));
+            }
+        }
+
         let provisioned: Vec<String> = preview
             .workloads
             .iter()
@@ -244,6 +270,7 @@ impl MigrationEngine {
             operation_id: Some(op.id),
             provisioned_resources: provisioned,
             ingress_routes_added: routes_added,
+            bridged_proxy_networks: bridged_summary,
             message: format!(
                 "Successfully migrated {} workload(s) into Smoooth workspace '{}'.",
                 preview.workloads.len(),

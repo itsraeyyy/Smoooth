@@ -1,3 +1,6 @@
+pub mod reconcile;
+pub use reconcile::{SupabaseReconciliationReport, SupabaseRoleReconciler};
+
 use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
@@ -69,6 +72,32 @@ impl PostgresAdapter {
             port,
             timeout_duration.as_secs()
         )))
+    }
+
+    /// Reconcile roles for a given PostgreSQL container, especially for Supabase stacks
+    pub async fn reconcile_supabase_stack(
+        &self,
+        host: &str,
+        port: u16,
+        user: &str,
+        admin_password: &str,
+        dbname: &str,
+    ) -> Result<SupabaseReconciliationReport> {
+        let conn_str = format!(
+            "host={} port={} user={} password={} dbname={} connect_timeout=5",
+            host, port, user, admin_password, dbname
+        );
+        let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
+            .await
+            .map_err(|e| SmooothError::PostgresFailed(format!("Failed connecting to Postgres for reconciliation: {}", e)))?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                tracing::warn!("Postgres reconciliation connection error: {}", e);
+            }
+        });
+
+        SupabaseRoleReconciler::reconcile_roles(&client, admin_password).await
     }
 }
 

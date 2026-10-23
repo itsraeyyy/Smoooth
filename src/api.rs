@@ -186,6 +186,7 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/workloads/deploy", post(deploy_workload_handler))
         .route("/api/workloads/:id", delete(delete_workload_handler))
         .route("/api/workloads/:id/restart", post(restart_workload_handler))
+        .route("/api/workloads/:id/env", get(get_workload_env_handler).post(update_workload_env_handler))
         // Migration Engine (Coolify, Compose, Render, Fly, Dokku, Host Scanner)
         .route("/api/migrate/detect", post(migrate_detect_handler))
         .route("/api/migrate/preview", post(migrate_preview_handler))
@@ -1115,6 +1116,369 @@ async fn delete_workload_handler(
         "success": true,
         "resource_id": id
     })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateWorkloadEnvRequest {
+    pub env: HashMap<String, String>,
+}
+
+/// Inspect Workload Environment Variables Handler
+async fn get_workload_env_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let mut env_map = serde_json::Map::new();
+    let mut image_name = String::new();
+    let mut container_name = id.clone();
+
+    // 1. Try docker inspect first
+    let inspect_output = tokio::process::Command::new("docker")
+        .args(["inspect", &id])
+        .output()
+        .await;
+
+    if let Ok(output) = inspect_output {
+        if output.status.success() {
+            if let Ok(json_arr) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+                if let Some(c) = json_arr.as_array().and_then(|a| a.first()) {
+                    if let Some(name) = c.get("Name").and_then(|n| n.as_str()) {
+                        container_name = name.trim_start_matches('/').to_string();
+                    }
+                    if let Some(img) = c.get("Config").and_then(|cfg| cfg.get("Image")).and_then(|i| i.as_str()) {
+                        image_name = img.to_string();
+                    }
+                    if let Some(envs) = c.get("Config").and_then(|cfg| cfg.get("Env")).and_then(|e| e.as_array()) {
+                        for item in envs {
+                            if let Some(line) = item.as_str() {
+                                if let Some((k, v)) = line.split_once('=') {
+                                    env_map.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Storage fallback if Docker inspect was empty or failed
+    if env_map.is_empty() {
+        if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+            if let Some(env_obj) = resource.configuration.get("env").and_then(|e| e.as_object()) {
+                for (k, v) in env_obj {
+                    env_map.insert(k.clone(), v.clone());
+                }
+            }
+            if let Some(img) = resource.configuration.get("image").and_then(|i| i.as_str()) {
+                image_name = img.to_string();
+            }
+            container_name = resource.name;
+        }
+    }
+
+    let count = env_map.len();
+    Ok(Json(serde_json::json!({
+        "resource_id": id,
+        "name": container_name,
+        "image": image_name,
+        "env": env_map,
+        "count": count
+    })))
+}
+
+/// Update Workload Environment Variables & Safely Recreate Container
+async fn update_workload_env_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateWorkloadEnvRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Deploy scope required to update workload environment" })),
+        ));
+    }
+
+    // 1. Inspect existing container from Docker
+    let inspect_output = tokio::process::Command::new("docker")
+        .args(["inspect", &id])
+        .output()
+        .await;
+
+    match inspect_output {
+        Ok(output) if output.status.success() => {
+            let json_arr: serde_json::Value = serde_json::from_slice(&output.stdout).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": format!("Failed to parse container inspect: {}", e) })),
+                )
+            })?;
+
+            let c = json_arr.as_array().and_then(|a| a.first()).ok_or_else(|| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": "Container not found in inspect output" })),
+                )
+            })?;
+
+            let raw_name = c.get("Name").and_then(|n| n.as_str()).unwrap_or(&id);
+            let clean_name = raw_name.trim_start_matches('/').to_string();
+
+            let image = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Image"))
+                .and_then(|i| i.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if image.is_empty() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": "Unable to determine container image tag" })),
+                ));
+            }
+
+            let working_dir = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("WorkingDir"))
+                .and_then(|w| w.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let restart_policy = c
+                .get("HostConfig")
+                .and_then(|h| h.get("RestartPolicy"))
+                .and_then(|r| r.get("Name"))
+                .and_then(|n| n.as_str())
+                .unwrap_or("unless-stopped")
+                .to_string();
+
+            let mut binds = Vec::new();
+            if let Some(arr) = c.get("HostConfig").and_then(|h| h.get("Binds")).and_then(|b| b.as_array()) {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        binds.push(s.to_string());
+                    }
+                }
+            }
+
+            let mut port_args = Vec::new();
+            if let Some(ports_obj) = c.get("HostConfig").and_then(|h| h.get("PortBindings")).and_then(|p| p.as_object()) {
+                for (container_port_proto, host_bindings) in ports_obj {
+                    if let Some(bindings_arr) = host_bindings.as_array() {
+                        for b in bindings_arr {
+                            let host_port = b.get("HostPort").and_then(|hp| hp.as_str()).unwrap_or("");
+                            let host_ip = b.get("HostIp").and_then(|ip| ip.as_str()).unwrap_or("");
+                            if !host_port.is_empty() {
+                                if !host_ip.is_empty() && host_ip != "0.0.0.0" {
+                                    port_args.push(format!("{}:{}:{}", host_ip, host_port, container_port_proto));
+                                } else {
+                                    port_args.push(format!("{}:{}", host_port, container_port_proto));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut networks = Vec::new();
+            if let Some(nets_obj) = c.get("NetworkSettings").and_then(|n| n.get("Networks")).and_then(|net| net.as_object()) {
+                for (net_name, _) in nets_obj {
+                    if net_name != "none" && net_name != "host" {
+                        networks.push(net_name.clone());
+                    }
+                }
+            }
+
+            let mut labels = Vec::new();
+            if let Some(labels_obj) = c.get("Config").and_then(|cfg| cfg.get("Labels")).and_then(|l| l.as_object()) {
+                for (k, v) in labels_obj {
+                    if let Some(val_str) = v.as_str() {
+                        if !k.starts_with("com.docker.compose.config-hash") {
+                            labels.push((k.clone(), val_str.to_string()));
+                        }
+                    }
+                }
+            }
+
+            let mut cmd_args = Vec::new();
+            if let Some(arr) = c.get("Config").and_then(|cfg| cfg.get("Cmd")).and_then(|a| a.as_array()) {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        cmd_args.push(s.to_string());
+                    }
+                }
+            }
+
+            let mut entrypoint_str = None;
+            if let Some(arr) = c.get("Config").and_then(|cfg| cfg.get("Entrypoint")).and_then(|a| a.as_array()) {
+                if let Some(first) = arr.first().and_then(|s| s.as_str()) {
+                    entrypoint_str = Some(first.to_string());
+                }
+            }
+
+            // 2. Transactional replacement with rollback
+            let backup_name = format!("{}_smoooth_backup_{}", clean_name, uuid::Uuid::new_v4().simple());
+
+            // Stop container
+            let _ = tokio::process::Command::new("docker")
+                .args(["stop", "-t", "10", &clean_name])
+                .output()
+                .await;
+
+            // Rename to backup
+            let rename_res = tokio::process::Command::new("docker")
+                .args(["rename", &clean_name, &backup_name])
+                .output()
+                .await;
+
+            if let Err(e) = rename_res {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": "Failed to rename container for backup",
+                        "message": e.to_string()
+                    })),
+                ));
+            }
+
+            // Build new container docker run command
+            let mut run_cmd = tokio::process::Command::new("docker");
+            run_cmd.arg("run").arg("-d");
+            run_cmd.args(["--name", &clean_name]);
+
+            if !restart_policy.is_empty() && restart_policy != "no" {
+                run_cmd.args(["--restart", &restart_policy]);
+            }
+            if !working_dir.is_empty() {
+                run_cmd.args(["-w", &working_dir]);
+            }
+            if let Some(primary_net) = networks.first() {
+                run_cmd.args(["--network", primary_net]);
+            }
+            for b in &binds {
+                run_cmd.args(["-v", b]);
+            }
+            for p in &port_args {
+                run_cmd.args(["-p", p]);
+            }
+            for (k, v) in &labels {
+                run_cmd.args(["-l", &format!("{}={}", k, v)]);
+            }
+            if let Some(ep) = &entrypoint_str {
+                run_cmd.args(["--entrypoint", ep]);
+            }
+
+            // Inject updated environment variables
+            for (k, v) in &body.env {
+                run_cmd.args(["-e", &format!("{}={}", k, v)]);
+            }
+
+            run_cmd.arg(&image);
+            for arg in &cmd_args {
+                run_cmd.arg(arg);
+            }
+
+            let run_output = run_cmd.output().await;
+
+            match run_output {
+                Ok(out) if out.status.success() => {
+                    // Connect any secondary networks
+                    for sec_net in networks.iter().skip(1) {
+                        let _ = tokio::process::Command::new("docker")
+                            .args(["network", "connect", sec_net, &clean_name])
+                            .output()
+                            .await;
+                    }
+
+                    // Safely remove the backup container
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["rm", "-f", &backup_name])
+                        .output()
+                        .await;
+
+                    // Update orchestrator state if registered
+                    if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
+                        resource.configuration["env"] = serde_json::to_value(&body.env).unwrap_or_default();
+                        resource.updated_at = chrono::Utc::now();
+                        let _ = state.orchestrator.storage().save_resource(resource).await;
+                    }
+
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "resource_id": id,
+                        "container_name": clean_name,
+                        "env_count": body.env.len(),
+                        "status": "recreated_and_started"
+                    })))
+                }
+                Ok(out) => {
+                    let err_msg = String::from_utf8_lossy(&out.stderr).to_string();
+                    tracing::error!("Failed to start replacement container for '{}': {}. Rolling back...", clean_name, err_msg);
+
+                    // Rollback
+                    let _ = tokio::process::Command::new("docker").args(["rm", "-f", &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker").args(["rename", &backup_name, &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker").args(["start", &clean_name]).output().await;
+
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to start container with new environment variables; rolled back to previous state",
+                            "details": err_msg
+                        })),
+                    ))
+                }
+                Err(e) => {
+                    tracing::error!("Execution error running replacement container for '{}': {}. Rolling back...", clean_name, e);
+
+                    // Rollback
+                    let _ = tokio::process::Command::new("docker").args(["rm", "-f", &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker").args(["rename", &backup_name, &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker").args(["start", &clean_name]).output().await;
+
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to execute docker run; rolled back to previous state",
+                            "details": e.to_string()
+                        })),
+                    ))
+                }
+            }
+        }
+        _ => {
+            // Fallback for storage-only / non-Docker test environment
+            if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
+                let resource_name = resource.name.clone();
+                resource.configuration["env"] = serde_json::to_value(&body.env).unwrap_or_default();
+                resource.updated_at = chrono::Utc::now();
+                let _ = state.orchestrator.storage().save_resource(resource).await;
+
+                Ok(Json(serde_json::json!({
+                    "success": true,
+                    "resource_id": id,
+                    "container_name": resource_name,
+                    "env_count": body.env.len(),
+                    "status": "updated_in_storage"
+                })))
+            } else {
+                Err((
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "error": "Workload container not found in Docker or storage state"
+                    })),
+                ))
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]

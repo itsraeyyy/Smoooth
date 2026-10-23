@@ -1,3 +1,9 @@
+pub mod acme;
+pub mod bridge;
+
+pub use acme::{AcmeCertificateEntry, AcmeDomain, AcmeKeystoreManager};
+pub use bridge::{BridgeStatus, ProxyBridgeManager};
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;

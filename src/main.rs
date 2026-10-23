@@ -66,6 +66,24 @@ enum Commands {
     Ops { operation_id: String },
     /// Inspect and reconcile drift or recover crashed resource
     Reconcile { resource_id: String },
+    /// Reconcile multi-role database permissions (Supabase/PostgreSQL) after migration or restore
+    ReconcileDb {
+        /// Target PostgreSQL host
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Target PostgreSQL port
+        #[arg(short, long, default_value_t = 5432)]
+        port: u16,
+        /// Superuser / admin user
+        #[arg(short, long, default_value = "postgres")]
+        user: String,
+        /// Admin password
+        #[arg(short = 'w', long)]
+        password: String,
+        /// Database name
+        #[arg(short, long, default_value = "postgres")]
+        dbname: String,
+    },
     /// Manage ingress routes, Caddy dynamic routing, and public domains
     Ingress {
         #[command(subcommand)]
@@ -259,6 +277,27 @@ enum IngressCommands {
         #[arg(short, long, default_value = "caddy")]
         format: String,
     },
+    /// Connect an active reverse proxy container (coolify-proxy, traefik, nginx) to workload networks
+    Bridge {
+        /// Name of the reverse proxy container (optional, auto-detected if omitted)
+        #[arg(short, long)]
+        proxy: Option<String>,
+        /// Target Docker network to bridge
+        #[arg(short, long)]
+        network: String,
+    },
+    /// Import and merge TLS certificates from source acme.json into target Traefik keystore
+    SyncCerts {
+        /// Path to source acme.json file
+        #[arg(short, long)]
+        source: String,
+        /// Path to target acme.json file
+        #[arg(short, long, default_value = "/data/coolify/proxy/acme.json")]
+        target: String,
+        /// ACME resolver name (default: letsencrypt)
+        #[arg(short, long, default_value = "letsencrypt")]
+        resolver: String,
+    },
 }
 
 #[tokio::main]
@@ -284,7 +323,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_adapter = Arc::new(smoooth::adapters::RedisAdapter::new(docker_adapter.clone()));
     let mongo_adapter = Arc::new(smoooth::adapters::MongoAdapter::new(docker_adapter.clone()));
     orchestrator.register_adapter(docker_adapter);
-    orchestrator.register_adapter(postgres_adapter);
+    orchestrator.register_adapter(postgres_adapter.clone());
     orchestrator.register_adapter(redis_adapter);
     orchestrator.register_adapter(mongo_adapter);
 
@@ -655,6 +694,26 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
+        Some(Commands::ReconcileDb { host, port, user, password, dbname }) => {
+            println!("\n🔧 Reconciling multi-role database permissions for PostgreSQL at {}:{}...", host, port);
+            match postgres_adapter.reconcile_supabase_stack(&host, port, &user, &password, &dbname).await {
+                Ok(report) => {
+                    if report.detected_supabase {
+                        println!("✅ Supabase schema footprint detected!");
+                        println!("   Roles Updated        : {}", report.roles_updated.join(", "));
+                        println!("   Functions Reassigned : {}", report.functions_reassigned.join(", "));
+                        println!("   Schemas Reassigned   : {}", report.schemas_reassigned.join(", "));
+                        println!("Reconciliation completed successfully.\n");
+                    } else {
+                        println!("ℹ️ Connected successfully. Standard PostgreSQL detected (no Supabase roles found).\n");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Database reconciliation failed: {}\n", e);
+                }
+            }
+        }
+
         Some(Commands::Ingress { command }) => {
             let ingress_manager = smoooth::ingress::IngressManager::default_local();
             match command {
@@ -719,6 +778,62 @@ async fn main() -> anyhow::Result<()> {
                             print!("{}", cfg);
                         }
                         Err(e) => eprintln!("\n❌ Failed to export ingress config: {}\n", e),
+                    }
+                }
+                IngressCommands::Bridge { proxy, network } => {
+                    let proxy_target = match proxy {
+                        Some(p) => p,
+                        None => match smoooth::ingress::ProxyBridgeManager::detect_active_proxy() {
+                            Ok(Some(detected)) => {
+                                println!("Detected active host reverse proxy: {}", detected);
+                                detected
+                            }
+                            _ => {
+                                eprintln!("❌ No active reverse proxy detected on this host. Specify --proxy explicitly.");
+                                return Ok(());
+                            }
+                        },
+                    };
+                    println!("Bridging network '{}' to proxy '{}'...", network, proxy_target);
+                    match smoooth::ingress::ProxyBridgeManager::bridge_network(&proxy_target, &network) {
+                        Ok(status) => {
+                            if status.already_connected {
+                                println!("ℹ️ Proxy '{}' was already connected to network '{}'.", status.proxy_container, status.network);
+                            } else {
+                                println!("✅ Successfully bridged network '{}' to proxy '{}'.", status.network, status.proxy_container);
+                            }
+                        }
+                        Err(e) => eprintln!("❌ Bridge failed: {}", e),
+                    }
+                }
+                IngressCommands::SyncCerts { source, target, resolver } => {
+                    println!("Importing certificates from '{}' into '{}' (resolver: {})...", source, target, resolver);
+                    let source_path = std::path::Path::new(&source);
+                    let target_path = std::path::Path::new(&target);
+                    if !source_path.exists() {
+                        eprintln!("❌ Source file '{}' does not exist.", source);
+                        return Ok(());
+                    }
+                    let content = match std::fs::read_to_string(source_path) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("❌ Failed to read source file: {}", e);
+                            return Ok(());
+                        }
+                    };
+                    let certs = match smoooth::ingress::AcmeKeystoreManager::parse_traefik_acme(&content, Some(&resolver)) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("❌ Failed to parse source acme.json: {}", e);
+                            return Ok(());
+                        }
+                    };
+                    println!("Discovered {} valid certificate(s) in source.", certs.len());
+                    match smoooth::ingress::AcmeKeystoreManager::merge_into_traefik_acme(certs, target_path, Some(&resolver)) {
+                        Ok(added) => {
+                            println!("✅ Successfully merged {} new certificate(s) into '{}' with strict 0600 permissions.", added, target);
+                        }
+                        Err(e) => eprintln!("❌ Merge failed: {}", e),
                     }
                 }
             }
