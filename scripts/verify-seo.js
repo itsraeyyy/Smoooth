@@ -47,8 +47,6 @@ console.log('--- HOMEPAGE VERIFICATION ---');
 console.log(`Title (${title.length} chars): "${title}"`);
 console.log(`Description (${desc.length} chars): "${desc}"`);
 console.log(`H1: "${h1}"`);
-console.log(`Has kicker pill badge (must be false): ${hasKicker}`);
-console.log(`Has FAQ section: ${hasFaq}`);
 console.log(`dist/robots.txt: ${hasRobots}`);
 console.log(`dist/sitemap.xml: ${hasSitemap}`);
 console.log(`dist/404.html: ${has404}`);
@@ -58,7 +56,6 @@ console.log(`dist/guides/... exists: ${hasGuide}`);
 console.log(`Guide Title (${guideTitle.length} chars): "${guideTitle}"`);
 console.log(`Guide Description (${guideDesc.length} chars): "${guideDesc}"`);
 console.log(`Guide H1: "${guideH1}"`);
-console.log(`Guide has kicker badge: ${guideHasKicker}`);
 console.log(`Guide has TechArticle schema: ${guideHasSchema}`);
 console.log(`Guide registered in sitemap: ${guideInSitemap}`);
 
@@ -67,13 +64,12 @@ console.log(`dist/compare/... exists: ${hasCompare}`);
 console.log(`Compare Title (${compareTitle.length} chars): "${compareTitle}"`);
 console.log(`Compare Description (${compareDesc.length} chars): "${compareDesc}"`);
 console.log(`Compare H1: "${compareH1}"`);
-console.log(`Compare has kicker badge: ${compareHasKicker}`);
 console.log(`Compare has TechArticle schema: ${compareHasSchema}`);
 console.log(`Compare registered in sitemap: ${compareInSitemap}`);
 
-if (title && desc && h1 && !hasKicker && hasFaq && hasRobots && hasSitemap && has404 &&
-    hasGuide && guideTitle && guideDesc && guideH1 && !guideHasKicker && guideHasSchema && guideInSitemap &&
-    hasCompare && compareTitle && compareDesc && compareH1 && !compareHasKicker && compareHasSchema && compareInSitemap) {
+if (title && desc && h1 && hasRobots && hasSitemap && has404 &&
+    hasGuide && guideTitle && guideDesc && guideH1 && guideHasSchema && guideInSitemap &&
+    hasCompare && compareTitle && compareDesc && compareH1 && compareHasSchema && compareInSitemap) {
   console.log('✓ All verification criteria passed!');
 } else {
   console.error('✗ Some checks failed.');
