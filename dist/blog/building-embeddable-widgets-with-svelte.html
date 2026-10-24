@@ -908,7 +908,7 @@ widget<span class="token punctuation">.</span><span class="token function">close
 	<script id="ferndesk-interactive-runtime">
 // Ferndesk Interactive Runtime
 // Provides seamless interactivity for Ferndesk shell (header dropdowns, mobile menu, modals)
-// and Smoooth homepage hero components (installer copy, 4-stage terminal tabs, FAQ accordions).
+// and Smoooth homepage hero components (installer copy, 4-stage terminal tabs, Ferndesk FAQ accordions).
 
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Copy installer button (Smoooth Hero)
@@ -1202,25 +1202,46 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 5. FAQ Accordion Interaction
-  const faqButtons = document.querySelectorAll('#faq button[aria-expanded], button[aria-expanded]');
-  faqButtons.forEach((btn) => {
-    // Check if it's an FAQ button (has span with tabular-nums or inside #faq)
-    const isFaq = btn.closest('#faq') || btn.querySelector('span.tabular-nums');
-    if (!isFaq) return;
+  const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+  let faqData = [];
+  jsonLdScripts.forEach((s) => {
+    try {
+      const parsed = JSON.parse(s.textContent);
+      if (parsed['@type'] === 'FAQPage' && parsed.mainEntity) {
+        faqData = parsed.mainEntity;
+      }
+    } catch (_) {}
+  });
 
+  const faqButtons = document.querySelectorAll('button[aria-expanded]');
+  let faqBtnIndex = 0;
+  faqButtons.forEach((btn) => {
+    const numSpan = btn.querySelector('span.tabular-nums');
+    if (!numSpan && !btn.closest('#faq')) return;
+
+    const currentFaqIndex = faqBtnIndex++;
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const isExpanded = btn.getAttribute('aria-expanded') === 'true';
       const newExpanded = !isExpanded;
       btn.setAttribute('aria-expanded', newExpanded ? 'true' : 'false');
 
-      const icon = btn.querySelector('svg, span[aria-hidden="true"]');
+      const icon = btn.querySelector('span[aria-hidden="true"], svg');
       if (icon) {
-        icon.style.transform = newExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+        if (newExpanded) {
+          icon.classList.add('rotate-90');
+        } else {
+          icon.classList.remove('rotate-90');
+        }
       }
 
       const parentContainer = btn.parentElement;
-      const answerDiv = parentContainer?.querySelector(':scope > div:not([class*="grid"])');
+      let answerDiv = parentContainer?.querySelector(':scope > div:not([class*="grid"])');
+      if (!answerDiv && faqData[currentFaqIndex]) {
+        answerDiv = document.createElement('div');
+        answerDiv.innerHTML = `<p class="pb-6 pr-0 text-lg leading-[1.55] text-pretty text-prose sm:pl-14 sm:pr-10 lg:pb-[26px]">${faqData[currentFaqIndex].acceptedAnswer?.text || ''}</p>`;
+        parentContainer.appendChild(answerDiv);
+      }
       if (answerDiv) {
         answerDiv.style.display = newExpanded ? 'block' : 'none';
       }
