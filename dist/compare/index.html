@@ -94,6 +94,30 @@
       color: #64748B;
     }
   </style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<style id="lexend-font-override">
+  :root {
+    --font-display: 'Lexend', ui-sans-serif, system-ui, sans-serif !important;
+    --font-sans: 'Lexend', ui-sans-serif, system-ui, sans-serif !important;
+    --font-text: 'Lexend', ui-sans-serif, system-ui, sans-serif !important;
+    --default-font-family: 'Lexend', ui-sans-serif, system-ui, sans-serif !important;
+    --font-display-stretch: 100% !important;
+  }
+  *, *::before, *::after {
+    --font-display-stretch: 100% !important;
+  }
+  html, body, button, input, select, textarea, h1, h2, h3, h4, h5, h6, .font-display, .font-sans, .kicker, .eyebrow, p, a, li, dt, dd, label, strong, b, em {
+    font-family: 'Lexend', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+    font-stretch: 100% !important;
+  }
+  code, pre, kbd, samp, .font-mono, [class*="font-mono"], code *, pre *, .font-mono * {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
+    font-stretch: 100% !important;
+  }
+</style>
 </head>
 <body>
   <div class="nav">
