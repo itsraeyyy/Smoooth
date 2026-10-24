@@ -26,9 +26,10 @@ function copyDirRecursive(src, dest) {
   }
 }
 
-// 1. Copy SvelteKit immutable assets (_app)
-console.log('Copying _app assets...');
+// 1. Copy SvelteKit immutable assets (_app) and brand assets
+console.log('Copying _app assets and brand assets...');
 copyDirRecursive(path.join(rootDir, '_app'), path.join(distDir, '_app'));
+copyDirRecursive(path.join(rootDir, 'assets'), path.join(distDir, 'assets'));
 
 // 2. Read interaction runtime script
 const interactionScript = fs.readFileSync(path.join(rootDir, 'scripts/ferndesk-interaction.js'), 'utf8');
