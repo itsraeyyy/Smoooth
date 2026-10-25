@@ -3,9 +3,11 @@
 Cargo.lock.bak
 **/*.rs.bk
 
-# Node & Next.js
+# Node & Next.js / Farm.js
 node_modules/
 .next/
+.farm/
+.output/
 out/
 /build/
 !src/build/

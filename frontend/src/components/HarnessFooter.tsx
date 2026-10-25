@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
+import { Link } from "@farm.js/core/client";
 import { Github, ExternalLink, ShieldCheck, Terminal, Heart } from "lucide-react";
 
 export function HarnessFooter() {

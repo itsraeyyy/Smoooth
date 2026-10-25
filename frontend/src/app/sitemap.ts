@@ -1,4 +1,4 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from "@farm.js/core";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://smoooth.dev';

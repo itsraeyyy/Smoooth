@@ -1,10 +1,14 @@
 {
-  "name": "smoooth-landing",
+  "name": "smoooth",
   "version": "1.0.0",
   "private": true,
-  "description": "Smoooth - Infrastructure Freedom for AI Agents Landing Page",
+  "description": "Smoooth - Infrastructure Freedom for AI Agents Landing Page & Engine",
   "scripts": {
-    "build": "node scripts/build-landing.js",
+    "dev": "pnpm --dir frontend dev",
+    "build": "pnpm --dir frontend build",
+    "start": "pnpm --dir frontend start",
+    "type-check": "pnpm --dir frontend type-check",
+    "build:landing-legacy": "node scripts/build-landing.js",
     "deploy": "node scripts/build-landing.js && npx wrangler pages deploy dist --project-name=smoooth",
     "preview": "npx serve dist"
   }

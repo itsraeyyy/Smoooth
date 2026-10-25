@@ -1,4 +1,4 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from "@farm.js/core";
 
 export default function robots(): MetadataRoute.Robots {
   const baseUrl = 'https://smoooth.dev';
@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/_next/', '/private/'],
+        disallow: ['/api/', '/private/'],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

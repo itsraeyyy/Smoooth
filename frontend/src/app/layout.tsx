@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { LayoutProps, Metadata } from "@farm.js/core";
 import "./globals.css";
 
 const siteUrl = "https://smoooth.dev";
@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: siteTitle,
   description: siteDescription,
-  applicationName: "Smoooth",
   authors: [{ name: "Smoooth Core Team", url: siteUrl }],
   creator: "Smoooth",
   publisher: "Smoooth",
@@ -76,11 +75,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: LayoutProps) {
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [

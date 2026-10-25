@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import { Link } from "@farm.js/core/client";
 
 export function HarnessHeader() {
   const [lang, setLang] = useState<"EN" | "CN">("EN");
