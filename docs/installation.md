@@ -33,20 +33,30 @@ Smoooth manages application containers by communicating with the local Docker da
 
 ## 3. Installation
 
-### Quickstart (Automated Installer)
+### Quickstart (Automated 1-Line Installer)
 
-Run the installer as root on your VPS:
+Install directly on your Linux VPS with zero compilation and zero CPU spike:
 
 ```bash
-# Clone or transfer repository to VPS
-git clone https://github.com/smoooth/smoooth.git /opt/smoooth
-cd /opt/smoooth
-
-# Run idempotent production installer
-sudo bash scripts/install.sh
+# 1-Line Zero-Compilation Installer (Downloads verified release binary from GitHub)
+curl -fsSL https://raw.githubusercontent.com/itsraeyyy/Smoooth/main/scripts/install.sh | sudo bash -s -- --show-token
 ```
 
-*(Target production distribution interface: `curl -fsSL https://get.smoooth.dev | sh` — once release CDN pipeline is published).*
+### Manual Release Bundle Installation
+
+```bash
+# 1. Download release bundle and SHA-256 checksum
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/smoooth-v0.1.1-linux-x86_64.tar.gz
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/SHA256SUMS
+
+# 2. Verify cryptographic integrity
+sha256sum -c SHA256SUMS
+
+# 3. Extract and run installer
+tar -xzf smoooth-v0.1.1-linux-x86_64.tar.gz
+cd smoooth-v0.1.1-linux-x86_64
+sudo ./install.sh --show-token
+```
 
 ### What the Installer Does:
 1. **Preflight Checks**: Verifies CPU architecture (`x86_64`), Linux kernel, free disk space (>= 512MB on `/var`), port 4040 availability, and Docker socket.

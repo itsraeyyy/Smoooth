@@ -74,11 +74,13 @@ jobs:
 
           # Compute SHA256 checksum
           sha256sum "${RELEASE_DIR}.tar.gz" > SHA256SUMS
+          sha256sum "${RELEASE_DIR}.tar.gz" | cut -d' ' -f1 > "${RELEASE_DIR}.tar.gz.sha256"
 
           # Verify self-test
           sha256sum -c SHA256SUMS
 
           echo "TARBALL=${RELEASE_DIR}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "SHA256FILE=${RELEASE_DIR}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
           echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -92,5 +94,6 @@ jobs:
           prerelease: true
           files: |
             ${{ steps.package.outputs.TARBALL }}
+            ${{ steps.package.outputs.SHA256FILE }}
             SHA256SUMS
             RELEASE_NOTES.md

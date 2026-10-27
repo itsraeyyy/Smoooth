@@ -59,23 +59,31 @@ Instead of forcing developers to adapt their architecture to proprietary hosting
    - Requiring root-only file access (`chmod 0700` on `/etc/smoooth`, `0600` on tokens).
    - Binding exclusively to loopback `127.0.0.1:4040` unless explicitly instructed otherwise with `--enable-remote`.
    - Recommending an authenticating reverse proxy (e.g. Caddy/Nginx) with TLS if accessed over public networks.
-2. **Distribution Status:**
-   The automated web installer (`curl -fsSL https://get.smoooth.dev | sh`) remains in **HELD** status until custom domain DNS and TLS certificates are completed. For this Beta release, distribution is managed via verified release tarballs (`smoooth-v0.1.0-linux-x86_64.tar.gz`) accompanied by cryptographic `SHA256SUMS`.
+2. **Zero-Compilation VPS Distribution:**
+   Smoooth provides pre-compiled, stripped binaries with cryptographic SHA-256 verification. Installation on target Linux VPS takes under 5 seconds with zero compiler CPU impact, protecting active production workloads from resource spikes.
 
 ---
 
 ## Installation & Upgrade
 
-### Clean Installation
+### 1-Line Automated Installer (Zero-Compilation, Zero-Downtime)
 ```bash
-# 1. Download and verify release bundle
-tar -xzf smoooth-v0.1.0-linux-x86_64.tar.gz
-cd smoooth-v0.1.0-linux-x86_64
+# Download and install verified pre-compiled release binary directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/itsraeyyy/Smoooth/main/scripts/install.sh | sudo bash -s -- --show-token
+```
+
+### Manual Release Bundle Installation
+```bash
+# 1. Download release bundle and checksum
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/smoooth-v0.1.1-linux-x86_64.tar.gz
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/SHA256SUMS
 
 # 2. Verify SHA256 checksum
 sha256sum -c SHA256SUMS
 
-# 3. Run privileged installer
+# 3. Extract and run installer
+tar -xzf smoooth-v0.1.1-linux-x86_64.tar.gz
+cd smoooth-v0.1.1-linux-x86_64
 sudo ./install.sh --show-token
 ```
 

@@ -130,7 +130,8 @@ impl McpServer {
                     "serverInfo": {
                         "name": "smoooth-mcp",
                         "version": "0.1.1"
-                    }
+                    },
+                    "instructions": "Smoooth: Autonomous infrastructure engine for AI coding agents. Deploy and operate any polyglot stack on your own Linux VPS with Docker. Safely coexists with existing proxies (Coolify Traefik, Caddy, Nginx) without mutating unmanaged containers. Use `doctor` for system health & proxy coexistence audit, `scan_foreign_workloads` to discover live Docker/Coolify services, and `smoooth_migrate` (or `migrate_stack`) to preview and execute zero-downtime migrations."
                 });
                 Some(JsonRpcResponse {
                     jsonrpc: "2.0".to_string(),
@@ -249,7 +250,7 @@ impl McpServer {
         if let Some(agent) = &caller.identity {
             let required_scope = match name {
                 "create_plan" => crate::models::AgentScope::Plan,
-                "migrate_stack" => {
+                "migrate_stack" | "smoooth_migrate" => {
                     let apply = args.get("apply").and_then(|a| a.as_bool()).unwrap_or(false);
                     if apply {
                         crate::models::AgentScope::Deploy
@@ -347,6 +348,11 @@ impl McpServer {
                 }
             }
 
+            "doctor" | "smoooth_doctor" => {
+                let report = crate::doctor::Doctor::run_diagnostics("smoooth_state.json", "127.0.0.1", 4040).await;
+                Ok(serde_json::to_value(report).unwrap_or_default())
+            }
+
             "scan_foreign_workloads" => {
                 let ws = args
                     .get("workspace_id")
@@ -356,7 +362,7 @@ impl McpServer {
                 Ok(serde_json::to_value(preview).unwrap_or_default())
             }
 
-            "migrate_stack" => {
+            "migrate_stack" | "smoooth_migrate" => {
                 let source_raw = args
                     .get("source")
                     .and_then(|v| v.as_str())

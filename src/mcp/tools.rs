@@ -37,8 +37,17 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
             }),
         },
         McpToolDefinition {
+            name: "doctor".to_string(),
+            description: "Run comprehensive system diagnostics on the host Linux VPS: CPU architecture, OS baseline, Docker daemon connectivity, loopback port binding (4040), filesystem permissions, and external proxy coexistence (Coolify Traefik, Caddy, Nginx). Returns complete health report.".to_string(),
+            step: "01 Discover".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        McpToolDefinition {
             name: "scan_foreign_workloads".to_string(),
-            description: "Scan local host VPS for running Coolify services, unmanaged Docker containers, or persistent databases and generate a zero-downtime Smoooth migration plan".to_string(),
+            description: "Zero-downtime audit and discovery: Scan local host VPS for running Coolify services, unmanaged Docker containers, or persistent databases and generate a safe Smoooth migration plan without mutating live containers.".to_string(),
             step: "01 Discover".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
@@ -50,8 +59,23 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
 
         // 02 Plan
         McpToolDefinition {
+            name: "smoooth_migrate".to_string(),
+            description: "Zero-downtime migration assistant: Import, inspect, parse, and translate stacks from Coolify (JSON or Docker Compose), standard docker-compose.yml, Render (render.yaml), Fly.io (fly.toml), or Dokku (Procfile) into a validated Smoooth canonical plan. Preview first (`apply: false`) to verify the resource diff before execution.".to_string(),
+            step: "02 Plan".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["source"],
+                "properties": {
+                    "source": { "type": "string", "description": "Raw manifest content (YAML, JSON, TOML, Procfile) or local file path" },
+                    "format": { "type": "string", "description": "Explicit format hint: 'compose', 'coolify', 'render', 'fly', 'dokku', 'auto' (default: auto-detected)" },
+                    "workspace_id": { "type": "string", "description": "Target workspace (default: 'default')" },
+                    "apply": { "type": "boolean", "description": "Whether to immediately execute and provision the stack (default: false, preview only)" }
+                }
+            }),
+        },
+        McpToolDefinition {
             name: "migrate_stack".to_string(),
-            description: "Effortlessly import, parse, and translate stacks from Coolify (JSON/Compose), Docker Compose (docker-compose.yml), Render (render.yaml), Fly.io (fly.toml), or Dokku (Procfile) into a validated Smoooth canonical plan with optional immediate deployment".to_string(),
+            description: "Import, parse, and translate stacks from Coolify (JSON/Compose), Docker Compose (docker-compose.yml), Render (render.yaml), Fly.io (fly.toml), or Dokku (Procfile) into a validated Smoooth canonical plan with optional immediate deployment".to_string(),
             step: "02 Plan".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",

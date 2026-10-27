@@ -190,6 +190,33 @@ impl Doctor {
             }
         }
 
+        // 5. External Reverse Proxy & Coexistence Audit (Coolify, Traefik, Caddy, Nginx)
+        let port_80_bound = TcpListener::bind("0.0.0.0:80").is_err();
+        let port_443_bound = TcpListener::bind("0.0.0.0:443").is_err();
+
+        if port_80_bound || port_443_bound {
+            checks.push(DoctorCheck {
+                category: "Coexistence & Ingress".to_string(),
+                name: "External Reverse Proxy Coexistence".to_string(),
+                status: "pass".to_string(),
+                message: format!(
+                    "External ingress proxy active on host (Port 80 bound: {}, Port 443 bound: {}). Smoooth runs in isolated coexistence mode on {}:{}.",
+                    port_80_bound, port_443_bound, bind_addr, port
+                ),
+                recommendation: Some(
+                    "Zero-Downtime Guarantee: Smoooth will NOT mutate external proxies (Coolify Traefik, Caddy, Nginx) or containers outside its assigned workspace. Use `migrate_stack` or `scan_foreign_workloads` to safely import workloads.".to_string(),
+                ),
+            });
+        } else {
+            checks.push(DoctorCheck {
+                category: "Coexistence & Ingress".to_string(),
+                name: "Standard Ingress Ports".to_string(),
+                status: "pass".to_string(),
+                message: "Standard HTTP/HTTPS ports (80/443) are available for Smoooth managed ingress.".to_string(),
+                recommendation: None,
+            });
+        }
+
         // 5. Storage & Persistence Check
         let state_path = Path::new(storage_path);
         let parent_dir = state_path.parent().unwrap_or(Path::new("."));

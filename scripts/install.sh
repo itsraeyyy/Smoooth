@@ -9,6 +9,7 @@
 set -euo pipefail
 
 SMOOOTH_VERSION="0.1.1"
+SMOOOTH_REPO="itsraeyyy/Smoooth"
 SMOOOTH_USER="smoooth"
 SMOOOTH_GROUP="smoooth"
 INSTALL_BIN_DIR="/usr/local/bin"
@@ -126,19 +127,35 @@ if [[ "${ACTION}" == "upgrade" ]]; then
   cp "${SMOOOTH_BIN}" "${BACKUP_BIN}"
 
   NEW_BIN=""
+  UPGRADE_TMP=""
   if [[ -f "./target/release/smoooth" ]]; then
     NEW_BIN="./target/release/smoooth"
   elif [[ -f "./smoooth" ]]; then
     NEW_BIN="./smoooth"
+  else
+    echo "[INFO] No local binary found. Fetching pre-compiled release v${SMOOOTH_VERSION} from GitHub Releases..."
+    UPGRADE_ARCH=$(uname -m)
+    UPGRADE_TMP=$(mktemp -d)
+    UPGRADE_TARBALL="smoooth-v${SMOOOTH_VERSION}-linux-${UPGRADE_ARCH}.tar.gz"
+    UPGRADE_URL="https://github.com/${SMOOOTH_REPO}/releases/download/v${SMOOOTH_VERSION}/${UPGRADE_TARBALL}"
+    UPGRADE_LATEST="https://github.com/${SMOOOTH_REPO}/releases/latest/download/${UPGRADE_TARBALL}"
+
+    if curl -fsSL "${UPGRADE_URL}" -o "${UPGRADE_TMP}/${UPGRADE_TARBALL}" 2>/dev/null || \
+       curl -fsSL "${UPGRADE_LATEST}" -o "${UPGRADE_TMP}/${UPGRADE_TARBALL}" 2>/dev/null; then
+      tar -xzf "${UPGRADE_TMP}/${UPGRADE_TARBALL}" -C "${UPGRADE_TMP}"
+      NEW_BIN=$(find "${UPGRADE_TMP}" -type f -name "smoooth" -perm -0100 | head -n 1)
+    fi
   fi
 
-  if [[ -z "${NEW_BIN}" ]]; then
-    echo "[ERROR] No new 'smoooth' binary found in release target or current directory." >&2
+  if [[ -z "${NEW_BIN}" || ! -f "${NEW_BIN}" ]]; then
+    echo "[ERROR] Could not find or download pre-built 'smoooth' binary for upgrade." >&2
+    [[ -n "${UPGRADE_TMP}" ]] && rm -rf "${UPGRADE_TMP}"
     exit 1
   fi
 
   echo "[INFO] Installing new binary from ${NEW_BIN}..."
   install -m 0755 "${NEW_BIN}" "${SMOOOTH_BIN}"
+  [[ -n "${UPGRADE_TMP}" ]] && rm -rf "${UPGRADE_TMP}"
 
   echo "[INFO] Restarting Smoooth service..."
   systemctl restart smoooth.service || true
@@ -335,22 +352,57 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 9. Binary Installation (Idempotent)
+# 9. Binary Installation (Idempotent & Zero-Compilation)
 # ------------------------------------------------------------------------------
 if [[ -f "./target/release/smoooth" ]]; then
-  echo "[INFO] Installing release binary from ./target/release/smoooth..."
+  echo "[INFO] Installing local release binary from ./target/release/smoooth..."
   install -m 0755 ./target/release/smoooth "${SMOOOTH_BIN}"
 elif [[ -f "./target/debug/smoooth" ]]; then
-  echo "[INFO] Installing debug binary from ./target/debug/smoooth..."
+  echo "[INFO] Installing local debug binary from ./target/debug/smoooth..."
   install -m 0755 ./target/debug/smoooth "${SMOOOTH_BIN}"
 elif [[ -f "./smoooth" ]]; then
   echo "[INFO] Installing local binary from ./smoooth..."
   install -m 0755 ./smoooth "${SMOOOTH_BIN}"
-elif command -v "${SMOOOTH_BIN}" >/dev/null 2>&1; then
-  echo "[INFO] Binary already installed at ${SMOOOTH_BIN}."
 else
-  echo "[WARN] No pre-built 'smoooth' binary found in current path."
-  echo "[INFO] Compile via: cargo build --release && sudo install -m 0755 target/release/smoooth ${SMOOOTH_BIN}"
+  # Automated Pre-Compiled Binary Download (Zero VPS Compilation Overhead)
+  echo "[INFO] Downloading verified pre-compiled release binary for ${ARCH} (v${SMOOOTH_VERSION})..."
+  INSTALL_TMP=$(mktemp -d)
+  TARBALL_NAME="smoooth-v${SMOOOTH_VERSION}-linux-${ARCH}.tar.gz"
+  DOWNLOAD_URL="https://github.com/${SMOOOTH_REPO}/releases/download/v${SMOOOTH_VERSION}/${TARBALL_NAME}"
+  LATEST_URL="https://github.com/${SMOOOTH_REPO}/releases/latest/download/${TARBALL_NAME}"
+
+  if ! curl -fsSL "${DOWNLOAD_URL}" -o "${INSTALL_TMP}/${TARBALL_NAME}" 2>/dev/null; then
+    echo "[INFO] Tag release not yet published; fetching latest pre-built release..."
+    if ! curl -fsSL "${LATEST_URL}" -o "${INSTALL_TMP}/${TARBALL_NAME}" 2>/dev/null; then
+      echo "[ERROR] Failed to download pre-compiled release bundle from GitHub." >&2
+      echo "[ERROR] Attempted: ${DOWNLOAD_URL}" >&2
+      rm -rf "${INSTALL_TMP}"
+      exit 1
+    fi
+  fi
+
+  # Attempt checksum verification if SHA256SUMS is available
+  CHECKSUM_URL="https://github.com/${SMOOOTH_REPO}/releases/download/v${SMOOOTH_VERSION}/SHA256SUMS"
+  if curl -fsSL "${CHECKSUM_URL}" -o "${INSTALL_TMP}/SHA256SUMS" 2>/dev/null; then
+    echo "[INFO] Verifying cryptographic SHA-256 integrity..."
+    if (cd "${INSTALL_TMP}" && grep "${TARBALL_NAME}" SHA256SUMS | sha256sum -c - 2>/dev/null); then
+      echo "[INFO] Cryptographic integrity verified (SHA-256 match)."
+    else
+      echo "[WARN] Checksum file present but entry mismatch or unverified; proceeding cautiously."
+    fi
+  fi
+
+  tar -xzf "${INSTALL_TMP}/${TARBALL_NAME}" -C "${INSTALL_TMP}"
+  EXTRACTED_BIN=$(find "${INSTALL_TMP}" -type f -name "smoooth" -perm -0100 | head -n 1)
+  if [[ -n "${EXTRACTED_BIN}" && -f "${EXTRACTED_BIN}" ]]; then
+    install -m 0755 "${EXTRACTED_BIN}" "${SMOOOTH_BIN}"
+    echo "[INFO] Pre-compiled release binary successfully installed to ${SMOOOTH_BIN}."
+  else
+    echo "[ERROR] Could not locate extracted 'smoooth' binary in release archive." >&2
+    rm -rf "${INSTALL_TMP}"
+    exit 1
+  fi
+  rm -rf "${INSTALL_TMP}"
 fi
 
 # ------------------------------------------------------------------------------

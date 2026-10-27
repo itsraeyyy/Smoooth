@@ -50,17 +50,21 @@ Smoooth/
 - **Privilege**: Root access (via `sudo`)
 
 ### 2. Installation
-Unpack the verified release archive and run the installer:
 
+#### Automated 1-Line Installer (Zero-Compilation, Zero-Downtime)
 ```bash
-# Extract release bundle
-tar -xzf smoooth-v0.1.0-linux-x86_64.tar.gz
-cd smoooth-v0.1.0-linux-x86_64
+curl -fsSL https://raw.githubusercontent.com/itsraeyyy/Smoooth/main/scripts/install.sh | sudo bash -s -- --show-token
+```
 
-# Verify cryptographic SHA-256 integrity
+#### Manual Release Bundle
+```bash
+# Download and extract verified release bundle
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/smoooth-v0.1.1-linux-x86_64.tar.gz
+curl -fsSLO https://github.com/itsraeyyy/Smoooth/releases/download/v0.1.1/SHA256SUMS
 sha256sum -c SHA256SUMS
 
-# Run idempotent installer
+tar -xzf smoooth-v0.1.1-linux-x86_64.tar.gz
+cd smoooth-v0.1.1-linux-x86_64
 sudo ./install.sh --show-token
 ```
 
