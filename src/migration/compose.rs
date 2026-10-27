@@ -43,10 +43,8 @@ impl ComposeParser {
                 if let Some(b) = svc_val.get("build") {
                     if let Some(s) = b.as_str() {
                         Some(s.to_string())
-                    } else if let Some(m) = b.as_mapping() {
-                        m.get(&Value::String("context".to_string()))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
+                    } else if let Some(ctx) = b.get("context").and_then(|v| v.as_str()) {
+                        Some(ctx.to_string())
                     } else {
                         Some(".".to_string())
                     }
@@ -71,17 +69,17 @@ impl ComposeParser {
                             host_port: Some(p_int as u16),
                             protocol: "tcp".to_string(),
                         });
-                    } else if let Some(p_map) = p.as_mapping() {
-                        let target = p_map
-                            .get(&Value::String("target".to_string()))
+                    } else if p.is_mapping() {
+                        let target = p
+                            .get("target")
                             .and_then(|v| v.as_i64())
                             .unwrap_or(80) as u16;
-                        let pub_port = p_map
-                            .get(&Value::String("published".to_string()))
+                        let pub_port = p
+                            .get("published")
                             .and_then(|v| v.as_i64())
                             .map(|v| v as u16);
-                        let proto = p_map
-                            .get(&Value::String("protocol".to_string()))
+                        let proto = p
+                            .get("protocol")
                             .and_then(|v| v.as_str())
                             .unwrap_or("tcp")
                             .to_string();
@@ -223,7 +221,7 @@ impl ComposeParser {
                 .find(|p| p.host_port.is_some())
                 .map(|p| p.container_port)
                 .or_else(|| ports.first().map(|p| p.container_port))
-                .unwrap_or_else(|| if is_db { 5432 } else { 8080 });
+                .unwrap_or(if is_db { 5432 } else { 8080 });
 
             for dom in &domains {
                 ingress_routes.push(IngressRoutePreview {

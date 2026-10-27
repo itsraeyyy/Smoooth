@@ -161,13 +161,13 @@ impl ProxyBridgeManager {
         for r in routes {
             let safe_id = r.id.replace('_', "-");
             yaml.push_str(&format!("    smoooth-http-{}:\n", safe_id));
-            yaml.push_str(&format!("      entryPoints: [\"http\"]\n"));
+            yaml.push_str("      entryPoints: [\"http\"]\n");
             yaml.push_str(&format!("      rule: \"Host(`{}`)\"\n", r.domain));
             yaml.push_str(&format!("      service: \"smoooth-{}\"\n", safe_id));
 
             if r.tls {
                 yaml.push_str(&format!("    smoooth-https-{}:\n", safe_id));
-                yaml.push_str(&format!("      entryPoints: [\"https\"]\n"));
+                yaml.push_str("      entryPoints: [\"https\"]\n");
                 yaml.push_str(&format!("      rule: \"Host(`{}`)\"\n", r.domain));
                 yaml.push_str(&format!("      service: \"smoooth-{}\"\n", safe_id));
                 yaml.push_str("      tls:\n        certResolver: letsencrypt\n");

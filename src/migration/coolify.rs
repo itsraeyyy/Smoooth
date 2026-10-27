@@ -187,8 +187,7 @@ impl CoolifyParser {
             .unwrap_or("coolify-app")
             .trim()
             .to_lowercase()
-            .replace(' ', "-")
-            .replace('_', "-");
+            .replace([' ', '_'], "-");
 
         let image = app
             .get("docker_image")
@@ -335,8 +334,7 @@ impl CoolifyParser {
             .unwrap_or("coolify-db")
             .trim()
             .to_lowercase()
-            .replace(' ', "-")
-            .replace('_', "-");
+            .replace([' ', '_'], "-");
 
         let db_type = db
             .get("type")

@@ -1,2 +1,7 @@
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-self-contained=yes"]
+
+[alias]
+# Developer shortcut for fast incremental rebuilds on supported platforms (Linux/macOS)
+bz = "blaze"
+

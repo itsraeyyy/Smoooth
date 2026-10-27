@@ -168,7 +168,7 @@ impl IngressManager {
 
         for r in &routes {
             let scheme = if r.tls { "https://" } else { "http://" };
-            out.push_str(&format!("{}{{\n", format!("{}{}", scheme, r.domain)));
+            out.push_str(&format!("{}{}{{\n", scheme, r.domain));
             if let Some(prefix) = &r.path_prefix {
                 out.push_str(&format!(
                     "    handle_path {}* {{\n        reverse_proxy 127.0.0.1:{}\n    }}\n",
