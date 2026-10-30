@@ -457,6 +457,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // 6. One-Command Install Copy Interaction
+  const copyBtn = document.getElementById('copy-install-btn');
+  const installCmd = document.getElementById('install-cmd');
+  const copyText = document.getElementById('copy-text');
+  if (copyBtn && installCmd) {
+    copyBtn.addEventListener('click', async () => {
+      const textToCopy = installCmd.textContent.trim();
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+      } catch (_) {
+        const temp = document.createElement('textarea');
+        temp.value = textToCopy;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        temp.remove();
+      }
+      if (copyText) copyText.textContent = 'Copied!';
+      copyBtn.classList.add('border-emerald-500/50', 'text-emerald-400');
+      setTimeout(() => {
+        if (copyText) copyText.textContent = 'Copy';
+        copyBtn.classList.remove('border-emerald-500/50', 'text-emerald-400');
+      }, 2000);
+    });
+  }
 });
 
 </script>

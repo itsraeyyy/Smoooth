@@ -12,3 +12,7 @@
 - **Proof over decoration**: Show real terminal commands, real adapter payloads (PostgreSQL, Redis, Mongo, SQLite), real MCP tool invocations, and verifiable release checksums.
 - **Immediate interactions**: Fast, crisp interactive states (default, hover, active/pressed `scale(0.97)`, visible focus ring). No sluggish or distracting decorative animations.
 - Full responsive fidelity across desktop (1440px/1280px), tablet (900px), and mobile (390px/360px).
+
+## 3. Cloudflare Guidelines
+- When interacting with Cloudflare, use the cf CLI unless the project has a Wrangler configuration file.
+
