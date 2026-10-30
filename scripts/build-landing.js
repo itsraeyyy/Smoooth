@@ -57,6 +57,20 @@ const lexendHeadInjection = `
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace !important;
     font-stretch: 100% !important;
   }
+  .sound-familiar-heading {
+    font-size: clamp(36px, 4.5vw, 56px) !important;
+    line-height: 1.05 !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.035em !important;
+    color: #ffffff !important;
+  }
+  .sound-familiar-item {
+    font-size: 21px !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    white-space: nowrap !important;
+  }
 </style>`;
 
 function processHtml(html) {
