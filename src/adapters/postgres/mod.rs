@@ -152,10 +152,16 @@ impl ProviderAdapter for PostgresAdapter {
             .and_then(|v| v.as_str())
             .unwrap_or("smoooth_user");
 
-        let password = config
-            .get("password")
-            .and_then(|v| v.as_str())
-            .unwrap_or("smoooth_secure_pass");
+        let generated_password;
+        let password = if let Some(p) = config.get("password").and_then(|v| v.as_str()) {
+            p
+        } else {
+            let mut rand_bytes = [0u8; 16];
+            getrandom::getrandom(&mut rand_bytes)
+                .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate secure DB password: {}", e)))?;
+            generated_password = format!("pg_{}", hex::encode(rand_bytes));
+            &generated_password
+        };
 
         let host_port = config
             .get("port")
@@ -262,6 +268,9 @@ impl ProviderAdapter for PostgresAdapter {
             obj.insert("host".to_string(), serde_json::json!(&connect_host));
             obj.insert("port".to_string(), serde_json::json!(connect_port));
             obj.insert("volume_name".to_string(), serde_json::json!(volume_name));
+            obj.insert("user".to_string(), serde_json::json!(user));
+            obj.insert("password".to_string(), serde_json::json!(password));
+            obj.insert("database".to_string(), serde_json::json!(dbname));
         }
 
         Ok(Resource {

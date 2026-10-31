@@ -22,11 +22,16 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     pub fn new(storage: Arc<dyn Storage>) -> Self {
+        let secret_store = crate::security::SecretStore::resolve_or_create()
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to resolve or auto-generate master key, falling back to default local: {}", e);
+                crate::security::SecretStore::default_local()
+            });
         Self {
             worker_id: format!("worker_{}", Uuid::new_v4().simple()),
             storage,
             adapters: HashMap::new(),
-            secret_store: Arc::new(crate::security::SecretStore::default_local()),
+            secret_store: Arc::new(secret_store),
         }
     }
 
@@ -46,6 +51,60 @@ impl Orchestrator {
     pub fn register_adapter(&mut self, adapter: Arc<dyn ProviderAdapter>) {
         self.adapters
             .insert(adapter.provider_name().to_string(), adapter);
+    }
+
+    /// Rotate the master encryption key, atomically re-encrypting all stored ServiceBindings.
+    /// Fails closed without modifying state if any decryption fails.
+    pub async fn rotate_master_key(
+        &mut self,
+        new_key: [u8; crate::security::KEY_LEN],
+    ) -> Result<(String, usize)> {
+        let old_store = self.secret_store.clone();
+        let new_store = Arc::new(crate::security::SecretStore::new(new_key));
+        let mut migrated_count = 0;
+
+        let bindings = self.storage.list_bindings().await?;
+        let mut updated_bindings = Vec::new();
+
+        for mut binding in bindings {
+            if !binding.encrypted_credentials.is_empty() {
+                let decrypted = binding.decrypt_credentials(&old_store)?;
+                let new_encrypted = new_store
+                    .domain_store("service_binding")
+                    .encrypt(&decrypted)?;
+                binding.encrypted_credentials = new_encrypted;
+                binding.updated_at = Utc::now();
+                updated_bindings.push(binding);
+                migrated_count += 1;
+            }
+        }
+
+        for b in updated_bindings {
+            self.storage.save_binding(b).await?;
+        }
+
+        self.secret_store = new_store.clone();
+
+        let _ = self
+            .storage
+            .record_audit(AuditEvent {
+                id: 0,
+                workspace_id: "*".to_string(),
+                actor: "operator".to_string(),
+                action: "master_key_rotate".to_string(),
+                target_resource_id: None,
+                plan_hash: None,
+                outcome: "success".to_string(),
+                redacted_evidence: Some(serde_json::json!({
+                    "old_fingerprint": old_store.fingerprint(),
+                    "new_fingerprint": new_store.fingerprint(),
+                    "records_migrated": migrated_count,
+                })),
+                timestamp: Utc::now(),
+            })
+            .await;
+
+        Ok((new_store.fingerprint(), migrated_count))
     }
 
     // Agent Identity & Authorization Management
@@ -166,6 +225,64 @@ impl Orchestrator {
             .await;
 
         Ok(raw_token)
+    }
+
+    /// Synthesizes an ephemeral, single-action VerifiedExecutionPermit for a legacy AgentScope
+    pub async fn synthesize_legacy_permit(
+        &self,
+        agent: &AgentIdentity,
+        target_urn: &crate::models::ResourceUrn,
+        action: crate::models::Action,
+        operation_digest: [u8; 32],
+    ) -> Result<crate::security::VerifiedExecutionPermit<'static>> {
+        // Enforce workspace boundary
+        if agent.workspace_id != "*" && agent.workspace_id != target_urn.workspace() {
+            return Err(SmooothError::Security(format!(
+                "Agent workspace '{}' does not match target URN workspace '{}'",
+                agent.workspace_id, target_urn.workspace()
+            )));
+        }
+
+        // Validate that legacy scope authorizes this specific action
+        let authorized = match &action {
+            crate::models::Action::InspectMetadata | crate::models::Action::ReadLogs { .. } => {
+                agent.scopes.contains(&AgentScope::ReadOnly)
+                    || agent.scopes.contains(&AgentScope::Plan)
+                    || agent.scopes.contains(&AgentScope::Deploy)
+                    || agent.scopes.contains(&AgentScope::Admin)
+            }
+            crate::models::Action::Provision { .. }
+            | crate::models::Action::UpdateEnv { .. }
+            | crate::models::Action::RestartWorkload
+            | crate::models::Action::Reconcile
+            | crate::models::Action::Snapshot { .. } => {
+                agent.scopes.contains(&AgentScope::Deploy) || agent.scopes.contains(&AgentScope::Admin)
+            }
+            crate::models::Action::Destroy(_) => {
+                agent.scopes.contains(&AgentScope::Destructive) || agent.scopes.contains(&AgentScope::Admin)
+            }
+            crate::models::Action::ReadSecret { .. } => {
+                agent.scopes.contains(&AgentScope::Admin)
+            }
+        };
+
+        if !authorized {
+            return Err(SmooothError::Security(format!(
+                "Agent with scopes {:?} is not authorized for action {:?}",
+                agent.scopes, action
+            )));
+        }
+
+        let epoch = self.storage.get_fencing_epoch(target_urn.workspace()).await?;
+        let permit = crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
+            &agent.agent_id,
+            target_urn.clone(),
+            action,
+            operation_digest,
+            epoch,
+            std::time::Duration::from_secs(60),
+        );
+        Ok(permit)
     }
 
     pub async fn authenticate_agent(&self, raw_token: &str) -> Result<Option<AgentIdentity>> {
@@ -1448,5 +1565,78 @@ impl Orchestrator {
         op.updated_at = Utc::now();
         let _ = storage.update_operation(op.clone()).await;
         Ok(op)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{connection::ConnectionDetails, ServiceBinding};
+    use crate::storage::local::LocalStorage;
+
+    #[tokio::test]
+    async fn test_orchestrator_master_key_rotation() {
+        let storage = Arc::new(LocalStorage::new_in_memory());
+        let initial_key = [11u8; crate::security::KEY_LEN];
+        let mut orch = Orchestrator::new(storage.clone())
+            .with_secret_store(Arc::new(crate::security::SecretStore::new(initial_key)));
+
+        // Create and save a binding encrypted with the initial key
+        let details = ConnectionDetails {
+            protocol: "postgres".to_string(),
+            host: "db.local".to_string(),
+            port: 5432,
+            path_or_database: Some("appdb".to_string()),
+            username: Some("smoooth".to_string()),
+            password: Some("initial_super_secret_pw".to_string()),
+            extra_params: HashMap::new(),
+        };
+
+        let binding = ServiceBinding::new_dynamic(
+            "bind_test_1".to_string(),
+            "web_app".to_string(),
+            "db_postgres".to_string(),
+            "postgres_connection".to_string(),
+            ResourceOwnership::SmooothManaged,
+            None,
+            details.clone(),
+            orch.secret_store(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        storage.save_binding(binding).await.unwrap();
+
+        // Rotate to a new master key
+        let new_key = [22u8; crate::security::KEY_LEN];
+        let (new_fp, count) = orch.rotate_master_key(new_key).await.unwrap();
+        assert_eq!(count, 1, "Must migrate 1 binding");
+        assert!(new_fp.starts_with("SMOOOTH-KEY-SHA256:"));
+
+        // Retrieve binding from storage and decrypt with new store
+        let reloaded = storage.get_binding("bind_test_1").await.unwrap().unwrap();
+        let decrypted_details = reloaded
+            .decrypt_connection_details(orch.secret_store())
+            .unwrap();
+        assert_eq!(
+            decrypted_details.password,
+            Some("initial_super_secret_pw".to_string())
+        );
+
+        // Verify the old initial store CANNOT decrypt the rotated credentials
+        let old_store = crate::security::SecretStore::new(initial_key);
+        let old_decrypt_attempt = reloaded.decrypt_connection_details(&old_store);
+        assert!(
+            old_decrypt_attempt.is_err(),
+            "Old key must fail to decrypt rotated credentials"
+        );
+
+        // Verify audit event was logged
+        let audits = storage.list_audit_events("*").await.unwrap();
+        let rot_event = audits
+            .iter()
+            .find(|e| e.action == "master_key_rotate")
+            .unwrap();
+        assert_eq!(rot_event.outcome, "success");
     }
 }

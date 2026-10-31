@@ -122,8 +122,8 @@ async fn test_workload_environment_get_and_update_lifecycle() {
 
     storage.save_resource(res).await.expect("Failed to seed resource");
 
-    // 2. Test GET /api/workloads/:id/env
-    println!("\n[Test 1] Testing GET /api/workloads/:id/env...");
+    // 2. Test GET /api/workloads/:id/env (Default Masked)
+    println!("\n[Test 1] Testing GET /api/workloads/:id/env (Default Masked)...");
     let (status, _, body) = http_request(
         server_addr,
         "GET",
@@ -138,11 +138,26 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     assert_eq!(json["resource_id"], test_resource_id);
     assert_eq!(json["env"]["NODE_ENV"], "production");
     assert_eq!(json["env"]["PORT"], "3000");
-    assert_eq!(json["env"]["DATABASE_URL"], "postgres://user:pass@db:5432/app");
+    assert_eq!(json["is_masked"], true);
+    assert!(json["env"]["DATABASE_URL"].as_str().unwrap().contains("[REDACTED]"), "Default GET must mask sensitive credentials");
     assert_eq!(json["count"], 3);
-    println!(">>> GET /api/workloads/:id/env verified successfully with {} variables.", json["count"]);
 
-    // 3. Test POST /api/workloads/:id/env (Updating environment variables)
+    // 2b. Test GET /api/workloads/:id/env?reveal=true (Plaintext Reveal for Admin/Operator)
+    let (rev_status, _, rev_body) = http_request(
+        server_addr,
+        "GET",
+        &format!("/api/workloads/{}/env?reveal=true", test_resource_id),
+        Some(&auth_token),
+        None,
+    )
+    .await;
+    assert_eq!(rev_status, 200);
+    let rev_json: serde_json::Value = serde_json::from_str(&rev_body).expect("Valid JSON");
+    assert_eq!(rev_json["is_masked"], false);
+    assert_eq!(rev_json["env"]["DATABASE_URL"], "postgres://user:pass@db:5432/app");
+    println!(">>> GET /api/workloads/:id/env verified successfully (masked default & reveal=true).");
+
+    // 3. Test POST /api/workloads/:id/env (Updating environment variables with secret encryption)
     println!("\n[Test 2] Testing POST /api/workloads/:id/env to update environment...");
     let update_payload = serde_json::json!({
         "env": {
@@ -174,7 +189,7 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     let (get_status_2, _, get_body_2) = http_request(
         server_addr,
         "GET",
-        &format!("/api/workloads/{}/env", test_resource_id),
+        &format!("/api/workloads/{}/env?reveal=true", test_resource_id),
         Some(&auth_token),
         None,
     )

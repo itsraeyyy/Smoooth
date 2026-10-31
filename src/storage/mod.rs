@@ -57,8 +57,26 @@ pub trait Storage: Send + Sync {
     // Service Bindings
     async fn save_binding(&self, binding: ServiceBinding) -> Result<()>;
     async fn get_binding(&self, id: &str) -> Result<Option<ServiceBinding>>;
+    async fn list_bindings(&self) -> Result<Vec<ServiceBinding>>;
 
     // Audit Log
     async fn record_audit(&self, event: AuditEvent) -> Result<()>;
     async fn list_audit_events(&self, workspace_id: &str) -> Result<Vec<AuditEvent>>;
+
+    // Capability Revocation & Nonce Tracking
+    async fn record_revocation(
+        &self,
+        capability_id: &uuid::Uuid,
+        reason: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()>;
+    async fn is_revoked(&self, capability_id: &uuid::Uuid) -> Result<bool>;
+    async fn record_used_nonce(
+        &self,
+        nonce: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()>;
+    async fn is_nonce_used(&self, nonce: &str) -> Result<bool>;
+    async fn get_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
+    async fn increment_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
 }

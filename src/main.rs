@@ -99,6 +99,27 @@ enum Commands {
         #[command(subcommand)]
         command: MigrateCommands,
     },
+    /// Manage capability tokens, delegation chains, and cryptographic revocation
+    Capability {
+        #[command(subcommand)]
+        command: CapabilityCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum CapabilityCommands {
+    /// Inspect and verify a capability chain token
+    Inspect {
+        #[arg(help = "Hex-encoded capability chain header string")]
+        token: String,
+    },
+    /// Durably revoke a capability and its descendants
+    Revoke {
+        #[arg(help = "UUID of capability to revoke")]
+        id: String,
+        #[arg(short, long, default_value = "Revoked by operator")]
+        reason: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -315,7 +336,18 @@ async fn main() -> anyhow::Result<()> {
         }
     });
     let storage = Arc::new(LocalStorage::new_file_backed(&storage_path));
-    let mut orchestrator = Orchestrator::new(storage.clone());
+    let secret_store = match smoooth::security::SecretStore::resolve_or_create() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("\n🛑 [FATAL SECURITY ERROR] {}", e);
+            eprintln!("   Smoooth cannot safely proceed without the master encryption key.");
+            eprintln!("   Failing closed to prevent permanent customer credential loss.\n");
+            return Err(anyhow::anyhow!(e));
+        }
+    };
+
+    let mut orchestrator =
+        Orchestrator::new(storage.clone()).with_secret_store(Arc::new(secret_store));
     let docker_adapter = Arc::new(DockerAdapter::new());
     let postgres_adapter = Arc::new(smoooth::adapters::PostgresAdapter::new(
         docker_adapter.clone(),
@@ -326,6 +358,15 @@ async fn main() -> anyhow::Result<()> {
     orchestrator.register_adapter(postgres_adapter.clone());
     orchestrator.register_adapter(redis_adapter);
     orchestrator.register_adapter(mongo_adapter);
+
+    if orchestrator.secret_store().is_insecure_default() {
+        tracing::warn!("SecretStore running with hardcoded development seed. Set SMOOOTH_MASTER_KEY or SMOOOTH_MASTER_KEY_FILE for production security.");
+    } else {
+        tracing::info!(
+            "SecretStore master encryption key loaded and verified (Fingerprint: {}).",
+            orchestrator.secret_store().fingerprint()
+        );
+    }
 
     match cli.command {
         Some(Commands::Doctor) => {
@@ -448,6 +489,60 @@ async fn main() -> anyhow::Result<()> {
                 println!("  🔑 New Plaintext Bearer Token (DISPLAYED ONCE):");
                 println!("     {}", new_token);
                 println!("============================================================\n");
+            }
+        },
+
+        Some(Commands::Capability { command }) => {
+            match command {
+                CapabilityCommands::Inspect { token } => {
+                    match smoooth::security::CapabilityChain::from_header_string(&token) {
+                        Ok(chain) => {
+                            let leaf = chain.leaf();
+                            println!("\n=== Smoooth Capability Chain Inspection ===");
+                            println!("• Chain Depth      : {}", chain.links.len());
+                            println!("• Capability ID    : {}", leaf.payload.id);
+                            println!("• Parent ID        : {:?}", leaf.payload.parent_id);
+                            println!("• Issuer           : {}", leaf.payload.issuer);
+                            println!("• Holder PK        : {}", leaf.payload.holder_public_key);
+                            println!("• Designated URN   : {}", leaf.payload.target_urn);
+                            println!("• Permitted Actions: {:?}", leaf.payload.actions);
+                            println!("• Caveats          : {:?}", leaf.payload.caveats);
+                            println!("• Can Delegate     : {}", leaf.payload.can_delegate);
+                            println!("• Expires At       : {}", leaf.payload.expires_at);
+                            let is_revoked = orchestrator.storage().is_revoked(&leaf.payload.id).await.unwrap_or(false);
+                            if is_revoked {
+                                println!("• Status           : ❌ REVOKED");
+                            } else {
+                                println!("• Status           : ✅ ACTIVE (Valid)");
+                            }
+                            println!("===========================================\n");
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Failed to parse capability chain: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                CapabilityCommands::Revoke { id, reason } => {
+                    let cap_id = match uuid::Uuid::parse_str(&id) {
+                        Ok(u) => u,
+                        Err(e) => {
+                            eprintln!("❌ Invalid capability UUID '{}': {}", id, e);
+                            std::process::exit(1);
+                        }
+                    };
+                    let exp = chrono::Utc::now() + chrono::Duration::days(30);
+                    match orchestrator.storage().record_revocation(&cap_id, &reason, exp).await {
+                        Ok(()) => {
+                            println!("\n✅ Capability '{}' and all derived descendants durably REVOKED.", id);
+                            println!("   Reason: {}\n", reason);
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Failed to record revocation: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
             }
         },
 

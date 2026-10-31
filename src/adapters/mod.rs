@@ -65,4 +65,63 @@ pub trait ProviderAdapter: Send + Sync {
 
     /// Safe destruction with persistent volume preservation safeguards
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()>;
+
+    /// Authorized destruction requiring a verified execution permit
+    async fn authorized_destroy(
+        &self,
+        permit: &crate::security::VerifiedExecutionPermit<'_>,
+        target_urn: &crate::models::ResourceUrn,
+        expected_digest: [u8; 32],
+        scope: crate::models::DestructionScope,
+        current_epoch: u64,
+    ) -> Result<()> {
+        if std::time::Instant::now() > permit.deadline_monotonic {
+            return Err(crate::error::SmooothError::Security(
+                "Execution permit expired by monotonic deadline".into(),
+            ));
+        }
+        if permit.fencing_epoch != current_epoch {
+            return Err(crate::error::SmooothError::Security(format!(
+                "Fencing epoch mismatch: permit={}, current={}",
+                permit.fencing_epoch, current_epoch
+            )));
+        }
+        if &permit.target_urn != target_urn {
+            return Err(crate::error::SmooothError::Security(format!(
+                "Target URN mismatch: permit={}, requested={}",
+                permit.target_urn, target_urn
+            )));
+        }
+        if permit.operation_digest != expected_digest {
+            return Err(crate::error::SmooothError::Security(
+                "Operation payload digest mismatch".into(),
+            ));
+        }
+        match (&permit.permitted_action, scope) {
+            (
+                crate::models::Action::Destroy(crate::models::DestructionScope::ResourceAndPersistentData),
+                crate::models::DestructionScope::ResourceAndPersistentData,
+            ) => {}
+            (
+                crate::models::Action::Destroy(crate::models::DestructionScope::ResourceOnly),
+                crate::models::DestructionScope::ResourceOnly,
+            ) => {}
+            (
+                crate::models::Action::Destroy(crate::models::DestructionScope::ResourceOnly),
+                crate::models::DestructionScope::ResourceAndPersistentData,
+            ) => {
+                return Err(crate::error::SmooothError::Security(
+                    "Permit authorizes ResourceOnly destruction; cannot destroy persistent data".into(),
+                ));
+            }
+            _ => {
+                return Err(crate::error::SmooothError::Security(
+                    "Permit does not authorize Destroy action".into(),
+                ));
+            }
+        }
+        let preserve_data = scope == crate::models::DestructionScope::ResourceOnly;
+        let res_id = target_urn.segments().last().map(|s| s.id()).unwrap_or("");
+        self.destroy(res_id, preserve_data).await
+    }
 }

@@ -28,9 +28,12 @@ next-env.d.ts
 Thumbs.db
 desktop.ini
 
-# Scratch and local tokens
+# Scratch and local tokens & keys
 scratch/
 *.token
+*.key
+smoooth_master.key
+smoooth_state.json
 release-dist/
 /*.png
 *.tar.gz

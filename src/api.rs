@@ -32,6 +32,69 @@ pub struct AuthenticatedCaller {
     pub identity: Option<AgentIdentity>,
 }
 
+impl AuthenticatedCaller {
+    pub fn allows_workspace(&self, target_ws: &str) -> bool {
+        if self.is_operator {
+            return true;
+        }
+        if let Some(ref identity) = self.identity {
+            identity.allows_workspace(target_ws)
+        } else {
+            false
+        }
+    }
+
+    pub fn has_scope(&self, required: &AgentScope) -> bool {
+        if self.is_operator {
+            return true;
+        }
+        if let Some(ref identity) = self.identity {
+            identity.has_scope(required)
+        } else {
+            false
+        }
+    }
+
+    pub fn effective_workspace<'a>(
+        &'a self,
+        requested: Option<&'a str>,
+    ) -> std::result::Result<&'a str, (StatusCode, Json<serde_json::Value>)> {
+        if self.is_operator {
+            return Ok(requested.unwrap_or("default"));
+        }
+        if let Some(ref identity) = self.identity {
+            if let Some(target) = requested {
+                if identity.allows_workspace(target) {
+                    Ok(target)
+                } else {
+                    Err((
+                        StatusCode::FORBIDDEN,
+                        Json(serde_json::json!({
+                            "error": "Forbidden",
+                            "message": format!(
+                                "Agent is not authorized for workspace '{}'. Bound workspace: '{}'",
+                                target, identity.workspace_id
+                            )
+                        })),
+                    ))
+                }
+            } else if identity.workspace_id == "*" {
+                Ok("default")
+            } else {
+                Ok(&identity.workspace_id)
+            }
+        } else {
+            Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "error": "Unauthorized",
+                    "message": "Valid authentication required"
+                })),
+            ))
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub orchestrator: Arc<Orchestrator>,
@@ -50,6 +113,63 @@ pub struct HealthResponse {
 #[derive(Deserialize)]
 pub struct StatusQuery {
     pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+pub struct GetEnvQuery {
+    pub reveal: Option<bool>,
+}
+
+/// Detect whether an environment variable key indicates sensitive secrets
+pub fn is_sensitive_key(key: &str) -> bool {
+    let k = key.to_uppercase();
+    k.contains("PASS")
+        || k.contains("SECRET")
+        || k.contains("KEY")
+        || k.contains("TOKEN")
+        || k.contains("CRED")
+        || k.contains("AUTH")
+        || k.contains("PRIVATE")
+        || k.contains("DATABASE_URL")
+        || k.contains("REDIS_URL")
+        || k.contains("MONGO_URL")
+        || k.contains("CERT")
+        || k.contains("SIGNING")
+}
+
+/// Mask sensitive values (e.g. database credentials, API tokens) for safe display
+pub fn mask_sensitive_value(key: &str, val: &str) -> String {
+    if !is_sensitive_key(key) {
+        return val.to_string();
+    }
+    if val.contains("://") && val.contains('@') {
+        return crate::models::ServiceBinding::mask_connection_string(val);
+    }
+    if val.len() <= 6 {
+        return "[REDACTED_SECRET]".to_string();
+    }
+    format!("{}...[REDACTED]", &val[..3.min(val.len())])
+}
+
+/// Recursively redact sensitive keys from any arbitrary JSON structure
+pub fn redact_sensitive_json(val: &serde_json::Value) -> serde_json::Value {
+    match val {
+        serde_json::Value::Object(map) => {
+            let mut redacted = serde_json::Map::new();
+            for (k, v) in map {
+                if is_sensitive_key(k) {
+                    redacted.insert(k.clone(), serde_json::Value::String("[REDACTED]".to_string()));
+                } else {
+                    redacted.insert(k.clone(), redact_sensitive_json(v));
+                }
+            }
+            serde_json::Value::Object(redacted)
+        }
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(redact_sensitive_json).collect())
+        }
+        other => other.clone(),
+    }
 }
 
 #[derive(Serialize)]
@@ -440,9 +560,12 @@ async fn sse_message_handler(
 /// Workspace Resources Status Handler (Real Orchestrator Data)
 async fn status_handler(
     State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
     Query(query): Query<StatusQuery>,
-) -> impl IntoResponse {
-    let workspace = query.workspace.unwrap_or_else(|| "default".to_string());
+) -> std::result::Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let workspace = caller
+        .effective_workspace(query.workspace.as_deref())?
+        .to_string();
     let resources = state.orchestrator.list_resources(&workspace).await;
 
     let items: Vec<ResourceSummary> = resources
@@ -459,11 +582,11 @@ async fn status_handler(
         .collect();
 
     let total = items.len();
-    Json(StatusResponse {
+    Ok(Json(StatusResponse {
         workspace,
         total_resources: total,
         resources: items,
-    })
+    }))
 }
 
 /// Discover Capabilities Handler
@@ -622,8 +745,22 @@ async fn reconcile_handler(
 /// List Agents Handler
 async fn list_agents_handler(
     State(state): State<AppState>,
-    Extension(_caller): Extension<AuthenticatedCaller>,
+    Extension(caller): Extension<AuthenticatedCaller>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Admin privileges required to list registered agent identities"
+            })),
+        ));
+    }
     match state.orchestrator.list_agents(None).await {
         Ok(agents) => {
             let sanitized: Vec<serde_json::Value> = agents
@@ -762,9 +899,42 @@ async fn rotate_agent_handler(
 /// Security Audit Trail Handler
 async fn audit_handler(
     State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
     Query(query): Query<AuditQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let ws = query.workspace.unwrap_or_else(|| "*".to_string());
+    let ws = if caller.is_operator
+        || caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            == Some("*")
+    {
+        query.workspace.unwrap_or_else(|| "*".to_string())
+    } else if let Some(ref identity) = caller.identity {
+        if let Some(target) = query.workspace.as_deref() {
+            if !identity.allows_workspace(target) {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({
+                        "error": "Forbidden",
+                        "message": format!(
+                            "Agent is not authorized to inspect audit logs for workspace '{}'",
+                            target
+                        )
+                    })),
+                ));
+            }
+            target.to_string()
+        } else {
+            identity.workspace_id.clone()
+        }
+    } else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    };
+
     match state.orchestrator.storage().list_audit_events(&ws).await {
         Ok(events) => Ok(Json(events)),
         Err(e) => Err((
@@ -876,9 +1046,39 @@ async fn export_ingress_handler(
 
 /// Real-Time Container Logs Handler for Overseer Drawer
 async fn resource_logs_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+        if !caller.allows_workspace(&resource.workspace_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Forbidden",
+                    "message": format!(
+                        "Agent is not authorized to inspect container logs in workspace '{}'",
+                        resource.workspace_id
+                    )
+                })),
+            ));
+        }
+    } else if !caller.is_operator
+        && caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            != Some("*")
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Resource '{}' not found in authorized workspace", id)
+            })),
+        ));
+    }
+
     let logs_cmd = tokio::process::Command::new("docker")
         .args(["logs", "--tail", "150", &id])
         .output()
@@ -891,15 +1091,15 @@ async fn resource_logs_handler(
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
-            Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "resource_id": id,
                 "logs": combined,
-            }))
+            })))
         }
-        Err(e) => Json(serde_json::json!({
+        Err(e) => Ok(Json(serde_json::json!({
             "resource_id": id,
             "logs": format!("Unable to fetch container logs: {}", e),
-        })),
+        }))),
     }
 }
 
@@ -948,7 +1148,9 @@ async fn deploy_workload_handler(
         ));
     }
 
-    let ws = body.workspace.unwrap_or_else(|| "default".to_string());
+    let ws = caller
+        .effective_workspace(body.workspace.as_deref())?
+        .to_string();
     let service_type = body.service_type.unwrap_or_else(|| "web".to_string());
     let port = body.port.unwrap_or(8080);
     let mut env_vars = body.env_vars.unwrap_or_default();
@@ -1044,7 +1246,7 @@ async fn deploy_workload_handler(
 
 /// Restart Workload Container Handler
 async fn restart_workload_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Extension(caller): Extension<AuthenticatedCaller>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
@@ -1056,7 +1258,38 @@ async fn restart_workload_handler(
     {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": "Deploy scope required" })),
+            Json(serde_json::json!({
+                "error": "Deploy scope required to restart workloads"
+            })),
+        ));
+    }
+
+    if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+        if !caller.allows_workspace(&resource.workspace_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Forbidden",
+                    "message": format!(
+                        "Agent is not authorized to restart resources in workspace '{}'",
+                        resource.workspace_id
+                    )
+                })),
+            ));
+        }
+    } else if !caller.is_operator
+        && caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            != Some("*")
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Resource '{}' not found in authorized workspace", id)
+            })),
         ));
     }
 
@@ -1095,13 +1328,48 @@ async fn delete_workload_handler(
         && !caller
             .identity
             .as_ref()
-            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+            .is_some_and(|i| i.has_scope(&AgentScope::Destructive))
     {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": "Deploy scope required" })),
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Destructive scope required to delete workloads"
+            })),
         ));
     }
+
+    let target_ws = if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+        if !caller.allows_workspace(&resource.workspace_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Forbidden",
+                    "message": format!(
+                        "Agent is not authorized to delete resources in workspace '{}'",
+                        resource.workspace_id
+                    )
+                })),
+            ));
+        }
+        resource.workspace_id
+    } else if !caller.is_operator
+        && caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            != Some("*")
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Resource '{}' not found in authorized workspace", id)
+            })),
+        ));
+    } else {
+        "default".to_string()
+    };
 
     // Stop and remove container via docker CLI
     let _ = tokio::process::Command::new("docker")
@@ -1111,6 +1379,27 @@ async fn delete_workload_handler(
 
     // Delete from state storage
     let _ = state.orchestrator.delete_resource(&id).await;
+
+    // Record audit event
+    let _ = state
+        .orchestrator
+        .storage()
+        .record_audit(crate::storage::AuditEvent {
+            id: 0,
+            workspace_id: target_ws,
+            actor: caller
+                .identity
+                .as_ref()
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "operator".to_string()),
+            action: "workload_delete".to_string(),
+            target_resource_id: Some(id.clone()),
+            plan_hash: None,
+            outcome: "success".to_string(),
+            redacted_evidence: Some(serde_json::json!({ "resource_id": id })),
+            timestamp: chrono::Utc::now(),
+        })
+        .await;
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -1123,11 +1412,74 @@ pub struct UpdateWorkloadEnvRequest {
     pub env: HashMap<String, String>,
 }
 
-/// Inspect Workload Environment Variables Handler
+/// Inspect Workload Environment Variables Handler (Masked by default; plaintext requires Admin + reveal=true)
 async fn get_workload_env_handler(
     State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
     Path(id): Path<String>,
+    Query(query): Query<GetEnvQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Deploy))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Deploy or Admin scope required to inspect workload environment secrets"
+            })),
+        ));
+    }
+
+    if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+        if !caller.allows_workspace(&resource.workspace_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Forbidden",
+                    "message": format!(
+                        "Agent is not authorized to inspect environment in workspace '{}'",
+                        resource.workspace_id
+                    )
+                })),
+            ));
+        }
+    } else if !caller.is_operator
+        && caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            != Some("*")
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Workload '{}' not found in authorized workspace", id)
+            })),
+        ));
+    }
+
+    let is_reveal_requested = query.reveal.unwrap_or(false);
+    if is_reveal_requested
+        && !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Admin privileges or operator access required to reveal plaintext environment secrets"
+            })),
+        ));
+    }
+
     let mut env_map = serde_json::Map::new();
     let mut image_name = String::new();
     let mut container_name = id.clone();
@@ -1165,9 +1517,26 @@ async fn get_workload_env_handler(
     // 2. Storage fallback if Docker inspect was empty or failed
     if env_map.is_empty() {
         if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+            // Decrypt encrypted_secrets if present
+            let env_store = state.orchestrator.secret_store().domain_store("workload_secrets");
+            let mut decrypted_secrets: HashMap<String, String> = HashMap::new();
+            if let Some(enc_hex) = resource.configuration.get("encrypted_secrets").and_then(|e| e.as_str()) {
+                if let Ok(ciphertext) = hex::decode(enc_hex) {
+                    if let Ok(plaintext_bytes) = env_store.decrypt(&ciphertext) {
+                        if let Ok(map) = serde_json::from_slice::<HashMap<String, String>>(&plaintext_bytes) {
+                            decrypted_secrets = map;
+                        }
+                    }
+                }
+            }
+
             if let Some(env_obj) = resource.configuration.get("env").and_then(|e| e.as_object()) {
                 for (k, v) in env_obj {
-                    env_map.insert(k.clone(), v.clone());
+                    if let Some(decrypted_val) = decrypted_secrets.get(k) {
+                        env_map.insert(k.clone(), serde_json::Value::String(decrypted_val.clone()));
+                    } else {
+                        env_map.insert(k.clone(), v.clone());
+                    }
                 }
             }
             if let Some(img) = resource.configuration.get("image").and_then(|i| i.as_str()) {
@@ -1178,11 +1547,61 @@ async fn get_workload_env_handler(
     }
 
     let count = env_map.len();
+    let mut masked_keys = Vec::new();
+
+    let final_env = if is_reveal_requested {
+        // Record audit event for plaintext reveal
+        let _ = state
+            .orchestrator
+            .storage()
+            .record_audit(crate::storage::AuditEvent {
+                id: 0,
+                workspace_id: caller
+                    .identity
+                    .as_ref()
+                    .map(|i| i.workspace_id.clone())
+                    .unwrap_or_else(|| "*".to_string()),
+                actor: caller
+                    .identity
+                    .as_ref()
+                    .map(|i| i.name.clone())
+                    .unwrap_or_else(|| "operator".to_string()),
+                action: "workload_secret_reveal".to_string(),
+                target_resource_id: Some(id.clone()),
+                plan_hash: None,
+                outcome: "success".to_string(),
+                redacted_evidence: Some(serde_json::json!({
+                    "resource_id": id,
+                    "env_count": count
+                })),
+                timestamp: chrono::Utc::now(),
+            })
+            .await;
+        env_map
+    } else {
+        let mut masked = serde_json::Map::new();
+        for (k, v) in env_map {
+            if is_sensitive_key(&k) {
+                masked_keys.push(k.clone());
+                if let Some(s) = v.as_str() {
+                    masked.insert(k.clone(), serde_json::Value::String(mask_sensitive_value(&k, s)));
+                } else {
+                    masked.insert(k.clone(), serde_json::Value::String("[REDACTED_SECRET]".to_string()));
+                }
+            } else {
+                masked.insert(k, v);
+            }
+        }
+        masked
+    };
+
     Ok(Json(serde_json::json!({
         "resource_id": id,
         "name": container_name,
         "image": image_name,
-        "env": env_map,
+        "env": final_env,
+        "masked_keys": masked_keys,
+        "is_masked": !is_reveal_requested,
         "count": count
     })))
 }
@@ -1206,7 +1625,81 @@ async fn update_workload_env_handler(
         ));
     }
 
-    // 1. Inspect existing container from Docker
+    if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+        if !caller.allows_workspace(&resource.workspace_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "Forbidden",
+                    "message": format!(
+                        "Agent is not authorized to update environment in workspace '{}'",
+                        resource.workspace_id
+                    )
+                })),
+            ));
+        }
+    } else if !caller.is_operator
+        && caller
+            .identity
+            .as_ref()
+            .map(|i| i.workspace_id.as_str())
+            != Some("*")
+    {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not Found",
+                "message": format!("Workload '{}' not found in authorized workspace", id)
+            })),
+        ));
+    }
+
+    // 1. Process environment variables: encrypt sensitive values and mask for rest storage
+    let env_store = state.orchestrator.secret_store().domain_store("workload_secrets");
+    let mut clean_env_for_docker = HashMap::new();
+    let mut secrets_to_encrypt = HashMap::new();
+    let mut masked_env_for_storage = serde_json::Map::new();
+
+    // Check existing encrypted secrets so we don't clobber if client sent back masked string
+    let mut existing_secrets: HashMap<String, String> = HashMap::new();
+    if let Ok(Some(ref existing_res)) = state.orchestrator.storage().get_resource(&id).await {
+        if let Some(enc_hex) = existing_res.configuration.get("encrypted_secrets").and_then(|e| e.as_str()) {
+            if let Ok(ciphertext) = hex::decode(enc_hex) {
+                if let Ok(bytes) = env_store.decrypt(&ciphertext) {
+                    if let Ok(map) = serde_json::from_slice::<HashMap<String, String>>(&bytes) {
+                        existing_secrets = map;
+                    }
+                }
+            }
+        }
+    }
+
+    for (k, v) in &body.env {
+        let resolved_v = if (v.contains("[REDACTED") || v.contains("[ENCRYPTED")) && existing_secrets.contains_key(k) {
+            existing_secrets[k].clone()
+        } else {
+            v.clone()
+        };
+
+        clean_env_for_docker.insert(k.clone(), resolved_v.clone());
+
+        if is_sensitive_key(k) {
+            secrets_to_encrypt.insert(k.clone(), resolved_v.clone());
+            masked_env_for_storage.insert(k.clone(), serde_json::Value::String(mask_sensitive_value(k, &resolved_v)));
+        } else {
+            masked_env_for_storage.insert(k.clone(), serde_json::Value::String(resolved_v));
+        }
+    }
+
+    let enc_payload_hex = if !secrets_to_encrypt.is_empty() {
+        let serialized = serde_json::to_vec(&secrets_to_encrypt).unwrap_or_default();
+        let enc_bytes = env_store.encrypt(&serialized).unwrap_or_default();
+        Some(hex::encode(enc_bytes))
+    } else {
+        None
+    };
+
+    // 2. Inspect existing container from Docker
     let inspect_output = tokio::process::Command::new("docker")
         .args(["inspect", &id])
         .output()
@@ -1324,7 +1817,7 @@ async fn update_workload_env_handler(
                 }
             }
 
-            // 2. Transactional replacement with rollback
+            // 3. Transactional replacement with rollback
             let backup_name = format!("{}_smoooth_backup_{}", clean_name, uuid::Uuid::new_v4().simple());
 
             // Stop container
@@ -1376,8 +1869,8 @@ async fn update_workload_env_handler(
                 run_cmd.args(["--entrypoint", ep]);
             }
 
-            // Inject updated environment variables
-            for (k, v) in &body.env {
+            // Inject updated environment variables (using decrypted real secrets)
+            for (k, v) in &clean_env_for_docker {
                 run_cmd.args(["-e", &format!("{}={}", k, v)]);
             }
 
@@ -1406,7 +1899,12 @@ async fn update_workload_env_handler(
 
                     // Update orchestrator state if registered
                     if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
-                        resource.configuration["env"] = serde_json::to_value(&body.env).unwrap_or_default();
+                        resource.configuration["env"] = serde_json::Value::Object(masked_env_for_storage.clone());
+                        if let Some(hex_str) = &enc_payload_hex {
+                            resource.configuration["encrypted_secrets"] = serde_json::Value::String(hex_str.clone());
+                        } else if let Some(obj) = resource.configuration.as_object_mut() {
+                            obj.remove("encrypted_secrets");
+                        }
                         resource.updated_at = chrono::Utc::now();
                         let _ = state.orchestrator.storage().save_resource(resource).await;
                     }
@@ -1458,7 +1956,12 @@ async fn update_workload_env_handler(
             // Fallback for storage-only / non-Docker test environment
             if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
                 let resource_name = resource.name.clone();
-                resource.configuration["env"] = serde_json::to_value(&body.env).unwrap_or_default();
+                resource.configuration["env"] = serde_json::Value::Object(masked_env_for_storage.clone());
+                if let Some(hex_str) = &enc_payload_hex {
+                    resource.configuration["encrypted_secrets"] = serde_json::Value::String(hex_str.clone());
+                } else if let Some(obj) = resource.configuration.as_object_mut() {
+                    obj.remove("encrypted_secrets");
+                }
                 resource.updated_at = chrono::Utc::now();
                 let _ = state.orchestrator.storage().save_resource(resource).await;
 
@@ -1512,9 +2015,12 @@ async fn migrate_detect_handler(
 
 /// Generate migration preview and canonical plan
 async fn migrate_preview_handler(
+    Extension(caller): Extension<AuthenticatedCaller>,
     Json(body): Json<MigratePreviewRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let ws = body.workspace.unwrap_or_else(|| "default".to_string());
+    let ws = caller
+        .effective_workspace(body.workspace.as_deref())?
+        .to_string();
     let forced = body.format.as_deref().and_then(|f| match f.to_lowercase().as_str() {
         "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
         "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
@@ -1549,6 +2055,19 @@ async fn migrate_apply_handler(
         return Err((
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({ "error": "Deploy scope required to execute migration" })),
+        ));
+    }
+
+    if !caller.allows_workspace(&body.preview.workspace_id) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": format!(
+                    "Agent is not authorized for workspace '{}'",
+                    body.preview.workspace_id
+                )
+            })),
         ));
     }
 

@@ -67,7 +67,9 @@ impl ServiceBinding {
         secret_store: &crate::security::SecretStore,
         exposed_env_keys: Vec<String>,
     ) -> crate::error::Result<Self> {
-        let encrypted_credentials = secret_store.encrypt(raw_credentials)?;
+        let encrypted_credentials = secret_store
+            .domain_store("service_binding")
+            .encrypt(raw_credentials)?;
         Ok(Self {
             id,
             source_resource_id,
@@ -102,7 +104,9 @@ impl ServiceBinding {
         // Serialize full connection details (including plaintext password) for encrypted storage
         let full_bytes = serde_json::to_vec(&details)
             .map_err(|e| crate::error::SmooothError::Validation(e.to_string()))?;
-        let encrypted_credentials = secret_store.encrypt(&full_bytes)?;
+        let encrypted_credentials = secret_store
+            .domain_store("service_binding")
+            .encrypt(&full_bytes)?;
 
         // Strip password for safe struct presentation
         let mut safe_details = details.clone();
@@ -139,6 +143,11 @@ impl ServiceBinding {
         &self,
         secret_store: &crate::security::SecretStore,
     ) -> crate::error::Result<Vec<u8>> {
+        // Try domain-separated store first, falling back to direct master store for backward compatibility
+        let domain_store = secret_store.domain_store("service_binding");
+        if let Ok(bytes) = domain_store.decrypt(&self.encrypted_credentials) {
+            return Ok(bytes);
+        }
         secret_store.decrypt(&self.encrypted_credentials)
     }
 

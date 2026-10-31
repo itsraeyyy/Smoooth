@@ -10,6 +10,14 @@ use crate::models::{
 };
 use crate::storage::{AuditEvent, Storage};
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct RevocationEntry {
+    pub capability_id: String,
+    pub reason: String,
+    pub revoked_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 struct StateSnapshot {
     #[serde(default)]
@@ -20,6 +28,12 @@ struct StateSnapshot {
     resources: HashMap<String, Resource>,
     bindings: HashMap<String, ServiceBinding>,
     audit_events: Vec<AuditEvent>,
+    #[serde(default)]
+    revocations: HashMap<String, RevocationEntry>,
+    #[serde(default)]
+    used_nonces: HashMap<String, chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    fencing_epochs: HashMap<String, u64>,
 }
 
 #[derive(Clone)]
@@ -350,6 +364,11 @@ impl Storage for LocalStorage {
         Ok(state.bindings.get(id).cloned())
     }
 
+    async fn list_bindings(&self) -> Result<Vec<ServiceBinding>> {
+        let state = self.state.read().await;
+        Ok(state.bindings.values().cloned().collect())
+    }
+
     async fn record_audit(&self, event: AuditEvent) -> Result<()> {
         let mut state = self.state.write().await;
         state.audit_events.push(event);
@@ -370,5 +389,70 @@ impl Storage for LocalStorage {
             .collect();
         list.sort_by_key(|a| std::cmp::Reverse(a.timestamp));
         Ok(list)
+    }
+
+    async fn record_revocation(
+        &self,
+        capability_id: &uuid::Uuid,
+        reason: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let mut state = self.state.write().await;
+        state.revocations.insert(
+            capability_id.to_string(),
+            RevocationEntry {
+                capability_id: capability_id.to_string(),
+                reason: reason.to_string(),
+                revoked_at: chrono::Utc::now(),
+                expires_at,
+            },
+        );
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(())
+    }
+
+    async fn is_revoked(&self, capability_id: &uuid::Uuid) -> Result<bool> {
+        let state = self.state.read().await;
+        Ok(state.revocations.contains_key(&capability_id.to_string()))
+    }
+
+    async fn record_used_nonce(
+        &self,
+        nonce: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let mut state = self.state.write().await;
+        let now = chrono::Utc::now();
+        state.used_nonces.retain(|_, exp| *exp > now);
+        state.used_nonces.insert(nonce.to_string(), expires_at);
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(())
+    }
+
+    async fn is_nonce_used(&self, nonce: &str) -> Result<bool> {
+        let state = self.state.read().await;
+        if let Some(exp) = state.used_nonces.get(nonce) {
+            if *exp > chrono::Utc::now() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    async fn get_fencing_epoch(&self, workspace_id: &str) -> Result<u64> {
+        let state = self.state.read().await;
+        Ok(state.fencing_epochs.get(workspace_id).copied().unwrap_or(1))
+    }
+
+    async fn increment_fencing_epoch(&self, workspace_id: &str) -> Result<u64> {
+        let mut state = self.state.write().await;
+        let epoch = state.fencing_epochs.entry(workspace_id.to_string()).or_insert(1);
+        *epoch += 1;
+        let new_epoch = *epoch;
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(new_epoch)
     }
 }

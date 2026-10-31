@@ -131,6 +131,31 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
                 }
             }),
         },
+        McpToolDefinition {
+            name: "inspect_capability".to_string(),
+            description: "Inspect, verify, and audit a cryptographic capability chain, designated resource URN, permitted actions, and caveats".to_string(),
+            step: "03 Govern".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["chain_header"],
+                "properties": {
+                    "chain_header": { "type": "string", "description": "Hex-encoded capability chain string" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "revoke_capability".to_string(),
+            description: "Durably revoke a capability grant and all delegated child capabilities across the cluster".to_string(),
+            step: "03 Govern".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["capability_id"],
+                "properties": {
+                    "capability_id": { "type": "string", "description": "UUID of capability to revoke" },
+                    "reason": { "type": "string", "description": "Revocation reason for audit trail" }
+                }
+            }),
+        },
 
         // 04 Provision
         McpToolDefinition {

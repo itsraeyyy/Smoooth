@@ -61,10 +61,16 @@ pub struct McpServer {
 
 impl McpServer {
     pub fn new(orchestrator: Arc<Orchestrator>) -> Self {
+        let secret_store = orchestrator.secret_store().clone();
         Self {
             orchestrator,
-            secret_store: SecretStore::default_local(),
+            secret_store,
         }
+    }
+
+    pub fn with_secret_store(mut self, secret_store: SecretStore) -> Self {
+        self.secret_store = secret_store;
+        self
     }
 
     /// Run the MCP server over standard input and output
@@ -261,7 +267,8 @@ impl McpServer {
                 "execute_plan" | "create_service_binding" | "reconcile_resource" | "configure_ingress" => {
                     crate::models::AgentScope::Deploy
                 }
-                "approve_plan" => crate::models::AgentScope::Admin,
+                "approve_plan" | "revoke_capability" => crate::models::AgentScope::Admin,
+                "inspect_capability" => crate::models::AgentScope::ReadOnly,
                 _ => crate::models::AgentScope::ReadOnly,
             };
 
@@ -562,6 +569,55 @@ impl McpServer {
                     "plan_hash": plan.plan_hash,
                     "approved_by": approved_by,
                     "ttl_seconds": ttl_seconds,
+                }))
+            }
+
+            "inspect_capability" => {
+                let chain_header = args
+                    .get("chain_header")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'chain_header'".to_string()))?;
+
+                let chain = crate::security::CapabilityChain::from_header_string(chain_header)?;
+                let leaf = chain.leaf();
+                let is_revoked = self.orchestrator.storage().is_revoked(&leaf.payload.id).await?;
+
+                Ok(serde_json::json!({
+                    "capability_id": leaf.payload.id,
+                    "target_urn": leaf.payload.target_urn.to_canonical_string(),
+                    "holder_public_key": leaf.payload.holder_public_key,
+                    "actions": leaf.payload.actions,
+                    "caveats": leaf.payload.caveats,
+                    "chain_depth": chain.links.len(),
+                    "expires_at": leaf.payload.expires_at,
+                    "is_revoked": is_revoked,
+                }))
+            }
+
+            "revoke_capability" => {
+                let cap_id_str = args
+                    .get("capability_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'capability_id'".to_string()))?;
+
+                let cap_id = uuid::Uuid::parse_str(cap_id_str)
+                    .map_err(|e| SmooothError::Validation(format!("Invalid capability UUID: {e}")))?;
+
+                let reason = args
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Revoked by operator");
+
+                self.orchestrator
+                    .storage()
+                    .record_revocation(&cap_id, reason, chrono::Utc::now() + chrono::Duration::days(30))
+                    .await?;
+
+                Ok(serde_json::json!({
+                    "success": true,
+                    "revoked_capability_id": cap_id.to_string(),
+                    "reason": reason,
+                    "timestamp": chrono::Utc::now(),
                 }))
             }
 

@@ -20,6 +20,15 @@ pub enum SmooothError {
     #[error("Cryptographic security error: {0}")]
     CryptoError(String),
 
+    #[error("Invalid resource URN: {0}")]
+    InvalidResourceUrn(String),
+
+    #[error("Security authorization error: {0}")]
+    Security(String),
+
+    #[error("Action attenuation violation: {0}")]
+    AttenuationViolation(String),
+
     #[error("Resource not found: {0}")]
     NotFound(String),
 

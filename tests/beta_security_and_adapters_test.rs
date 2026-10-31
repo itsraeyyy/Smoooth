@@ -279,8 +279,8 @@ async fn test_dashboard_html_rendering() {
     let html = get_dashboard_html();
     assert!(!html.is_empty());
     assert!(html.contains("<!DOCTYPE html>"));
-    assert!(html.contains("Smoooth — Control Plane Dashboard"));
-    assert!(html.contains("#0b0d10"));
+    assert!(html.contains("Overview · Smoooth Overseer"));
+    assert!(html.contains("Smoooth"));
     assert!(html.contains("/api/status"));
     assert!(html.contains("/api/agents"));
     assert!(html.contains("/api/audit"));

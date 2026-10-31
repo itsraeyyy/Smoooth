@@ -8,7 +8,7 @@ use smoooth::engine::orchestrator::Orchestrator;
 use smoooth::mcp::server::{CallerContext, McpServer};
 use smoooth::models::agent::AgentScope;
 use smoooth::models::plan::{CanonicalActionSpec, CanonicalExecutionSpec, PolicyConstraints};
-use smoooth::storage::local::LocalStorage;
+use smoooth::storage::{local::LocalStorage, Storage};
 
 fn build_dummy_plan_spec(ws: &str, is_delete: bool) -> CanonicalExecutionSpec {
     CanonicalExecutionSpec {
@@ -411,4 +411,229 @@ async fn test_zero_secret_leakage_in_api_responses_and_audits() {
 
     assert!(!audit_body.contains(&raw_token), "Raw token must NEVER appear in audit events");
     assert!(!audit_body.contains("token_hash"), "token_hash must NEVER appear in audit events");
+}
+
+#[tokio::test]
+async fn test_adversarial_workspace_isolation_and_env_secrets() {
+    let storage = Arc::new(LocalStorage::new_in_memory());
+    let orchestrator = Arc::new(Orchestrator::new(storage.clone()));
+    let master_token = "operator_master_key_adv_987".to_string();
+    let (app, _) = build_app(orchestrator.clone(), master_token.clone());
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    // Pair agent-alpha with read_only in workspace-alpha
+    let (_, raw_ro_token) = orchestrator
+        .pair_agent(
+            "agent-alpha-ro",
+            "workspace-alpha",
+            vec![AgentScope::ReadOnly],
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Pair agent-deployer with deploy in workspace-alpha
+    let (_, raw_deploy_token) = orchestrator
+        .pair_agent(
+            "agent-alpha-deploy",
+            "workspace-alpha",
+            vec![AgentScope::ReadOnly, AgentScope::Plan, AgentScope::Deploy],
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Pair agent-destructive with destructive in workspace-alpha
+    let (_, raw_destruct_token) = orchestrator
+        .pair_agent(
+            "agent-alpha-destruct",
+            "workspace-alpha",
+            vec![
+                AgentScope::ReadOnly,
+                AgentScope::Plan,
+                AgentScope::Deploy,
+                AgentScope::Destructive,
+            ],
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Seed resources in workspace-alpha and workspace-beta
+    let alpha_res = smoooth::models::Resource {
+        id: "workload-alpha".to_string(),
+        name: "alpha-app".to_string(),
+        workspace_id: "workspace-alpha".to_string(),
+        service_type: "web".to_string(),
+        provider: "docker".to_string(),
+        is_persistent: false,
+        ownership: smoooth::models::ResourceOwnership::SmooothManaged,
+        status: smoooth::models::ResourceStatus::Active,
+        configuration: serde_json::json!({
+            "env": {
+                "DATABASE_URL": "postgres://alpha:secret@localhost:5432/alphadb"
+            }
+        }),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    storage.save_resource(alpha_res).await.unwrap();
+
+    let beta_res = smoooth::models::Resource {
+        id: "workload-beta".to_string(),
+        name: "beta-db".to_string(),
+        workspace_id: "workspace-beta".to_string(),
+        service_type: "database".to_string(),
+        provider: "postgres".to_string(),
+        is_persistent: true,
+        ownership: smoooth::models::ResourceOwnership::SmooothManaged,
+        status: smoooth::models::ResourceStatus::Active,
+        configuration: serde_json::json!({
+            "env": {
+                "POSTGRES_PASSWORD": "super_secret_beta_password"
+            }
+        }),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    storage.save_resource(beta_res).await.unwrap();
+
+    // Test 1: ReadOnly agent is rejected on inspecting env secrets
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/workloads/workload-alpha/env",
+        Some(&raw_ro_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "ReadOnly agent must NOT inspect env secrets");
+    assert!(body.contains("Deploy or Admin scope required"));
+
+    // Test 2: Cross-workspace access: deployer in workspace-alpha cannot inspect workspace-beta env
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/workloads/workload-beta/env",
+        Some(&raw_deploy_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Cross-workspace env inspection must be forbidden");
+    assert!(body.contains("workspace 'workspace-beta'"));
+
+    // Test 3a: Authorized deployer inspects env in their own workspace -> sensitive credentials are masked by default!
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/workloads/workload-alpha/env",
+        Some(&raw_deploy_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(body.contains("[REDACTED]"), "Default inspection must mask sensitive credentials");
+    assert!(!body.contains("secret@"), "Plaintext password must NEVER appear in unrevealed response");
+
+    // Test 3b: Deployer without Admin scope cannot reveal plaintext secrets
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/workloads/workload-alpha/env?reveal=true",
+        Some(&raw_deploy_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Deployer without Admin scope cannot reveal plaintext secrets");
+    assert!(body.contains("Admin privileges or operator access required"));
+
+    // Test 3c: Master operator token CAN reveal plaintext secrets
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/workloads/workload-alpha/env?reveal=true",
+        Some(&master_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert!(body.contains("postgres://alpha:secret@localhost:5432/alphadb"), "Authorized reveal must return plaintext");
+
+    // Test 4: Cross-workspace status query: agent-alpha cannot query workspace-beta
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/status?workspace=workspace-beta",
+        Some(&raw_ro_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Cross-workspace status queries must be forbidden");
+    assert!(body.contains("Bound workspace: 'workspace-alpha'"));
+
+    // Test 5: Status query defaulting to bound workspace
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/status",
+        Some(&raw_ro_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200);
+    let status_json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(status_json["workspace"], "workspace-alpha");
+    assert_eq!(status_json["total_resources"], 1);
+
+    // Test 6: Deployer cannot delete workload without Destructive scope
+    let (status, body) = raw_http_call(
+        addr,
+        "DELETE",
+        "/api/workloads/workload-alpha",
+        Some(&raw_deploy_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Deployer without Destructive scope cannot delete workload");
+    assert!(body.contains("Destructive scope required"));
+
+    // Test 7: Non-admin agent cannot list agents
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/agents",
+        Some(&raw_deploy_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Non-admin agent cannot list platform agents");
+    assert!(body.contains("Admin privileges required"));
+
+    // Test 8: Agent with Destructive scope can delete workload in their workspace
+    let (status, _) = raw_http_call(
+        addr,
+        "DELETE",
+        "/api/workloads/workload-alpha",
+        Some(&raw_destruct_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "Destructive agent can delete workload in own workspace");
+
+    // Test 9: Cross-workspace audit log query rejected
+    let (status, body) = raw_http_call(
+        addr,
+        "GET",
+        "/api/audit?workspace=workspace-beta",
+        Some(&raw_ro_token),
+        None,
+    )
+    .await;
+    assert_eq!(status, 403, "Cross-workspace audit inspection must be forbidden");
+    assert!(body.contains("workspace 'workspace-beta'"));
 }

@@ -146,6 +146,16 @@ impl ContainerManager {
             memory: spec.memory_bytes,
             cpu_shares: spec.cpu_shares,
             nano_cpus: spec.nano_cpus,
+            security_opt: Some(vec!["no-new-privileges:true".to_string()]),
+            pids_limit: Some(256),
+            privileged: Some(false),
+            cap_drop: Some(vec![
+                "NET_RAW".to_string(),
+                "SYS_ADMIN".to_string(),
+                "SYS_PTRACE".to_string(),
+                "SYS_MODULE".to_string(),
+                "DAC_OVERRIDE".to_string(),
+            ]),
             ..Default::default()
         };
 
