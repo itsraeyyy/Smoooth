@@ -479,18 +479,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7. Sound Familiar Upward Ticker Rotation
+  // 7. Sound Familiar Upward Ticker Rotation (Emil Kowalski Design Standard)
   const track = document.getElementById('sound-familiar-track');
   const rotatorContainer = document.querySelector('.sound-familiar-list-container');
   if (track && rotatorContainer) {
     const totalPhrases = 7;
     const rowHeight = 44;
+    const stepDuration = 380; // ms - snappy, authoritative duration under Emil's UI budget
+    const stepInterval = 1500; // ms - 1.5s cadence gives ~1.12s hold to comfortably read
+    const initialDelay = 600; // ms - prompt response upon entering viewport
     let currentStep = 0;
     let intervalId = null;
     let timeoutId = null;
     let isHovered = false;
 
-    // Respect user's motion preferences
+    // Respect reduced motion: leave static and legible
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return;
     }
@@ -498,7 +501,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function step() {
       if (isHovered) return;
       currentStep++;
-      track.style.transition = 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)';
+      // Emil Kowalski canonical --ease-out: cubic-bezier(0.23, 1, 0.32, 1)
+      track.style.transition = `transform ${stepDuration}ms cubic-bezier(0.23, 1, 0.32, 1)`;
       track.style.transform = `translateY(-${currentStep * rowHeight}px)`;
 
       if (currentStep >= totalPhrases) {
@@ -507,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
           currentStep = 0;
           track.style.transform = 'translateY(0px)';
           void track.offsetHeight;
-        }, 510);
+        }, stepDuration + 10);
       }
     }
 
@@ -517,9 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
           timeoutId = null;
           step();
           if (!intervalId) {
-            intervalId = setInterval(step, 1800);
+            intervalId = setInterval(step, stepInterval);
           }
-        }, 800);
+        }, initialDelay);
       }
     }
 
@@ -534,8 +538,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    rotatorContainer.addEventListener('mouseenter', () => { isHovered = true; });
-    rotatorContainer.addEventListener('mouseleave', () => { isHovered = false; });
+    // Gate hover only for pointer: fine devices (no false sticky hovers on touch)
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      rotatorContainer.addEventListener('mouseenter', () => { isHovered = true; });
+      rotatorContainer.addEventListener('mouseleave', () => { isHovered = false; });
+    }
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
