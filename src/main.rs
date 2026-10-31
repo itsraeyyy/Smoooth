@@ -104,6 +104,39 @@ enum Commands {
         #[command(subcommand)]
         command: CapabilityCommands,
     },
+    /// Automated encrypted backups and verifiable isolated restoration
+    Backup {
+        #[command(subcommand)]
+        command: BackupCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BackupCommands {
+    /// Create an AES-256-GCM encrypted backup archive of workspace or platform state
+    Create {
+        /// Target workspace to back up (or '*' for all workspaces)
+        #[arg(short, long, default_value = "*")]
+        workspace: String,
+        /// Destination archive file path
+        #[arg(short, long, default_value = "smoooth_backup.enc.json")]
+        out: String,
+    },
+    /// Verify an encrypted backup in an isolated sandbox without modifying live state
+    Verify {
+        /// Path to encrypted backup archive file
+        #[arg(short, long)]
+        file: String,
+    },
+    /// Restore an encrypted backup into live storage (requires explicit confirmation token)
+    Restore {
+        /// Path to encrypted backup archive file
+        #[arg(short, long)]
+        file: String,
+        /// Mandatory confirmation token for destructive live state overwrite
+        #[arg(long)]
+        confirm: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -539,6 +572,114 @@ async fn main() -> anyhow::Result<()> {
                         }
                         Err(e) => {
                             eprintln!("❌ Failed to record revocation: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        },
+
+        Some(Commands::Backup { command }) => {
+            match command {
+                BackupCommands::Create { workspace, out } => {
+                    println!("\n=== Smoooth Automated Encrypted Backup ===");
+                    println!("• Target Workspace : {}", workspace);
+                    println!("• Output Path      : {}", out);
+                    println!("• Encryption       : AES-256-GCM (KDF domain 'backup')");
+
+                    match smoooth::security::BackupManager::export_to_file(
+                        orchestrator.storage().as_ref(),
+                        orchestrator.secret_store(),
+                        &workspace,
+                        &out,
+                    ).await {
+                        Ok(archive) => {
+                            println!("\n✅ Encrypted Backup created successfully!");
+                            println!("• Backup UUID      : {}", archive.header.backup_id);
+                            println!("• Key Fingerprint  : {}", archive.header.key_fingerprint);
+                            println!("• Payload Digest   : {}", archive.header.plaintext_sha256);
+                            println!("• Created At       : {}", archive.header.created_at);
+                            println!("• Status           : Encrypted & Verified\n");
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Failed to create encrypted backup: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                BackupCommands::Verify { file } => {
+                    println!("\n=== Smoooth Backup Sandbox Verification (Non-Destructive) ===");
+                    println!("• Archive File     : {}", file);
+                    println!("• Environment      : Ephemeral In-Memory Sandbox (Live Storage Untouched)");
+
+                    let archive = match smoooth::security::BackupManager::load_from_file(&file).await {
+                        Ok(a) => a,
+                        Err(e) => {
+                            eprintln!("❌ Failed to load backup file: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    match smoooth::security::BackupManager::verify_restore_isolated(
+                        &archive,
+                        orchestrator.secret_store(),
+                    ).await {
+                        Ok((report, _)) => {
+                            println!("\n✅ Backup Verification SUCCEEDED!");
+                            println!("• Backup UUID      : {}", report.backup_id);
+                            println!("• Workspace        : {}", report.workspace_id);
+                            println!("• Resources        : {} verified", report.resource_count);
+                            println!("• Service Bindings : {} verified", report.binding_count);
+                            println!("• Agent Identities : {} verified", report.agent_count);
+                            println!("• Revocations      : {} verified", report.revocation_count);
+                            println!("• SHA-256 Digest   : Matched Authoritative Header");
+                            println!("• Live Storage     : 100% UNTOUCHED (Zero mutations to production)\n");
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Backup verification failed: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                BackupCommands::Restore { file, confirm } => {
+                    println!("\n=== Smoooth Encrypted Backup Restoration ===");
+                    println!("• Archive File     : {}", file);
+
+                    let token = confirm.unwrap_or_default();
+                    if token != smoooth::security::backup::RESTORE_CONFIRMATION_TOKEN {
+                        eprintln!("\n❌ DESTRUCTIVE SAFETY GUARD BLOCKED RESTORATION!");
+                        eprintln!("Restoring a backup overwrites live platform state.");
+                        eprintln!("To execute a live restore, you must explicitly pass:");
+                        eprintln!("   --confirm {}", smoooth::security::backup::RESTORE_CONFIRMATION_TOKEN);
+                        eprintln!("\nTo verify the backup first without touching live infrastructure, run:");
+                        eprintln!("   smoooth backup verify -f {}", file);
+                        println!();
+                        std::process::exit(1);
+                    }
+
+                    let archive = match smoooth::security::BackupManager::load_from_file(&file).await {
+                        Ok(a) => a,
+                        Err(e) => {
+                            eprintln!("❌ Failed to load backup file: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    match smoooth::security::BackupManager::restore_to_live(
+                        &archive,
+                        orchestrator.secret_store(),
+                        orchestrator.storage().as_ref(),
+                        &token,
+                    ).await {
+                        Ok(report) => {
+                            println!("\n✅ Live State Restoration COMPLETED!");
+                            println!("• Backup UUID      : {}", report.backup_id);
+                            println!("• Restored State   : {} resources, {} agents", report.resource_count, report.agent_count);
+                            println!("• Applied At       : {}", chrono::Utc::now());
+                            println!("• Status           : Verified & Restored\n");
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Live restoration failed: {}", e);
                             std::process::exit(1);
                         }
                     }

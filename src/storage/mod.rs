@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 pub mod local;
 
-pub use local::LocalStorage;
+pub use local::{LocalStorage, RevocationEntry, StateSnapshot};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuditEvent {
@@ -79,4 +79,8 @@ pub trait Storage: Send + Sync {
     async fn is_nonce_used(&self, nonce: &str) -> Result<bool>;
     async fn get_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
     async fn increment_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
+
+    // Backup & Disaster Recovery
+    async fn export_snapshot(&self, workspace_id: &str) -> Result<StateSnapshot>;
+    async fn import_snapshot(&self, snapshot: StateSnapshot) -> Result<()>;
 }

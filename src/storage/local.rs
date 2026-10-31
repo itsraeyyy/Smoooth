@@ -10,7 +10,7 @@ use crate::models::{
 };
 use crate::storage::{AuditEvent, Storage};
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RevocationEntry {
     pub capability_id: String,
     pub reason: String,
@@ -18,22 +18,28 @@ pub struct RevocationEntry {
     pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
-struct StateSnapshot {
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StateSnapshot {
     #[serde(default)]
-    agents: HashMap<String, AgentIdentity>,
-    plans: HashMap<String, Plan>,
-    idempotency: HashMap<String, IdempotencyRecord>, // key serialized as string for json compatibility
-    operations: HashMap<String, Operation>,
-    resources: HashMap<String, Resource>,
-    bindings: HashMap<String, ServiceBinding>,
-    audit_events: Vec<AuditEvent>,
+    pub agents: HashMap<String, AgentIdentity>,
     #[serde(default)]
-    revocations: HashMap<String, RevocationEntry>,
+    pub plans: HashMap<String, Plan>,
     #[serde(default)]
-    used_nonces: HashMap<String, chrono::DateTime<chrono::Utc>>,
+    pub idempotency: HashMap<String, IdempotencyRecord>, // key serialized as string for json compatibility
     #[serde(default)]
-    fencing_epochs: HashMap<String, u64>,
+    pub operations: HashMap<String, Operation>,
+    #[serde(default)]
+    pub resources: HashMap<String, Resource>,
+    #[serde(default)]
+    pub bindings: HashMap<String, ServiceBinding>,
+    #[serde(default)]
+    pub audit_events: Vec<AuditEvent>,
+    #[serde(default)]
+    pub revocations: HashMap<String, RevocationEntry>,
+    #[serde(default)]
+    pub used_nonces: HashMap<String, chrono::DateTime<chrono::Utc>>,
+    #[serde(default)]
+    pub fencing_epochs: HashMap<String, u64>,
 }
 
 #[derive(Clone)]
@@ -454,5 +460,76 @@ impl Storage for LocalStorage {
         drop(state);
         self.persist_snapshot().await?;
         Ok(new_epoch)
+    }
+
+    async fn export_snapshot(&self, workspace_id: &str) -> Result<StateSnapshot> {
+        let state = self.state.read().await;
+        if workspace_id == "*" || workspace_id.is_empty() {
+            return Ok(state.clone());
+        }
+
+        // Workspace-scoped export: filter items belonging to this workspace
+        let agents: HashMap<String, AgentIdentity> = state
+            .agents
+            .iter()
+            .filter(|(_, a)| a.workspace_id == "*" || a.workspace_id == workspace_id)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let plans: HashMap<String, Plan> = state
+            .plans
+            .iter()
+            .filter(|(_, p)| p.spec.workspace_id == workspace_id)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let operations: HashMap<String, Operation> = state
+            .operations
+            .iter()
+            .filter(|(_, o)| o.workspace_id == workspace_id)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let resources: HashMap<String, Resource> = state
+            .resources
+            .iter()
+            .filter(|(_, r)| r.workspace_id == workspace_id)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let resource_keys: std::collections::HashSet<String> = resources.keys().cloned().collect();
+        let bindings: HashMap<String, ServiceBinding> = state
+            .bindings
+            .iter()
+            .filter(|(_, b)| resource_keys.contains(&b.source_resource_id) || resource_keys.contains(&b.target_resource_id))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let audit_events = state
+            .audit_events
+            .iter()
+            .filter(|e| e.workspace_id == workspace_id)
+            .cloned()
+            .collect();
+        let mut fencing_epochs = HashMap::new();
+        if let Some(epoch) = state.fencing_epochs.get(workspace_id) {
+            fencing_epochs.insert(workspace_id.to_string(), *epoch);
+        }
+
+        Ok(StateSnapshot {
+            agents,
+            plans,
+            idempotency: HashMap::new(),
+            operations,
+            resources,
+            bindings,
+            audit_events,
+            revocations: state.revocations.clone(),
+            used_nonces: state.used_nonces.clone(),
+            fencing_epochs,
+        })
+    }
+
+    async fn import_snapshot(&self, snapshot: StateSnapshot) -> Result<()> {
+        let mut state = self.state.write().await;
+        *state = snapshot;
+        drop(state);
+        self.persist_snapshot().await?;
+        Ok(())
     }
 }
