@@ -86,14 +86,15 @@ const lexendHeadInjection = `
     font-size: 50px !important;
   }
 }
-
+.sound-familiar-list-container {
+  --slot: 44px !important;
+}
 @media (min-width: 1280px) {
   .sound-familiar-list-container {
     margin-top: 44px !important;
   }
 }
-
-  .sound-familiar-item {
+.sound-familiar-item {
   font-family: var(--font-display, 'Lexend', ui-sans-serif, system-ui, sans-serif) !important;
   font-size: 26px !important;
   line-height: 1.15 !important;
