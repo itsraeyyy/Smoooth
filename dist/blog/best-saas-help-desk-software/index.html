@@ -482,6 +482,67 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 2000);
     });
   }
+
+  // 7. Sound Familiar Upward Ticker Rotation
+  const track = document.getElementById('sound-familiar-track');
+  const rotatorContainer = document.querySelector('.sound-familiar-list-container');
+  if (track && rotatorContainer) {
+    const totalPhrases = 7;
+    const rowHeight = 44;
+    let currentStep = 0;
+    let intervalId = null;
+    let isHovered = false;
+
+    // Respect user's motion preferences
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    function step() {
+      if (isHovered) return;
+      currentStep++;
+      track.style.transition = 'transform 750ms cubic-bezier(0.16, 1, 0.3, 1)';
+      track.style.transform = `translateY(-${currentStep * rowHeight}px)`;
+
+      if (currentStep >= totalPhrases) {
+        setTimeout(() => {
+          track.style.transition = 'none';
+          currentStep = 0;
+          track.style.transform = 'translateY(0px)';
+          void track.offsetHeight;
+        }, 760);
+      }
+    }
+
+    function start() {
+      if (!intervalId) {
+        intervalId = setInterval(step, 2800);
+      }
+    }
+
+    function stop() {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+
+    rotatorContainer.addEventListener('mouseenter', () => { isHovered = true; });
+    rotatorContainer.addEventListener('mouseleave', () => { isHovered = false; });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          start();
+        } else {
+          stop();
+        }
+      });
+    }, { rootMargin: '0px 0px -10% 0px' });
+
+    observer.observe(rotatorContainer);
+  }
+
 });
 
 </script>

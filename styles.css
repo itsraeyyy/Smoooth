@@ -32,12 +32,21 @@
   }
 }
 .sound-familiar-list-container {
-  --slot: 44px !important;
+  mask-image: linear-gradient(180deg, transparent 0px, rgba(0,0,0,0.9) 36px, rgba(0,0,0,0.55) 140px, rgba(0,0,0,0.2) 230px, transparent 310px);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0px, rgba(0,0,0,0.9) 36px, rgba(0,0,0,0.55) 140px, rgba(0,0,0,0.2) 230px, transparent 310px);
 }
 @media (min-width: 1280px) {
   .sound-familiar-list-container {
     margin-top: 44px !important;
   }
+}
+.sound-familiar-item-row {
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
 }
 .sound-familiar-item {
   font-family: var(--font-display, 'Lexend', ui-sans-serif, system-ui, sans-serif) !important;
@@ -46,5 +55,6 @@
   font-weight: 600 !important;
   letter-spacing: -0.02em !important;
   white-space: nowrap !important;
+  text-align: right !important;
 }
 
