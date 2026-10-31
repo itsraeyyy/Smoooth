@@ -2,6 +2,23 @@
 
 
 /* Sound Familiar Section Typography Guard */
+
+.sound-familiar-grid {
+  display: grid !important;
+  align-items: flex-start !important;
+  gap: 2rem !important;
+}
+@media (min-width: 1024px) {
+  .sound-familiar-grid {
+    gap: 3rem !important;
+  }
+}
+@media (min-width: 1280px) {
+  .sound-familiar-grid {
+    grid-template-columns: minmax(0, 1fr) 400px !important;
+  }
+}
+
 .sound-familiar-heading {
   font-family: var(--font-display, 'Lexend', ui-sans-serif, system-ui, sans-serif) !important;
   font-size: clamp(36px, 4.5vw, 56px) !important;
