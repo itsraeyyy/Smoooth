@@ -249,7 +249,7 @@ impl WorkloadSpec {
         }
 
         // 7. Environment variables validation
-        for (k, _) in &self.env {
+        for k in self.env.keys() {
             let k_upper = k.to_uppercase();
             if k_upper == "LD_PRELOAD" || k_upper == "LD_LIBRARY_PATH" {
                 return Err(SmooothError::Security(format!(

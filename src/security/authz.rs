@@ -78,6 +78,7 @@ impl AuthorizationEngine {
     /// durable revocation, target URN containment, action permissions, and caveats.
     ///
     /// Produces an unforgeable, zero-cost, in-memory `VerifiedExecutionPermit` upon success.
+    #[allow(clippy::too_many_arguments)]
     pub async fn authorize_capability_request<S: Storage>(
         &self,
         storage: &S,

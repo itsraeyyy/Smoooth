@@ -2,10 +2,11 @@ use crate::error::{Result, SmooothError};
 use serde::{Deserialize, Serialize};
 
 /// Commercial tier classifications matching the Smoooth Strategic & Product Blueprint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CommercialPlan {
     /// Free adoption engine: Self-hosted single-node daemon, core MCP/CLI, basic operations
+    #[default]
     Community,
     /// $9–15/mo: Managed Smoooth Cloud control plane, multiple environments, agent credentials
     Developer,
@@ -15,12 +16,6 @@ pub enum CommercialPlan {
     Team,
     /// Custom: SSO/SAML, private deployment, compliance packs, dedicated SLA
     Business,
-}
-
-impl Default for CommercialPlan {
-    fn default() -> Self {
-        Self::Community
-    }
 }
 
 /// Feature capabilities gated by commercial plan entitlements

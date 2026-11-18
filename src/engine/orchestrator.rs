@@ -615,6 +615,30 @@ impl Orchestrator {
                     continue;
                 }
 
+                // Ensure consumer resource is persisted in storage with canonical identity before binding injection
+                if storage
+                    .get_resource(&action.resource_name)
+                    .await
+                    .ok()
+                    .flatten()
+                    .is_none()
+                {
+                    let initial_res = Resource {
+                        id: format!("res_{}_{}", plan.spec.workspace_id, action.resource_name),
+                        name: action.resource_name.clone(),
+                        service_type: action.service_type.clone(),
+                        provider: action.provider.clone(),
+                        workspace_id: plan.spec.workspace_id.clone(),
+                        status: ResourceStatus::Provisioning,
+                        ownership: ResourceOwnership::SmooothManaged,
+                        configuration: action.config.clone(),
+                        is_persistent: action.is_persistent,
+                        created_at: Utc::now(),
+                        updated_at: Utc::now(),
+                    };
+                    let _ = storage.save_resource(initial_res).await;
+                }
+
                 // Resolve dynamic bindings and inject into action environment variables
                 let reqs_for_action = prerequisites
                     .get(&action.resource_name)
@@ -1141,22 +1165,25 @@ impl Orchestrator {
                 }
             }
 
-            // Resolve canonical resource IDs for source and target
-            let source_canonical_id = storage
+            // Resolve canonical resource IDs for source and target from persisted storage
+            let source_res = storage
                 .get_resource(&action.resource_name)
-                .await
-                .ok()
-                .flatten()
-                .map(|r| r.id)
-                .unwrap_or_else(|| format!("res_{}_{}", workspace_id, action.resource_name));
+                .await?
+                .ok_or_else(|| {
+                    crate::error::SmooothError::Storage(format!(
+                        "Cannot inject binding: source resource '{}' not found in workspace '{}'",
+                        action.resource_name, workspace_id
+                    ))
+                })?;
+            let source_canonical_id = source_res.id;
 
-            let target_canonical_id = storage
-                .get_resource(target_name)
-                .await
-                .ok()
-                .flatten()
-                .map(|r| r.id)
-                .unwrap_or_else(|| format!("res_{}_{}", workspace_id, target_name));
+            let target_res = storage.get_resource(target_name).await?.ok_or_else(|| {
+                crate::error::SmooothError::Storage(format!(
+                    "Cannot inject binding: target resource '{}' not found in workspace '{}'",
+                    target_name, workspace_id
+                ))
+            })?;
+            let target_canonical_id = target_res.id;
 
             // Persist binding metadata with canonical IDs, workspace, and key fingerprint
             let binding_id = format!("bind_{}_{}", source_canonical_id, target_canonical_id);
@@ -1172,7 +1199,7 @@ impl Orchestrator {
                 req.env_mappings,
             )?
             .with_workspace(workspace_id);
-            let _ = storage.save_binding(binding).await;
+            storage.save_binding(binding).await?;
         }
 
         // 3. Auto-bind any prerequisites in DAG not explicitly bound
@@ -1192,23 +1219,27 @@ impl Orchestrator {
                         env_map.entry(k).or_insert(v);
                     }
 
-                    let source_canonical_id = storage
+                    let source_res = storage
                         .get_resource(&action.resource_name)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|r| r.id)
-                        .unwrap_or_else(|| {
-                            format!("res_{}_{}", workspace_id, action.resource_name)
-                        });
+                        .await?
+                        .ok_or_else(|| {
+                            crate::error::SmooothError::Storage(format!(
+                                "Cannot auto-bind prerequisite: source resource '{}' not found in workspace '{}'",
+                                action.resource_name, workspace_id
+                            ))
+                        })?;
+                    let source_canonical_id = source_res.id;
 
-                    let target_canonical_id = storage
+                    let target_res = storage
                         .get_resource(prereq)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|r| r.id)
-                        .unwrap_or_else(|| format!("res_{}_{}", workspace_id, prereq));
+                        .await?
+                        .ok_or_else(|| {
+                            crate::error::SmooothError::Storage(format!(
+                                "Cannot auto-bind prerequisite: prerequisite resource '{}' not found in workspace '{}'",
+                                prereq, workspace_id
+                            ))
+                        })?;
+                    let target_canonical_id = target_res.id;
 
                     let binding_id =
                         format!("bind_{}_{}", source_canonical_id, target_canonical_id);
@@ -1224,7 +1255,7 @@ impl Orchestrator {
                         HashMap::new(),
                     )?
                     .with_workspace(workspace_id);
-                    let _ = storage.save_binding(binding).await;
+                    storage.save_binding(binding).await?;
                 }
             }
         }
@@ -1606,6 +1637,30 @@ impl Orchestrator {
                 continue;
             }
 
+            // Ensure consumer resource is persisted in storage with canonical identity before binding injection
+            if storage
+                .get_resource(&action.resource_name)
+                .await
+                .ok()
+                .flatten()
+                .is_none()
+            {
+                let initial_res = Resource {
+                    id: format!("res_{}_{}", plan.spec.workspace_id, action.resource_name),
+                    name: action.resource_name.clone(),
+                    service_type: action.service_type.clone(),
+                    provider: action.provider.clone(),
+                    workspace_id: plan.spec.workspace_id.clone(),
+                    status: ResourceStatus::Provisioning,
+                    ownership: ResourceOwnership::SmooothManaged,
+                    configuration: action.config.clone(),
+                    is_persistent: action.is_persistent,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                };
+                let _ = storage.save_resource(initial_res).await;
+            }
+
             // Resolve dynamic bindings and inject into action environment variables
             let reqs_for_action = prerequisites
                 .get(&action.resource_name)
@@ -1654,57 +1709,12 @@ impl Orchestrator {
                         serde_json::json!(op.lease_owner.as_deref().unwrap_or("worker")),
                     );
                 }
-                let target_urn = crate::models::ResourceUrn::for_resource(
-                    &plan.spec.workspace_id,
-                    &resolved_action.service_type,
-                    &resolved_action.resource_name,
-                )
-                .unwrap_or_else(|_| {
-                    crate::models::ResourceUrn::new_workspace(&plan.spec.workspace_id)
-                        .or_else(|_| {
-                            crate::models::ResourceUrn::new_workspace(
-                                &plan.spec.workspace_id.replace('_', "-"),
-                            )
-                        })
-                        .unwrap_or_else(|_| {
-                            crate::models::ResourceUrn::new_workspace("default").unwrap()
-                        })
-                });
-                let op_digest: [u8; 32] = Sha256::digest(
-                    serde_json::to_string(&config)
-                        .unwrap_or_default()
-                        .as_bytes(),
-                )
-                .into();
-                let permit = crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
-                    &plan.created_by,
-                    target_urn.clone(),
-                    crate::models::Action::Provision {
-                        resource_type: match resolved_action.service_type.as_str() {
-                            "database" => crate::models::ResourceType::Database,
-                            "network" => crate::models::ResourceType::Network,
-                            "storage" | "volume" => crate::models::ResourceType::Volume,
-                            "ingress" => crate::models::ResourceType::Ingress,
-                            _ => crate::models::ResourceType::Workload,
-                        },
-                        name_pattern: resolved_action.resource_name.clone(),
-                        limits: crate::models::ResourceLimits::default(),
-                        allow_public_exposure: resolved_action.exposes_network_publicly,
-                    },
-                    op_digest,
-                    initial_epoch,
-                    std::time::Duration::from_secs(60),
-                );
 
                 match adapter
-                    .authorized_provision(
-                        &permit,
-                        &target_urn,
-                        op_digest,
+                    .provision(
                         &resolved_action.resource_name,
                         &config,
                         resolved_action.is_persistent,
-                        initial_epoch,
                     )
                     .await
                 {

@@ -275,7 +275,7 @@ impl RuntimeProvider for DockerRuntimeProvider {
             }
             if ip_address.is_none() {
                 if let Some(networks) = &net.networks {
-                    for (_, n) in networks {
+                    for n in networks.values() {
                         if let Some(ip) = &n.ip_address {
                             if !ip.is_empty() {
                                 ip_address = Some(ip.clone());

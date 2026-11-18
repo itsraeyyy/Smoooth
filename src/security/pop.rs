@@ -30,7 +30,7 @@ pub fn compute_request_digest(
     hasher.update(b"\n");
     hasher.update(canonical_uri.as_bytes());
     hasher.update(b"\n");
-    hasher.update(&body_hash);
+    hasher.update(body_hash);
     hasher.update(b"\n");
     hasher.update(capability_id.to_string().as_bytes());
     hasher.update(b"\n");

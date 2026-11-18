@@ -67,6 +67,7 @@ pub trait ProviderAdapter: Send + Sync {
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()>;
 
     /// Authorized resource provisioning requiring a verified execution permit
+    #[allow(clippy::too_many_arguments)]
     async fn authorized_provision(
         &self,
         permit: &crate::security::VerifiedExecutionPermit<'_>,

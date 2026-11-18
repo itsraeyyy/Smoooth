@@ -2138,4 +2138,306 @@ mod tests {
         let _ = std::fs::remove_file(state_path.with_extension("lock"));
         let _ = std::fs::remove_file(state_path.with_extension("bak"));
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_maintenance_drain_waits_for_active_mutation_and_handles_timeout() {
+        let temp_dir = std::env::temp_dir();
+        let state_path = temp_dir.join(format!(
+            "smoooth_maint_drain_test_{}.json",
+            uuid::Uuid::new_v4().simple()
+        ));
+
+        let storage = Arc::new(LocalStorage::new_file_backed(&state_path));
+        storage
+            .save_agent(AgentIdentity {
+                agent_id: "init_agent".to_string(),
+                name: "Initial Agent".to_string(),
+                token_hash: "th_init".to_string(),
+                token_prefix: "smoooth_ag_init".to_string(),
+                scopes: vec![crate::models::AgentScope::ReadOnly],
+                created_at: chrono::Utc::now(),
+                expires_at: None,
+                revoked: false,
+                revoked_at: None,
+                last_used_at: None,
+                workspace_id: "ws-maint".to_string(),
+            })
+            .await
+            .expect("initial save");
+
+        let maintenance_path = state_path.with_extension("maintenance");
+
+        // PART 1: Verify maintenance-lock acquisition timeout and error paths
+        // do not leave an orphaned sentinel or permanently frozen storage.
+        {
+            let (holding_lock_tx, holding_lock_rx) = std::sync::mpsc::channel();
+            let (release_lock_tx, release_lock_rx) = std::sync::mpsc::channel();
+            let holding_lock_tx = Arc::new(std::sync::Mutex::new(Some(holding_lock_tx)));
+            let release_lock_rx = Arc::new(std::sync::Mutex::new(release_lock_rx));
+
+            let storage_clone = storage.clone();
+            let h_tx = holding_lock_tx.clone();
+            let r_rx = release_lock_rx.clone();
+            let mutation_handle = tokio::spawn(async move {
+                storage_clone
+                    .mutate_and_persist(move |state| {
+                        // Mutation has acquired lock and passed under-lock sentinel check
+                        if let Some(tx) = h_tx.lock().unwrap().take() {
+                            tx.send(()).unwrap();
+                        }
+                        let _ = r_rx.lock().unwrap().recv();
+                        state.agents.insert(
+                            "in_flight_1".to_string(),
+                            AgentIdentity {
+                                agent_id: "in_flight_1".to_string(),
+                                name: "In Flight 1".to_string(),
+                                token_hash: "th_if1".to_string(),
+                                token_prefix: "smoooth_ag_if1".to_string(),
+                                scopes: vec![crate::models::AgentScope::ReadOnly],
+                                created_at: chrono::Utc::now(),
+                                expires_at: None,
+                                revoked: false,
+                                revoked_at: None,
+                                last_used_at: None,
+                                workspace_id: "ws-maint".to_string(),
+                            },
+                        );
+                        Ok(((), false))
+                    })
+                    .await
+            });
+
+            // Wait until mutation has acquired the storage lock
+            holding_lock_rx
+                .recv()
+                .expect("mutation must acquire storage lock");
+
+            // While mutation holds lock, attempt maintenance lock with a short 50ms timeout.
+            // This MUST timeout because mutation holds the lock.
+            let timeout_res = LocalStorage::acquire_maintenance_lock(
+                &state_path,
+                std::time::Duration::from_millis(50),
+            )
+            .await;
+            assert!(
+                timeout_res.is_err(),
+                "Must timeout waiting for in-flight mutation to release lock"
+            );
+
+            // CRITICAL CHECK: Verify maintenance-lock acquisition timeout error path
+            // does NOT leave an orphaned sentinel on disk!
+            assert!(
+                !maintenance_path.exists(),
+                "Timeout must clean up .maintenance sentinel and not leave it orphaned"
+            );
+
+            // Release the mutation
+            let _ = release_lock_tx.send(());
+            let mutation_res = mutation_handle.await.unwrap();
+            assert!(
+                mutation_res.is_ok(),
+                "In-flight mutation should complete successfully after timeout aborted"
+            );
+
+            // Storage is NOT permanently frozen: subsequent mutations succeed
+            let probe_res = storage
+                .save_agent(AgentIdentity {
+                    agent_id: "probe_agent".to_string(),
+                    name: "Probe Agent".to_string(),
+                    token_hash: "th_probe".to_string(),
+                    token_prefix: "smoooth_ag_probe".to_string(),
+                    scopes: vec![crate::models::AgentScope::ReadOnly],
+                    created_at: chrono::Utc::now(),
+                    expires_at: None,
+                    revoked: false,
+                    revoked_at: None,
+                    last_used_at: None,
+                    workspace_id: "ws-maint".to_string(),
+                })
+                .await;
+            assert!(
+                probe_res.is_ok(),
+                "Storage must not be frozen after maintenance lock timeout"
+            );
+        }
+
+        // PART 2: Deterministic test where a mutation has acquired lock,
+        // maintenance begins and waits for in-flight mutation to finish or abort,
+        // subsequent mutations fail closed, and maintenance lock acquisition succeeds.
+        {
+            let (holding_lock_tx, holding_lock_rx) = std::sync::mpsc::channel();
+            let (release_lock_tx, release_lock_rx) = std::sync::mpsc::channel();
+            let holding_lock_tx = Arc::new(std::sync::Mutex::new(Some(holding_lock_tx)));
+            let release_lock_rx = Arc::new(std::sync::Mutex::new(release_lock_rx));
+
+            let storage_clone = storage.clone();
+            let h_tx = holding_lock_tx.clone();
+            let r_rx = release_lock_rx.clone();
+            let mutation_handle = tokio::spawn(async move {
+                storage_clone
+                    .mutate_and_persist(move |state| {
+                        if let Some(tx) = h_tx.lock().unwrap().take() {
+                            tx.send(()).unwrap();
+                        }
+                        let _ = r_rx.lock().unwrap().recv();
+                        state.agents.insert(
+                            "in_flight_2".to_string(),
+                            AgentIdentity {
+                                agent_id: "in_flight_2".to_string(),
+                                name: "In Flight 2".to_string(),
+                                token_hash: "th_if2".to_string(),
+                                token_prefix: "smoooth_ag_if2".to_string(),
+                                scopes: vec![crate::models::AgentScope::ReadOnly],
+                                created_at: chrono::Utc::now(),
+                                expires_at: None,
+                                revoked: false,
+                                revoked_at: None,
+                                last_used_at: None,
+                                workspace_id: "ws-maint".to_string(),
+                            },
+                        );
+                        // With modified: true, the mutation attempts to persist
+                        // but will abort cleanly if it detects the maintenance sentinel before commit
+                        Ok(((), true))
+                    })
+                    .await
+            });
+
+            // 1. Mutation has acquired the storage lock and passed initial sentinel check
+            holding_lock_rx
+                .recv()
+                .expect("mutation must acquire storage lock");
+
+            // 2. Start acquiring maintenance lock in background with generous 5s timeout
+            let path_clone = state_path.clone();
+            let maint_handle = tokio::spawn(async move {
+                LocalStorage::acquire_maintenance_lock(
+                    &path_clone,
+                    std::time::Duration::from_secs(5),
+                )
+                .await
+            });
+
+            // Poll briefly until the maintenance sentinel is created on disk
+            let mut sentinel_created = false;
+            for _ in 0..50 {
+                if maintenance_path.exists() {
+                    sentinel_created = true;
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            assert!(
+                sentinel_created,
+                "Maintenance sentinel must be created while waiting for lock"
+            );
+
+            // 3. Verify maintenance cannot acquire its lock until the mutation finishes or aborts
+            assert!(
+                !maint_handle.is_finished(),
+                "Maintenance must be waiting for in-flight mutation to release lock"
+            );
+
+            // 4. Verify subsequent mutations fail closed immediately because sentinel exists
+            let subsequent_err = storage
+                .save_agent(AgentIdentity {
+                    agent_id: "subsequent_agent".to_string(),
+                    name: "Subsequent Agent".to_string(),
+                    token_hash: "th_sub".to_string(),
+                    token_prefix: "smoooth_ag_sub".to_string(),
+                    scopes: vec![crate::models::AgentScope::ReadOnly],
+                    created_at: chrono::Utc::now(),
+                    expires_at: None,
+                    revoked: false,
+                    revoked_at: None,
+                    last_used_at: None,
+                    workspace_id: "ws-maint".to_string(),
+                })
+                .await
+                .unwrap_err();
+            assert!(
+                subsequent_err
+                    .to_string()
+                    .contains("Storage is frozen for maintenance"),
+                "Subsequent mutation must fail closed while maintenance is pending/active, got: {}",
+                subsequent_err
+            );
+
+            // 5. Release the in-flight mutation
+            let _ = release_lock_tx.send(());
+            let mutation_res = mutation_handle.await.unwrap();
+            // Pre-commit sentinel check safely aborts the mutation if sentinel was dropped
+            if let Err(e) = mutation_res {
+                assert!(
+                    e.to_string().contains("Storage is frozen for maintenance"),
+                    "If in-flight mutation aborts, it must be due to maintenance freeze: {}",
+                    e
+                );
+            }
+
+            // 6. Maintenance lock acquisition completes now that mutation has dropped the lock
+            let maint_lock = maint_handle
+                .await
+                .unwrap()
+                .expect("Maintenance lock must be acquired after mutation finishes or aborts");
+
+            // 7. While maintenance lock is held, mutations continue to fail closed
+            let during_maint_err = storage
+                .save_agent(AgentIdentity {
+                    agent_id: "during_maint_agent".to_string(),
+                    name: "During Maint Agent".to_string(),
+                    token_hash: "th_dm".to_string(),
+                    token_prefix: "smoooth_ag_dm".to_string(),
+                    scopes: vec![crate::models::AgentScope::ReadOnly],
+                    created_at: chrono::Utc::now(),
+                    expires_at: None,
+                    revoked: false,
+                    revoked_at: None,
+                    last_used_at: None,
+                    workspace_id: "ws-maint".to_string(),
+                })
+                .await
+                .unwrap_err();
+            assert!(
+                during_maint_err
+                    .to_string()
+                    .contains("Storage is frozen for maintenance"),
+                "Mutations must fail closed while maintenance lock is held"
+            );
+
+            // 8. Release maintenance lock and verify storage is reopened
+            LocalStorage::release_maintenance_lock(&state_path, maint_lock)
+                .await
+                .expect("release maintenance lock");
+            assert!(
+                !maintenance_path.exists(),
+                "Sentinel must be removed on release"
+            );
+
+            let post_maint_res = storage
+                .save_agent(AgentIdentity {
+                    agent_id: "post_maint_agent".to_string(),
+                    name: "Post Maint Agent".to_string(),
+                    token_hash: "th_post".to_string(),
+                    token_prefix: "smoooth_ag_post".to_string(),
+                    scopes: vec![crate::models::AgentScope::ReadOnly],
+                    created_at: chrono::Utc::now(),
+                    expires_at: None,
+                    revoked: false,
+                    revoked_at: None,
+                    last_used_at: None,
+                    workspace_id: "ws-maint".to_string(),
+                })
+                .await;
+            assert!(
+                post_maint_res.is_ok(),
+                "Mutations must succeed after maintenance lock is released"
+            );
+        }
+
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(state_path.with_extension("lock"));
+        let _ = std::fs::remove_file(state_path.with_extension("bak"));
+        let _ = std::fs::remove_file(maintenance_path);
+    }
 }

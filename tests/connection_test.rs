@@ -228,6 +228,22 @@ async fn test_dynamic_env_injection_bindings() {
     };
     storage.save_resource(redis_res).await.unwrap();
 
+    // Register consumer resource in storage
+    let web_res = Resource {
+        id: "res_ws-demo_web-app".to_string(),
+        name: "web-app".to_string(),
+        service_type: "web".to_string(),
+        provider: "docker".to_string(),
+        workspace_id: "ws-demo".to_string(),
+        status: ResourceStatus::Active,
+        ownership: ResourceOwnership::SmooothManaged,
+        configuration: serde_json::json!({}),
+        is_persistent: false,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    storage.save_resource(web_res).await.unwrap();
+
     // Consumer action with declared binding requirement
     let mut action = CanonicalActionSpec {
         resource_name: "web-app".to_string(),
@@ -312,6 +328,21 @@ async fn test_custom_env_mappings_injection() {
         updated_at: Utc::now(),
     };
     storage.save_resource(db_res).await.unwrap();
+
+    let consumer_res = Resource {
+        id: "res_ws-custom_custom-consumer".to_string(),
+        name: "custom-consumer".to_string(),
+        service_type: "web".to_string(),
+        provider: "docker".to_string(),
+        workspace_id: "ws-custom".to_string(),
+        status: ResourceStatus::Active,
+        ownership: ResourceOwnership::SmooothManaged,
+        configuration: serde_json::json!({}),
+        is_persistent: false,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    storage.save_resource(consumer_res).await.unwrap();
 
     let mut action = CanonicalActionSpec {
         resource_name: "custom-consumer".to_string(),
@@ -632,4 +663,112 @@ fn test_redis_connection_details_and_env_mapping() {
 
     let env_masked = conn.to_env_map(Some("CACHE"), true);
     assert_eq!(env_masked.get("CACHE_PASSWORD").unwrap(), "[REDACTED]");
+}
+
+#[tokio::test]
+async fn test_inject_bindings_fails_closed_when_source_resource_missing() {
+    let storage: Arc<dyn Storage> = Arc::new(LocalStorage::new_in_memory());
+    let secret_store = Arc::new(SecretStore::default_local());
+
+    // Register target dependency (redis) but DO NOT register source (web-app)
+    let redis_res = Resource {
+        id: "res_ws-demo_redis".to_string(),
+        name: "redis_cache".to_string(),
+        service_type: "cache".to_string(),
+        provider: "docker".to_string(),
+        workspace_id: "ws-demo".to_string(),
+        status: ResourceStatus::Active,
+        ownership: ResourceOwnership::SmooothManaged,
+        configuration: serde_json::json!({ "protocol": "redis", "host": "127.0.0.1", "port": 6379 }),
+        is_persistent: false,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    storage.save_resource(redis_res).await.unwrap();
+
+    let mut action = CanonicalActionSpec {
+        resource_name: "web-app".to_string(),
+        provider: "docker".to_string(),
+        service_type: "web".to_string(),
+        action_type: "create".to_string(),
+        config: serde_json::json!({
+            "bindings": [{ "resource": "redis_cache" }]
+        }),
+        is_persistent: false,
+        exposes_network_publicly: true,
+    };
+
+    let result = Orchestrator::inject_bindings(
+        &storage,
+        &secret_store,
+        &mut action,
+        &["redis_cache".to_string()],
+        "ws-demo",
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Must fail closed when source resource is missing"
+    );
+    let err_str = result.unwrap_err().to_string();
+    assert!(
+        err_str.contains("source resource 'web-app' not found"),
+        "Error must mention missing source resource, got: {}",
+        err_str
+    );
+}
+
+#[tokio::test]
+async fn test_inject_bindings_fails_closed_when_target_resource_missing() {
+    let storage: Arc<dyn Storage> = Arc::new(LocalStorage::new_in_memory());
+    let secret_store = Arc::new(SecretStore::default_local());
+
+    // Register source (web-app) but DO NOT register target dependency (redis_cache)
+    let web_res = Resource {
+        id: "res_ws-demo_web-app".to_string(),
+        name: "web-app".to_string(),
+        service_type: "web".to_string(),
+        provider: "docker".to_string(),
+        workspace_id: "ws-demo".to_string(),
+        status: ResourceStatus::Active,
+        ownership: ResourceOwnership::SmooothManaged,
+        configuration: serde_json::json!({}),
+        is_persistent: false,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    storage.save_resource(web_res).await.unwrap();
+
+    let mut action = CanonicalActionSpec {
+        resource_name: "web-app".to_string(),
+        provider: "docker".to_string(),
+        service_type: "web".to_string(),
+        action_type: "create".to_string(),
+        config: serde_json::json!({
+            "bindings": [{ "resource": "redis_cache" }]
+        }),
+        is_persistent: false,
+        exposes_network_publicly: true,
+    };
+
+    let result = Orchestrator::inject_bindings(
+        &storage,
+        &secret_store,
+        &mut action,
+        &["redis_cache".to_string()],
+        "ws-demo",
+    )
+    .await;
+
+    assert!(
+        result.is_err(),
+        "Must fail closed when target resource is missing"
+    );
+    let err_str = result.unwrap_err().to_string();
+    assert!(
+        err_str.contains("redis_cache") && err_str.contains("not found"),
+        "Error must mention missing target resource, got: {}",
+        err_str
+    );
 }
