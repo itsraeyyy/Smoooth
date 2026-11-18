@@ -11,14 +11,14 @@ pub enum OperationStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OperationLogEntry {
     pub timestamp: DateTime<Utc>,
     pub message: String,
     pub level: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Operation {
     pub id: String,
     pub workspace_id: String,

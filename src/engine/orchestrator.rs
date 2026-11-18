@@ -1,4 +1,5 @@
 use chrono::{Duration, Utc};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -11,7 +12,7 @@ use crate::models::{
     IdempotencyRecord, Operation, OperationLogEntry, OperationStatus, Plan, ReconciliationOutcome,
     Resource, ResourceOwnership, ResourceStatus, RiskTier, ServiceBinding,
 };
-use crate::storage::{AuditEvent, Storage};
+use crate::storage::{AuditEvent, OperationInitOutcome, Storage};
 
 pub struct Orchestrator {
     worker_id: String,
@@ -22,11 +23,13 @@ pub struct Orchestrator {
 
 impl Orchestrator {
     pub fn new(storage: Arc<dyn Storage>) -> Self {
-        let secret_store = crate::security::SecretStore::resolve_or_create()
-            .unwrap_or_else(|e| {
-                tracing::warn!("Failed to resolve or auto-generate master key, falling back to default local: {}", e);
-                crate::security::SecretStore::default_local()
-            });
+        let secret_store = crate::security::SecretStore::resolve_or_create().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Failed to resolve or auto-generate master key, falling back to default local: {}",
+                e
+            );
+            crate::security::SecretStore::default_local()
+        });
         Self {
             worker_id: format!("worker_{}", Uuid::new_v4().simple()),
             storage,
@@ -73,36 +76,39 @@ impl Orchestrator {
                     .domain_store("service_binding")
                     .encrypt(&decrypted)?;
                 binding.encrypted_credentials = new_encrypted;
+                binding.key_fingerprint = new_store.fingerprint();
                 binding.updated_at = Utc::now();
                 updated_bindings.push(binding);
                 migrated_count += 1;
             }
         }
 
-        for b in updated_bindings {
-            self.storage.save_binding(b).await?;
-        }
+        let audit = AuditEvent {
+            id: 0,
+            workspace_id: "*".to_string(),
+            actor: "operator".to_string(),
+            action: "master_key_rotate".to_string(),
+            target_resource_id: None,
+            plan_hash: None,
+            outcome: "success".to_string(),
+            redacted_evidence: Some(serde_json::json!({
+                "old_fingerprint": old_store.fingerprint(),
+                "new_fingerprint": new_store.fingerprint(),
+                "records_migrated": migrated_count,
+            })),
+            timestamp: Utc::now(),
+        };
+
+        self.storage
+            .rotate_service_bindings_batch(
+                &old_store.fingerprint(),
+                &new_store.fingerprint(),
+                updated_bindings,
+                audit,
+            )
+            .await?;
 
         self.secret_store = new_store.clone();
-
-        let _ = self
-            .storage
-            .record_audit(AuditEvent {
-                id: 0,
-                workspace_id: "*".to_string(),
-                actor: "operator".to_string(),
-                action: "master_key_rotate".to_string(),
-                target_resource_id: None,
-                plan_hash: None,
-                outcome: "success".to_string(),
-                redacted_evidence: Some(serde_json::json!({
-                    "old_fingerprint": old_store.fingerprint(),
-                    "new_fingerprint": new_store.fingerprint(),
-                    "records_migrated": migrated_count,
-                })),
-                timestamp: Utc::now(),
-            })
-            .await;
 
         Ok((new_store.fingerprint(), migrated_count))
     }
@@ -239,7 +245,8 @@ impl Orchestrator {
         if agent.workspace_id != "*" && agent.workspace_id != target_urn.workspace() {
             return Err(SmooothError::Security(format!(
                 "Agent workspace '{}' does not match target URN workspace '{}'",
-                agent.workspace_id, target_urn.workspace()
+                agent.workspace_id,
+                target_urn.workspace()
             )));
         }
 
@@ -256,14 +263,14 @@ impl Orchestrator {
             | crate::models::Action::RestartWorkload
             | crate::models::Action::Reconcile
             | crate::models::Action::Snapshot { .. } => {
-                agent.scopes.contains(&AgentScope::Deploy) || agent.scopes.contains(&AgentScope::Admin)
+                agent.scopes.contains(&AgentScope::Deploy)
+                    || agent.scopes.contains(&AgentScope::Admin)
             }
             crate::models::Action::Destroy(_) => {
-                agent.scopes.contains(&AgentScope::Destructive) || agent.scopes.contains(&AgentScope::Admin)
+                agent.scopes.contains(&AgentScope::Destructive)
+                    || agent.scopes.contains(&AgentScope::Admin)
             }
-            crate::models::Action::ReadSecret { .. } => {
-                agent.scopes.contains(&AgentScope::Admin)
-            }
+            crate::models::Action::ReadSecret { .. } => agent.scopes.contains(&AgentScope::Admin),
         };
 
         if !authorized {
@@ -273,7 +280,10 @@ impl Orchestrator {
             )));
         }
 
-        let epoch = self.storage.get_fencing_epoch(target_urn.workspace()).await?;
+        let epoch = self
+            .storage
+            .get_fencing_epoch(target_urn.workspace())
+            .await?;
         let permit = crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
             &agent.agent_id,
             target_urn.clone(),
@@ -306,38 +316,7 @@ impl Orchestrator {
         // 0. Validate dependency graph and cycle freedom before reserving operations or leases
         plan.spec.resolve_execution_order()?;
 
-        let idemp_key = IdempotencyKey {
-            workspace_id: plan.spec.workspace_id.clone(),
-            operation_type: "execute_plan".to_string(),
-            client_key: idempotency_client_key.to_string(),
-        };
-
-        let request_hash = plan.plan_hash.clone();
-
-        // 1. Atomic Idempotency check or reservation
-        let op_id = format!("op_{}", Uuid::new_v4().simple());
-        let placeholder_record = IdempotencyRecord {
-            key: idemp_key.clone(),
-            request_hash: request_hash.clone(),
-            operation_id: op_id.clone(),
-            created_at: Utc::now(),
-        };
-
-        if let Some(existing_record) = self
-            .storage
-            .check_or_record_idempotency(placeholder_record)
-            .await?
-        {
-            if let Some(existing_op) = self
-                .storage
-                .get_operation(&existing_record.operation_id)
-                .await?
-            {
-                return Ok((existing_op, false));
-            }
-        }
-
-        // 2. Strict cryptographic plan approval & policy verification
+        // 1. Strict cryptographic plan approval & policy verification before reserving
         let requires_approval = plan.risk_tier != RiskTier::Low
             || plan.spec.environment == "production"
             || plan.spec.actions.iter().any(|a| {
@@ -371,17 +350,33 @@ impl Orchestrator {
             )));
         }
 
-        // 3. Create durable operation with monotonic fencing token (lease_epoch = 1)
+        let idemp_key = IdempotencyKey {
+            workspace_id: plan.spec.workspace_id.clone(),
+            operation_type: "execute_plan".to_string(),
+            client_key: idempotency_client_key.to_string(),
+        };
+
+        let request_hash = plan.plan_hash.clone();
+        let op_id = format!("op_{}", Uuid::new_v4().simple());
+
+        let idempotency_record = IdempotencyRecord {
+            key: idemp_key,
+            request_hash: request_hash.clone(),
+            operation_id: op_id.clone(),
+            created_at: Utc::now(),
+        };
+
+        // 2. Prepare durable operation with initial fencing token (lease_epoch = 1)
         let lease_expiration = Utc::now() + Duration::minutes(5);
         let initial_epoch = 1u64;
 
         let operation = Operation {
-            id: op_id.clone(),
+            id: op_id,
             workspace_id: plan.spec.workspace_id.clone(),
             operation_type: "execute_plan".to_string(),
             plan_id: plan.id.clone(),
             plan_hash: plan.plan_hash.clone(),
-            request_hash: request_hash.clone(),
+            request_hash,
             idempotency_client_key: idempotency_client_key.to_string(),
             status: OperationStatus::Running,
             progress_percent: 0,
@@ -407,10 +402,15 @@ impl Orchestrator {
             updated_at: Utc::now(),
         };
 
-        // Persist operation
-        self.storage.save_operation(operation.clone()).await?;
-
-        Ok((operation, true))
+        // 3. Atomic Idempotency reservation and operation creation
+        match self
+            .storage
+            .reserve_or_get_operation(idempotency_record, operation)
+            .await?
+        {
+            OperationInitOutcome::Created(op) => Ok((op, true)),
+            OperationInitOutcome::Existing(op) => Ok((op, false)),
+        }
     }
 
     pub async fn execute_plan(
@@ -537,9 +537,65 @@ impl Orchestrator {
                         return;
                     }
                     if let Some(adapter) = adapters.get(&action.provider) {
-                        let _ = adapter
-                            .destroy(&action.resource_name, action.is_persistent)
+                        let scope = if action.is_persistent {
+                            crate::models::DestructionScope::ResourceAndPersistentData
+                        } else {
+                            crate::models::DestructionScope::ResourceOnly
+                        };
+                        let target_urn = crate::models::ResourceUrn::for_resource(
+                            &plan.spec.workspace_id,
+                            &action.service_type,
+                            &action.resource_name,
+                        )
+                        .unwrap_or_else(|_| {
+                            crate::models::ResourceUrn::new_workspace(&plan.spec.workspace_id)
+                                .or_else(|_| {
+                                    crate::models::ResourceUrn::new_workspace(
+                                        &plan.spec.workspace_id.replace('_', "-"),
+                                    )
+                                })
+                                .unwrap_or_else(|_| {
+                                    crate::models::ResourceUrn::new_workspace("default").unwrap()
+                                })
+                        });
+                        let op_digest: [u8; 32] = Sha256::digest(
+                            serde_json::to_string(&action.config)
+                                .unwrap_or_default()
+                                .as_bytes(),
+                        )
+                        .into();
+                        let permit =
+                            crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
+                                &plan.created_by,
+                                target_urn.clone(),
+                                crate::models::Action::Destroy(scope),
+                                op_digest,
+                                initial_epoch,
+                                std::time::Duration::from_secs(60),
+                            );
+                        if let Err(e) = adapter
+                            .authorized_destroy(
+                                &permit,
+                                &target_urn,
+                                op_digest,
+                                scope,
+                                initial_epoch,
+                            )
+                            .await
+                        {
+                            Self::handle_partial_failure(
+                                &adapters,
+                                &provisioned_resources,
+                                &storage,
+                                &mut op_task,
+                                format!(
+                                    "Authorized destruction failed for '{}': {}",
+                                    action.resource_name, e
+                                ),
+                            )
                             .await;
+                            return;
+                        }
                         let _ = storage.delete_resource(&action.resource_name).await;
                         completed += 1;
                     } else {
@@ -624,11 +680,57 @@ impl Orchestrator {
                         serde_json::json!(op_task.lease_owner.as_deref().unwrap_or("worker")),
                     );
                 }
+                let target_urn = crate::models::ResourceUrn::for_resource(
+                    &plan.spec.workspace_id,
+                    &resolved_action.service_type,
+                    &resolved_action.resource_name,
+                )
+                .unwrap_or_else(|_| {
+                    crate::models::ResourceUrn::new_workspace(&plan.spec.workspace_id)
+                        .or_else(|_| {
+                            crate::models::ResourceUrn::new_workspace(
+                                &plan.spec.workspace_id.replace('_', "-"),
+                            )
+                        })
+                        .unwrap_or_else(|_| {
+                            crate::models::ResourceUrn::new_workspace("default").unwrap()
+                        })
+                });
+                let op_digest: [u8; 32] = Sha256::digest(
+                    serde_json::to_string(&config)
+                        .unwrap_or_default()
+                        .as_bytes(),
+                )
+                .into();
+                let permit = crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
+                    &plan.created_by,
+                    target_urn.clone(),
+                    crate::models::Action::Provision {
+                        resource_type: match resolved_action.service_type.as_str() {
+                            "database" => crate::models::ResourceType::Database,
+                            "network" => crate::models::ResourceType::Network,
+                            "storage" | "volume" => crate::models::ResourceType::Volume,
+                            "ingress" => crate::models::ResourceType::Ingress,
+                            _ => crate::models::ResourceType::Workload,
+                        },
+                        name_pattern: resolved_action.resource_name.clone(),
+                        limits: crate::models::ResourceLimits::default(),
+                        allow_public_exposure: resolved_action.exposes_network_publicly,
+                    },
+                    op_digest,
+                    initial_epoch,
+                    std::time::Duration::from_secs(60),
+                );
+
                 match adapter
-                    .provision(
+                    .authorized_provision(
+                        &permit,
+                        &target_urn,
+                        op_digest,
                         &resolved_action.resource_name,
                         &config,
                         resolved_action.is_persistent,
+                        initial_epoch,
                     )
                     .await
                 {
@@ -1039,19 +1141,37 @@ impl Orchestrator {
                 }
             }
 
-            // Persist binding metadata
-            let binding_id = format!("bind_{}_{}", action.resource_name, target_name);
+            // Resolve canonical resource IDs for source and target
+            let source_canonical_id = storage
+                .get_resource(&action.resource_name)
+                .await
+                .ok()
+                .flatten()
+                .map(|r| r.id)
+                .unwrap_or_else(|| format!("res_{}_{}", workspace_id, action.resource_name));
+
+            let target_canonical_id = storage
+                .get_resource(target_name)
+                .await
+                .ok()
+                .flatten()
+                .map(|r| r.id)
+                .unwrap_or_else(|| format!("res_{}_{}", workspace_id, target_name));
+
+            // Persist binding metadata with canonical IDs, workspace, and key fingerprint
+            let binding_id = format!("bind_{}_{}", source_canonical_id, target_canonical_id);
             let binding = ServiceBinding::new_dynamic(
                 binding_id,
-                action.resource_name.clone(),
-                target_name.clone(),
+                source_canonical_id,
+                target_canonical_id,
                 format!("{}_connection", conn_details.protocol),
                 ResourceOwnership::SmooothManaged,
                 None,
                 conn_details,
                 secret_store,
                 req.env_mappings,
-            )?;
+            )?
+            .with_workspace(workspace_id);
             let _ = storage.save_binding(binding).await;
         }
 
@@ -1071,18 +1191,39 @@ impl Orchestrator {
                     for (k, v) in generated {
                         env_map.entry(k).or_insert(v);
                     }
-                    let binding_id = format!("bind_{}_{}", action.resource_name, prereq);
+
+                    let source_canonical_id = storage
+                        .get_resource(&action.resource_name)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|r| r.id)
+                        .unwrap_or_else(|| {
+                            format!("res_{}_{}", workspace_id, action.resource_name)
+                        });
+
+                    let target_canonical_id = storage
+                        .get_resource(prereq)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|r| r.id)
+                        .unwrap_or_else(|| format!("res_{}_{}", workspace_id, prereq));
+
+                    let binding_id =
+                        format!("bind_{}_{}", source_canonical_id, target_canonical_id);
                     let binding = ServiceBinding::new_dynamic(
                         binding_id,
-                        action.resource_name.clone(),
-                        prereq.clone(),
+                        source_canonical_id,
+                        target_canonical_id,
                         format!("{}_connection", conn_details.protocol),
                         ResourceOwnership::SmooothManaged,
                         None,
                         conn_details,
                         secret_store,
                         HashMap::new(),
-                    )?;
+                    )?
+                    .with_workspace(workspace_id);
                     let _ = storage.save_binding(binding).await;
                 }
             }
@@ -1101,7 +1242,10 @@ impl Orchestrator {
     }
 
     pub async fn list_operations(&self, workspace_id: Option<&str>) -> Vec<Operation> {
-        self.storage.list_operations(workspace_id).await.unwrap_or_default()
+        self.storage
+            .list_operations(workspace_id)
+            .await
+            .unwrap_or_default()
     }
 
     pub async fn save_plan(&self, plan: Plan) -> Result<()> {
@@ -1110,6 +1254,14 @@ impl Orchestrator {
 
     pub async fn get_plan(&self, id: &str) -> Result<Option<Plan>> {
         self.storage.get_plan(id).await
+    }
+
+    pub async fn list_plans(&self) -> Result<Vec<Plan>> {
+        self.storage.list_plans().await
+    }
+
+    pub async fn delete_plan(&self, id: &str) -> Result<()> {
+        self.storage.delete_plan(id).await
     }
 
     pub async fn get_resource(&self, id: &str) -> Result<Option<Resource>> {
@@ -1502,11 +1654,57 @@ impl Orchestrator {
                         serde_json::json!(op.lease_owner.as_deref().unwrap_or("worker")),
                     );
                 }
+                let target_urn = crate::models::ResourceUrn::for_resource(
+                    &plan.spec.workspace_id,
+                    &resolved_action.service_type,
+                    &resolved_action.resource_name,
+                )
+                .unwrap_or_else(|_| {
+                    crate::models::ResourceUrn::new_workspace(&plan.spec.workspace_id)
+                        .or_else(|_| {
+                            crate::models::ResourceUrn::new_workspace(
+                                &plan.spec.workspace_id.replace('_', "-"),
+                            )
+                        })
+                        .unwrap_or_else(|_| {
+                            crate::models::ResourceUrn::new_workspace("default").unwrap()
+                        })
+                });
+                let op_digest: [u8; 32] = Sha256::digest(
+                    serde_json::to_string(&config)
+                        .unwrap_or_default()
+                        .as_bytes(),
+                )
+                .into();
+                let permit = crate::security::AuthorizationEngine::synthesize_ephemeral_permit(
+                    &plan.created_by,
+                    target_urn.clone(),
+                    crate::models::Action::Provision {
+                        resource_type: match resolved_action.service_type.as_str() {
+                            "database" => crate::models::ResourceType::Database,
+                            "network" => crate::models::ResourceType::Network,
+                            "storage" | "volume" => crate::models::ResourceType::Volume,
+                            "ingress" => crate::models::ResourceType::Ingress,
+                            _ => crate::models::ResourceType::Workload,
+                        },
+                        name_pattern: resolved_action.resource_name.clone(),
+                        limits: crate::models::ResourceLimits::default(),
+                        allow_public_exposure: resolved_action.exposes_network_publicly,
+                    },
+                    op_digest,
+                    initial_epoch,
+                    std::time::Duration::from_secs(60),
+                );
+
                 match adapter
-                    .provision(
+                    .authorized_provision(
+                        &permit,
+                        &target_urn,
+                        op_digest,
                         &resolved_action.resource_name,
                         &config,
                         resolved_action.is_persistent,
+                        initial_epoch,
                     )
                     .await
                 {

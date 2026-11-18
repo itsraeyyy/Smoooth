@@ -20,6 +20,8 @@ fn default_binding_version() -> u32 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceBinding {
     pub id: String,
+    #[serde(default)]
+    pub workspace_id: String,
     pub source_resource_id: String,
     pub target_resource_id: String,
     pub binding_type: String, // e.g. "postgres_connection", "redis_connection", "generic_http", "custom"
@@ -28,6 +30,8 @@ pub struct ServiceBinding {
     pub ownership: ResourceOwnership,
     #[serde(default = "default_binding_version")]
     pub binding_version: u32,
+    #[serde(default)]
+    pub key_fingerprint: String,
     #[serde(default)]
     pub resolved_endpoint: Option<Endpoint>,
     /// Safe connection details (password always redacted or omitted from serialization)
@@ -72,12 +76,14 @@ impl ServiceBinding {
             .encrypt(raw_credentials)?;
         Ok(Self {
             id,
+            workspace_id: String::new(),
             source_resource_id,
             target_resource_id,
             binding_type,
             rotation_stage: RotationStage::Active,
             ownership: ResourceOwnership::SmooothManaged,
             binding_version: 1,
+            key_fingerprint: secret_store.fingerprint(),
             resolved_endpoint: None,
             safe_connection_details: None,
             encrypted_credentials,
@@ -86,6 +92,11 @@ impl ServiceBinding {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         })
+    }
+
+    pub fn with_workspace(mut self, workspace_id: impl Into<String>) -> Self {
+        self.workspace_id = workspace_id.into();
+        self
     }
 
     /// Construct dynamic service binding with typed connection details and environment variable mapping
@@ -122,12 +133,14 @@ impl ServiceBinding {
 
         Ok(Self {
             id,
+            workspace_id: String::new(),
             source_resource_id,
             target_resource_id,
             binding_type,
             rotation_stage: RotationStage::Active,
             ownership,
             binding_version: 1,
+            key_fingerprint: secret_store.fingerprint(),
             resolved_endpoint: endpoint,
             safe_connection_details: Some(safe_details),
             encrypted_credentials,

@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant};
 use chrono::Utc;
 use ed25519_dalek::VerifyingKey;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::error::{Result, SmooothError};
@@ -54,7 +54,8 @@ impl<'a> VerifiedExecutionPermit<'a> {
             fencing_epoch,
             issued_at_monotonic: now_mono,
             deadline_monotonic: now_mono + ttl,
-            expires_at_wallclock: Utc::now() + chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(60)),
+            expires_at_wallclock: Utc::now()
+                + chrono::Duration::from_std(ttl).unwrap_or(chrono::Duration::seconds(60)),
             _marker: std::marker::PhantomData,
         }
     }
@@ -68,7 +69,9 @@ pub struct AuthorizationEngine {
 impl AuthorizationEngine {
     /// Creates a new engine holding the trusted issuer public key.
     pub fn new(issuer_verifying_key: VerifyingKey) -> Self {
-        Self { issuer_verifying_key }
+        Self {
+            issuer_verifying_key,
+        }
     }
 
     /// Primary authorization boundary: verifies presented capability chain, Proof of Possession,
@@ -99,14 +102,7 @@ impl AuthorizationEngine {
             }
         }
 
-        // 3. Multi-instance replay protection: check if nonce was already used
-        if storage.is_nonce_used(&pop.nonce).await? {
-            return Err(SmooothError::Security(
-                "Proof of possession nonce already consumed (replay attack rejected)".into(),
-            ));
-        }
-
-        // 4. Verify Proof of Possession against the leaf capability holder key
+        // 3. Verify Proof of Possession against the leaf capability holder key
         let leaf = chain.leaf();
         let digest = pop.verify(
             &leaf.payload.holder_public_key,
@@ -116,9 +112,15 @@ impl AuthorizationEngine {
             DEFAULT_MAX_CLOCK_SKEW_SECONDS,
         )?;
 
-        // 5. Commit nonce to durable storage with expiration (60 seconds)
+        // 4. Multi-instance replay protection: atomically consume nonce
         let nonce_expiry = pop.timestamp + chrono::Duration::seconds(60);
-        storage.record_used_nonce(&pop.nonce, nonce_expiry).await?;
+        let consumed = storage.consume_nonce(&pop.nonce, nonce_expiry).await?;
+        if !consumed {
+            return Err(SmooothError::Security(
+                "Proof of possession nonce already consumed or expired (replay attack rejected)"
+                    .into(),
+            ));
+        }
 
         // 6. Verify target URN containment: leaf capability must encompass requested resource
         if !leaf.payload.target_urn.encompasses(target_urn) {
@@ -129,7 +131,10 @@ impl AuthorizationEngine {
         }
 
         // 7. Verify requested action is monotonically authorized by leaf capability
-        if !can_attenuate_action_set(&leaf.payload.actions, std::slice::from_ref(requested_action)) {
+        if !can_attenuate_action_set(
+            &leaf.payload.actions,
+            std::slice::from_ref(requested_action),
+        ) {
             return Err(SmooothError::Security(format!(
                 "Requested action {:?} is not authorized by capability actions: {:?}",
                 requested_action, leaf.payload.actions
@@ -140,7 +145,9 @@ impl AuthorizationEngine {
         for caveat in &leaf.payload.caveats {
             match caveat {
                 Caveat::DisallowPersistentDataLoss => {
-                    if let Action::Destroy(DestructionScope::ResourceAndPersistentData) = requested_action {
+                    if let Action::Destroy(DestructionScope::ResourceAndPersistentData) =
+                        requested_action
+                    {
                         return Err(SmooothError::Security(
                             "Capability caveat DisallowPersistentDataLoss prohibits persistent data destruction".into(),
                         ));
@@ -241,14 +248,8 @@ mod tests {
         let body = b"{\"grace_period\": 10}";
         let nonce = "unique_nonce_1".to_string();
 
-        let pop = ProofOfPossession::generate(
-            &agent_sk,
-            root_payload.id,
-            method,
-            uri,
-            body,
-            nonce,
-        ).unwrap();
+        let pop = ProofOfPossession::generate(&agent_sk, root_payload.id, method, uri, body, nonce)
+            .unwrap();
 
         let requested_action = Action::RestartWorkload;
 
@@ -299,21 +300,20 @@ mod tests {
 
         // Mark the capability revoked in durable storage
         storage
-            .record_revocation(&cap_id, "Compromised key", Utc::now() + chrono::Duration::hours(1))
+            .record_revocation(
+                &cap_id,
+                "Compromised key",
+                Utc::now() + chrono::Duration::hours(1),
+            )
             .await
             .unwrap();
 
         let method = "POST";
         let uri = "/api/workloads/production/web-api/restart";
         let body = b"{}";
-        let pop = ProofOfPossession::generate(
-            &agent_sk,
-            cap_id,
-            method,
-            uri,
-            body,
-            "nonce_2".into(),
-        ).unwrap();
+        let pop =
+            ProofOfPossession::generate(&agent_sk, cap_id, method, uri, body, "nonce_2".into())
+                .unwrap();
 
         let res = engine
             .authorize_capability_request(
@@ -367,7 +367,8 @@ mod tests {
             uri,
             body,
             "nonce_replay_test".into(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // First attempt succeeds and records nonce
         let first = engine

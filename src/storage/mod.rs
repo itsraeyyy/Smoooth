@@ -6,7 +6,13 @@ use async_trait::async_trait;
 
 pub mod local;
 
-pub use local::{LocalStorage, RevocationEntry, StateSnapshot};
+pub use local::{FileLock, LocalStorage, RevocationEntry, StateSnapshot};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OperationInitOutcome {
+    Created(Operation),
+    Existing(Operation),
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuditEvent {
@@ -33,14 +39,21 @@ pub trait Storage: Send + Sync {
     // Plans
     async fn save_plan(&self, plan: Plan) -> Result<()>;
     async fn get_plan(&self, id: &str) -> Result<Option<Plan>>;
+    async fn list_plans(&self) -> Result<Vec<Plan>>;
+    async fn delete_plan(&self, id: &str) -> Result<()>;
 
-    // Idempotency
+    // Idempotency & Operation Atomic Reservation
     async fn check_idempotency(&self, key: &IdempotencyKey) -> Result<Option<IdempotencyRecord>>;
     async fn record_idempotency(&self, record: IdempotencyRecord) -> Result<()>;
     async fn check_or_record_idempotency(
         &self,
         record: IdempotencyRecord,
     ) -> Result<Option<IdempotencyRecord>>;
+    async fn reserve_or_get_operation(
+        &self,
+        idempotency_record: IdempotencyRecord,
+        operation: Operation,
+    ) -> Result<OperationInitOutcome>;
 
     // Operations & Fencing Leases
     async fn save_operation(&self, operation: Operation) -> Result<()>;
@@ -49,15 +62,22 @@ pub trait Storage: Send + Sync {
     async fn update_operation(&self, operation: Operation) -> Result<()>;
 
     // Resources
-    async fn save_resource(&self, resource: Resource) -> Result<()>;
+    async fn save_resource(&self, resource: Resource) -> Result<Resource>;
     async fn get_resource(&self, id: &str) -> Result<Option<Resource>>;
     async fn list_resources(&self, workspace_id: &str) -> Result<Vec<Resource>>;
     async fn delete_resource(&self, id: &str) -> Result<()>;
 
-    // Service Bindings
+    // Service Bindings & Batch Rotation
     async fn save_binding(&self, binding: ServiceBinding) -> Result<()>;
     async fn get_binding(&self, id: &str) -> Result<Option<ServiceBinding>>;
     async fn list_bindings(&self) -> Result<Vec<ServiceBinding>>;
+    async fn rotate_service_bindings_batch(
+        &self,
+        expected_old_fingerprint: &str,
+        new_fingerprint: &str,
+        updated_bindings: Vec<ServiceBinding>,
+        audit_event: AuditEvent,
+    ) -> Result<usize>;
 
     // Audit Log
     async fn record_audit(&self, event: AuditEvent) -> Result<()>;
@@ -77,6 +97,11 @@ pub trait Storage: Send + Sync {
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<()>;
     async fn is_nonce_used(&self, nonce: &str) -> Result<bool>;
+    async fn consume_nonce(
+        &self,
+        nonce: &str,
+        expires_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool>;
     async fn get_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
     async fn increment_fencing_epoch(&self, workspace_id: &str) -> Result<u64>;
 

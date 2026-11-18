@@ -8,8 +8,12 @@ use std::time::Duration;
 use smoooth::adapters::{AdapterGuarantees, HealthEvidence, ProviderAdapter};
 use smoooth::engine::Orchestrator;
 use smoooth::error::Result;
-use smoooth::models::plan::{CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints, RiskTier};
-use smoooth::models::{Capability, OperationStatus, Plan, Resource, ResourceOwnership, ResourceStatus};
+use smoooth::models::plan::{
+    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints, RiskTier,
+};
+use smoooth::models::{
+    Capability, OperationStatus, Plan, Resource, ResourceOwnership, ResourceStatus,
+};
 use smoooth::storage::{LocalStorage, Storage};
 
 /// Controllable mock adapter allowing controlled delays and tracking executed actions.
@@ -190,8 +194,14 @@ async fn test_adversarial_revocation_during_active_multistep_operation() {
 
     // 2. Allow Step 1 to complete and Step 2 to enter slow provider execution
     tokio::time::sleep(Duration::from_millis(60)).await;
-    assert!(mock_adapter.step_1_executed.load(Ordering::SeqCst), "Step 1 must have executed");
-    assert!(mock_adapter.step_2_executed.load(Ordering::SeqCst), "Step 2 must be running");
+    assert!(
+        mock_adapter.step_1_executed.load(Ordering::SeqCst),
+        "Step 1 must have executed"
+    );
+    assert!(
+        mock_adapter.step_2_executed.load(Ordering::SeqCst),
+        "Step 2 must be running"
+    );
 
     // 3. ADVERSARIAL ACTION: Operator / Security Guard revokes lease mid-flight!
     // Bumps lease epoch from 1 to 2 in storage
@@ -219,7 +229,11 @@ async fn test_adversarial_revocation_during_active_multistep_operation() {
     let final_op = storage.get_operation(&op_id).await.unwrap().unwrap();
     assert_eq!(final_op.status, OperationStatus::Failed);
     assert!(
-        final_op.error_message.as_ref().map(|s| s.contains("Worker lease lost")).unwrap_or(false),
+        final_op
+            .error_message
+            .as_ref()
+            .map(|s| s.contains("Worker lease lost"))
+            .unwrap_or(false),
         "Operation error must indicate Worker lease lost: {:?}",
         final_op.error_message
     );
@@ -262,7 +276,11 @@ async fn test_adversarial_lease_expiry_during_slow_provider_aborts_subsequent_st
     let final_op = storage.get_operation(&op_id).await.unwrap().unwrap();
     assert_eq!(final_op.status, OperationStatus::Failed);
     assert!(
-        final_op.error_message.as_ref().map(|s| s.contains("Worker lease expired")).unwrap_or(false),
+        final_op
+            .error_message
+            .as_ref()
+            .map(|s| s.contains("Worker lease expired"))
+            .unwrap_or(false),
         "Operation error must indicate lease expiration: {:?}",
         final_op.error_message
     );
