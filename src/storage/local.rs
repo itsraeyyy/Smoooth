@@ -332,8 +332,7 @@ impl LocalStorage {
 
         // 1. Check maintenance sentinel before acquiring lock
         let maintenance_path = path.with_extension("maintenance");
-        let default_maintenance = path.with_file_name("smoooth_state.maintenance");
-        if maintenance_path.exists() || default_maintenance.exists() {
+        if maintenance_path.exists() {
             return Err(crate::error::SmooothError::Storage(
                 "Storage is frozen for maintenance: maintenance sentinel file present".to_string(),
             ));
@@ -344,7 +343,7 @@ impl LocalStorage {
         let _file_lock = FileLock::acquire(&lock_path, std::time::Duration::from_secs(10)).await?;
 
         // Double-check maintenance sentinel while holding lock
-        if maintenance_path.exists() || default_maintenance.exists() {
+        if maintenance_path.exists() {
             return Err(crate::error::SmooothError::Storage(
                 "Storage is frozen for maintenance: maintenance sentinel file present".to_string(),
             ));
@@ -376,6 +375,13 @@ impl LocalStorage {
 
         // 5. If state was modified, persist atomically to disk
         if modified {
+            // Triple-check maintenance sentinel immediately before writing to disk
+            if maintenance_path.exists() {
+                return Err(crate::error::SmooothError::Storage(
+                    "Storage is frozen for maintenance: maintenance sentinel file present before commit".to_string(),
+                ));
+            }
+
             snapshot.version += 1;
             Self::write_snapshot_atomic(path, &snapshot).await?;
 
@@ -396,6 +402,49 @@ impl LocalStorage {
         Ok(result)
     }
 
+    /// Enters maintenance mode:
+    /// 1. Drops a `.maintenance` sentinel file to immediately fail-closed all subsequent mutations.
+    /// 2. Acquires the cross-process exclusive `FileLock`, ensuring any in-flight mutation that passed
+    ///    its under-lock check finishes its execution and releases the lock before this function returns.
+    ///
+    /// While the returned `FileLock` is held, zero mutations can execute, and all mutation attempts fail closed.
+    pub async fn acquire_maintenance_lock(
+        path: &Path,
+        timeout: std::time::Duration,
+    ) -> Result<FileLock> {
+        let maintenance_path = path.with_extension("maintenance");
+
+        // 1. Atomically drop maintenance sentinel
+        tokio::fs::write(&maintenance_path, b"MAINTENANCE_ACTIVE\n")
+            .await
+            .map_err(|e| {
+                crate::error::SmooothError::Storage(format!(
+                    "Failed to create maintenance sentinel at {:?}: {}",
+                    maintenance_path, e
+                ))
+            })?;
+
+        // 2. Acquire exclusive lock to drain any active in-flight mutation
+        let lock_path = path.with_extension("lock");
+        match FileLock::acquire(&lock_path, timeout).await {
+            Ok(lock) => Ok(lock),
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&maintenance_path).await;
+                Err(e)
+            }
+        }
+    }
+
+    /// Releases maintenance mode:
+    /// 1. Deletes `.maintenance` sentinel files.
+    /// 2. Drops the exclusive `FileLock`, reopening storage for normal mutations.
+    pub async fn release_maintenance_lock(path: &Path, lock: FileLock) -> Result<()> {
+        let maintenance_path = path.with_extension("maintenance");
+        let _ = tokio::fs::remove_file(&maintenance_path).await;
+        drop(lock);
+        Ok(())
+    }
+
     pub async fn sync_from_disk(&self) -> Result<()> {
         let Some(path) = &self.snapshot_path else {
             return Ok(());
@@ -404,24 +453,18 @@ impl LocalStorage {
             return Ok(());
         }
 
-        // Fast metadata check: if disk mtime hasn't changed since last sync, skip disk I/O
-        let current_mtime = match tokio::fs::metadata(path).await {
-            Ok(meta) => meta.modified().ok(),
-            Err(_) => None,
-        };
-
-        if let Some(mtime) = current_mtime {
-            let last_mtime = *self.last_synced_mtime.read().await;
-            if Some(mtime) == last_mtime {
-                return Ok(());
-            }
-        }
-
+        // Direct disk read: version ordering is the sole correctness mechanism.
+        // Mtime caching is strictly diagnostic and cannot suppress reading a newer version.
         if let Ok(data) = tokio::fs::read_to_string(path).await {
             if let Ok(disk_snapshot) = serde_json::from_str::<StateSnapshot>(&data) {
+                let current_mtime = tokio::fs::metadata(path)
+                    .await
+                    .ok()
+                    .and_then(|m| m.modified().ok());
+
                 let mut state = self.state.write().await;
                 // Strict monotonic guard against stale snapshot overwriting newer memory state:
-                if disk_snapshot.version >= state.version {
+                if disk_snapshot.version > state.version {
                     *state = disk_snapshot;
                     if let Some(mtime) = current_mtime {
                         let mut last = self.last_synced_mtime.write().await;
@@ -1886,6 +1929,210 @@ mod tests {
         );
         let read_a_again = instance_a.get_agent("agent_a").await.unwrap();
         assert!(read_a_again.is_some(), "Instance A must still see Agent A");
+
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(state_path.with_extension("lock"));
+        let _ = std::fs::remove_file(state_path.with_extension("bak"));
+    }
+
+    #[tokio::test]
+    async fn test_maintenance_freeze_drains_in_flight_and_fails_closed() {
+        let temp_dir = std::env::temp_dir();
+        let state_path = temp_dir.join(format!(
+            "smoooth_maint_drain_test_{}.json",
+            uuid::Uuid::new_v4().simple()
+        ));
+
+        let storage = LocalStorage::new_file_backed(&state_path);
+
+        // 1. Initial mutation to establish state
+        let agent1 = AgentIdentity {
+            agent_id: "agent_maint_1".to_string(),
+            name: "Agent 1".to_string(),
+            token_hash: "th_1".to_string(),
+            token_prefix: "smoooth_ag_1".to_string(),
+            scopes: vec![crate::models::AgentScope::ReadOnly],
+            created_at: chrono::Utc::now(),
+            expires_at: None,
+            revoked: false,
+            revoked_at: None,
+            last_used_at: None,
+            workspace_id: "ws-maint".to_string(),
+        };
+        storage.save_agent(agent1.clone()).await.unwrap();
+
+        // 2. Administrator enters maintenance mode via acquire_maintenance_lock
+        let maint_lock =
+            LocalStorage::acquire_maintenance_lock(&state_path, std::time::Duration::from_secs(5))
+                .await
+                .expect("Administrator must acquire maintenance lock");
+
+        // 3. Any subsequent mutation must fail closed while in maintenance
+        let agent2 = AgentIdentity {
+            agent_id: "agent_maint_2".to_string(),
+            name: "Agent 2".to_string(),
+            token_hash: "th_2".to_string(),
+            token_prefix: "smoooth_ag_2".to_string(),
+            scopes: vec![crate::models::AgentScope::ReadOnly],
+            created_at: chrono::Utc::now(),
+            expires_at: None,
+            revoked: false,
+            revoked_at: None,
+            last_used_at: None,
+            workspace_id: "ws-maint".to_string(),
+        };
+        let err = storage.save_agent(agent2.clone()).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Storage is frozen for maintenance"),
+            "Mutations must fail closed while maintenance is active, got: {}",
+            err
+        );
+
+        // 4. Administrator completes maintenance and releases lock
+        LocalStorage::release_maintenance_lock(&state_path, maint_lock)
+            .await
+            .expect("Administrator must release maintenance lock");
+
+        // 5. Subsequent mutations must now succeed
+        storage.save_agent(agent2.clone()).await.unwrap();
+        assert!(storage.get_agent("agent_maint_2").await.unwrap().is_some());
+
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(state_path.with_extension("lock"));
+        let _ = std::fs::remove_file(state_path.with_extension("bak"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_from_disk_timestamp_collision_never_suppresses_newer_version() {
+        let temp_dir = std::env::temp_dir();
+        let state_path = temp_dir.join(format!(
+            "smoooth_timestamp_collision_test_{}.json",
+            uuid::Uuid::new_v4().simple()
+        ));
+
+        let instance_a = LocalStorage::new_file_backed(&state_path);
+        let instance_b = LocalStorage::new_file_backed(&state_path);
+
+        // Instance A writes agent 1 (version 1)
+        let agent1 = AgentIdentity {
+            agent_id: "agent_tc_1".to_string(),
+            name: "Agent 1".to_string(),
+            token_hash: "th_1".to_string(),
+            token_prefix: "smoooth_ag_1".to_string(),
+            scopes: vec![crate::models::AgentScope::ReadOnly],
+            created_at: chrono::Utc::now(),
+            expires_at: None,
+            revoked: false,
+            revoked_at: None,
+            last_used_at: None,
+            workspace_id: "ws-tc".to_string(),
+        };
+        instance_a.save_agent(agent1.clone()).await.unwrap();
+
+        // Instance B syncs: version 1 loaded
+        instance_b.sync_from_disk().await.unwrap();
+        assert_eq!(instance_b.state.read().await.version, 1);
+
+        // Instance A writes agent 2 (version 2)
+        let agent2 = AgentIdentity {
+            agent_id: "agent_tc_2".to_string(),
+            name: "Agent 2".to_string(),
+            token_hash: "th_2".to_string(),
+            token_prefix: "smoooth_ag_2".to_string(),
+            scopes: vec![crate::models::AgentScope::ReadOnly],
+            created_at: chrono::Utc::now(),
+            expires_at: None,
+            revoked: false,
+            revoked_at: None,
+            last_used_at: None,
+            workspace_id: "ws-tc".to_string(),
+        };
+        instance_a.save_agent(agent2.clone()).await.unwrap();
+
+        // Simulate timestamp collision on Instance B:
+        // Set Instance B's last_synced_mtime to match the file's current disk mtime.
+        let file_mtime = std::fs::metadata(&state_path)
+            .ok()
+            .and_then(|m| m.modified().ok());
+        *instance_b.last_synced_mtime.write().await = file_mtime;
+
+        // Instance B syncs from disk.
+        // Even with identical mtime (timestamp collision), version ordering MUST load version 2!
+        instance_b.sync_from_disk().await.unwrap();
+        assert_eq!(
+            instance_b.state.read().await.version,
+            2,
+            "Version ordering must apply genuinely newer version despite timestamp collision"
+        );
+        let found = instance_b.get_agent("agent_tc_2").await.unwrap();
+        assert!(found.is_some(), "Agent 2 must be visible in memory");
+
+        let _ = std::fs::remove_file(&state_path);
+        let _ = std::fs::remove_file(state_path.with_extension("lock"));
+        let _ = std::fs::remove_file(state_path.with_extension("bak"));
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_synchronization_calls_preserve_monotonicity() {
+        let temp_dir = std::env::temp_dir();
+        let state_path = temp_dir.join(format!(
+            "smoooth_concurrent_sync_test_{}.json",
+            uuid::Uuid::new_v4().simple()
+        ));
+
+        let writer = LocalStorage::new_file_backed(&state_path);
+        let reader = LocalStorage::new_file_backed(&state_path);
+
+        let reader_arc = Arc::new(reader);
+        let mut reader_handles = Vec::new();
+
+        // Spawn 10 concurrent readers calling sync_from_disk and verifying monotonicity
+        for _ in 0..10 {
+            let r = reader_arc.clone();
+            reader_handles.push(tokio::spawn(async move {
+                let mut last_observed_version = 0;
+                for _ in 0..20 {
+                    r.sync_from_disk().await.unwrap();
+                    let current_version = r.state.read().await.version;
+                    assert!(
+                        current_version >= last_observed_version,
+                        "Observed version regressed from {} to {}",
+                        last_observed_version,
+                        current_version
+                    );
+                    last_observed_version = current_version;
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                }
+            }));
+        }
+
+        // Writer concurrently writes 5 incremental agent updates
+        for i in 1..=5 {
+            let agent = AgentIdentity {
+                agent_id: format!("agent_con_sync_{}", i),
+                name: format!("Agent {}", i),
+                token_hash: format!("th_{}", i),
+                token_prefix: format!("smoooth_ag_{}", i),
+                scopes: vec![crate::models::AgentScope::ReadOnly],
+                created_at: chrono::Utc::now(),
+                expires_at: None,
+                revoked: false,
+                revoked_at: None,
+                last_used_at: None,
+                workspace_id: "ws-con".to_string(),
+            };
+            writer.save_agent(agent).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        for h in reader_handles {
+            h.await.unwrap();
+        }
+
+        // Final sync ensures reader reaches version 5
+        reader_arc.sync_from_disk().await.unwrap();
+        assert_eq!(reader_arc.state.read().await.version, 5);
 
         let _ = std::fs::remove_file(&state_path);
         let _ = std::fs::remove_file(state_path.with_extension("lock"));
