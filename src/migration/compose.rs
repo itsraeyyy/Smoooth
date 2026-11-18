@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use super::types::{DetectedWorkload, IngressRoutePreview, PortMapping, VolumeMapping};
 use crate::error::SmooothError;
-use crate::models::{CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints};
+use crate::models::{
+    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints,
+};
 
 pub struct ComposeParser;
 
@@ -11,14 +13,23 @@ impl ComposeParser {
     pub fn parse(
         yaml_content: &str,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let root: Value = serde_yaml::from_str(yaml_content)
             .map_err(|e| SmooothError::Validation(format!("Invalid Docker Compose YAML: {}", e)))?;
 
         let services_map = root
             .get("services")
             .and_then(|s| s.as_mapping())
-            .ok_or_else(|| SmooothError::Validation("No 'services' section found in compose file".to_string()))?;
+            .ok_or_else(|| {
+                SmooothError::Validation("No 'services' section found in compose file".to_string())
+            })?;
 
         let mut workloads = Vec::new();
         let mut canonical_actions = Vec::new();
@@ -70,10 +81,7 @@ impl ComposeParser {
                             protocol: "tcp".to_string(),
                         });
                     } else if p.is_mapping() {
-                        let target = p
-                            .get("target")
-                            .and_then(|v| v.as_i64())
-                            .unwrap_or(80) as u16;
+                        let target = p.get("target").and_then(|v| v.as_i64()).unwrap_or(80) as u16;
                         let pub_port = p
                             .get("published")
                             .and_then(|v| v.as_i64())
@@ -130,7 +138,8 @@ impl ComposeParser {
                             let source = parts[0].to_string();
                             let target = parts[1].to_string();
                             let is_named = !source.starts_with('/') && !source.starts_with('.');
-                            let read_only = parts.get(2).map(|&m| m.contains("ro")).unwrap_or(false);
+                            let read_only =
+                                parts.get(2).map(|&m| m.contains("ro")).unwrap_or(false);
                             volumes.push(VolumeMapping {
                                 source,
                                 target,
@@ -167,7 +176,11 @@ impl ComposeParser {
                 let k_lower = k.to_lowercase();
                 if k_lower == "virtual_host" || k_lower == "domain" || k_lower == "fqdn" {
                     for d in v.split(',') {
-                        let clean = d.trim().trim_start_matches("https://").trim_start_matches("http://").trim_matches('/');
+                        let clean = d
+                            .trim()
+                            .trim_start_matches("https://")
+                            .trim_start_matches("http://")
+                            .trim_matches('/');
                         if !clean.is_empty() && !domains.contains(&clean.to_string()) {
                             domains.push(clean.to_string());
                         }
@@ -209,10 +222,16 @@ impl ComposeParser {
 
             let mut notes = Vec::new();
             if is_db {
-                notes.push(format!("Identified stateful {} database adapter with persistent volume safeguarding.", provider));
+                notes.push(format!(
+                    "Identified stateful {} database adapter with persistent volume safeguarding.",
+                    provider
+                ));
             }
             if !domains.is_empty() {
-                notes.push(format!("Configured automatic HTTPS ingress for domain(s): {}", domains.join(", ")));
+                notes.push(format!(
+                    "Configured automatic HTTPS ingress for domain(s): {}",
+                    domains.join(", ")
+                ));
             }
 
             // Register ingress routes
@@ -242,7 +261,10 @@ impl ComposeParser {
             let mut ports_map = serde_json::Map::new();
             for p in &ports {
                 let target_port = p.host_port.unwrap_or(p.container_port);
-                ports_map.insert(format!("{}/{}", p.container_port, p.protocol), serde_json::json!(target_port));
+                ports_map.insert(
+                    format!("{}/{}", p.container_port, p.protocol),
+                    serde_json::json!(target_port),
+                );
             }
 
             let action_config = serde_json::json!({
@@ -341,7 +363,11 @@ impl ComposeParser {
             if let Some(start) = val.find("Host(") {
                 let rest = &val[start + 5..];
                 if let Some(end) = rest.find(')') {
-                    let d = rest[..end].trim().trim_matches('`').trim_matches('"').trim_matches('\'');
+                    let d = rest[..end]
+                        .trim()
+                        .trim_matches('`')
+                        .trim_matches('"')
+                        .trim_matches('\'');
                     if !d.is_empty() && !domains.contains(&d.to_string()) {
                         domains.push(d.to_string());
                     }
@@ -351,7 +377,11 @@ impl ComposeParser {
         // Coolify FQDN label
         else if key == "coolify.fqdn" || key == "fqdn" {
             for d in val.split(',') {
-                let clean = d.trim().trim_start_matches("https://").trim_start_matches("http://").trim_matches('/');
+                let clean = d
+                    .trim()
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_matches('/');
                 if !clean.is_empty() && !domains.contains(&clean.to_string()) {
                     domains.push(clean.to_string());
                 }
@@ -359,7 +389,11 @@ impl ComposeParser {
         }
         // Caddy label
         else if key == "caddy" {
-            let clean = val.trim().trim_start_matches("https://").trim_start_matches("http://").trim_matches('/');
+            let clean = val
+                .trim()
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_matches('/');
             if !clean.is_empty() && !domains.contains(&clean.to_string()) {
                 domains.push(clean.to_string());
             }
@@ -370,13 +404,23 @@ impl ComposeParser {
         let img_lower = image.to_lowercase();
         let name_lower = name.to_lowercase();
 
-        if img_lower.contains("postgres") || name_lower.contains("postgres") || name_lower.contains("psql") {
+        if img_lower.contains("postgres")
+            || name_lower.contains("postgres")
+            || name_lower.contains("psql")
+        {
             ("postgres".to_string(), "database".to_string(), true)
-        } else if img_lower.contains("redis") || name_lower.contains("redis") || img_lower.contains("dragonfly") || img_lower.contains("keydb") {
+        } else if img_lower.contains("redis")
+            || name_lower.contains("redis")
+            || img_lower.contains("dragonfly")
+            || img_lower.contains("keydb")
+        {
             ("redis".to_string(), "cache".to_string(), true)
         } else if img_lower.contains("mongo") || name_lower.contains("mongo") {
             ("mongo".to_string(), "database".to_string(), true)
-        } else if img_lower.contains("mysql") || img_lower.contains("mariadb") || name_lower.contains("mysql") {
+        } else if img_lower.contains("mysql")
+            || img_lower.contains("mariadb")
+            || name_lower.contains("mysql")
+        {
             ("docker".to_string(), "database".to_string(), true)
         } else if name_lower.contains("worker") || img_lower.contains("worker") {
             ("docker".to_string(), "worker".to_string(), false)

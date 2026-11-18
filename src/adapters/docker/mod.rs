@@ -220,7 +220,11 @@ impl ProviderAdapter for DockerAdapter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("tcp")
                     .to_lowercase();
-                let c_port = if image.contains("nginx") || image.contains("http") { 80 } else { h_port as u16 };
+                let c_port = if image.contains("nginx") || image.contains("http") {
+                    80
+                } else {
+                    h_port as u16
+                };
                 if proto == "udp" {
                     custom_port_bindings.push(containers::PortMappingSpec {
                         container_port: c_port,

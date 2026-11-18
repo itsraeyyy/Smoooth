@@ -14,7 +14,14 @@ impl CoolifyParser {
     pub fn parse_json(
         json_content: &str,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let root: Value = serde_json::from_str(json_content)
             .map_err(|e| SmooothError::Validation(format!("Invalid Coolify JSON format: {}", e)))?;
 
@@ -26,7 +33,13 @@ impl CoolifyParser {
         // 1. Check if the root has "services", "applications", or "databases"
         if let Some(apps) = root.get("applications").and_then(|a| a.as_array()) {
             for app in apps {
-                Self::process_coolify_app(app, workspace, &mut workloads, &mut canonical_actions, &mut ingress_routes)?;
+                Self::process_coolify_app(
+                    app,
+                    workspace,
+                    &mut workloads,
+                    &mut canonical_actions,
+                    &mut ingress_routes,
+                )?;
             }
         }
 
@@ -40,7 +53,9 @@ impl CoolifyParser {
             for svc in services {
                 // If service contains raw docker-compose, parse with ComposeParser
                 if let Some(compose_raw) = svc.get("docker_compose_raw").and_then(|c| c.as_str()) {
-                    if let Ok((mut w, mut spec, mut ing)) = ComposeParser::parse(compose_raw, workspace) {
+                    if let Ok((mut w, mut spec, mut ing)) =
+                        ComposeParser::parse(compose_raw, workspace)
+                    {
                         workloads.append(&mut w);
                         canonical_actions.append(&mut spec.actions);
                         dependencies.append(&mut spec.dependencies);
@@ -48,7 +63,13 @@ impl CoolifyParser {
                         continue;
                     }
                 }
-                Self::process_coolify_app(svc, workspace, &mut workloads, &mut canonical_actions, &mut ingress_routes)?;
+                Self::process_coolify_app(
+                    svc,
+                    workspace,
+                    &mut workloads,
+                    &mut canonical_actions,
+                    &mut ingress_routes,
+                )?;
             }
         }
 
@@ -58,13 +79,20 @@ impl CoolifyParser {
                 return ComposeParser::parse(compose_raw, workspace);
             }
             if root.get("name").is_some() || root.get("fqdn").is_some() {
-                Self::process_coolify_app(&root, workspace, &mut workloads, &mut canonical_actions, &mut ingress_routes)?;
+                Self::process_coolify_app(
+                    &root,
+                    workspace,
+                    &mut workloads,
+                    &mut canonical_actions,
+                    &mut ingress_routes,
+                )?;
             }
         }
 
         if workloads.is_empty() {
             return Err(SmooothError::Validation(
-                "No deployable applications or databases discovered in Coolify JSON manifest.".to_string(),
+                "No deployable applications or databases discovered in Coolify JSON manifest."
+                    .to_string(),
             ));
         }
 
@@ -90,7 +118,14 @@ impl CoolifyParser {
     pub fn scan_local_data_dir(
         base_dir: &str,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let base_path = Path::new(base_dir);
         if !base_path.exists() {
             return Err(SmooothError::Validation(format!(
@@ -119,7 +154,9 @@ impl CoolifyParser {
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    let compose_candidate = if path.is_file() && (path.ends_with("docker-compose.yml") || path.ends_with("compose.yaml")) {
+                    let compose_candidate = if path.is_file()
+                        && (path.ends_with("docker-compose.yml") || path.ends_with("compose.yaml"))
+                    {
                         Some(path.clone())
                     } else if path.is_dir() {
                         let inner1 = path.join("docker-compose.yml");
@@ -137,7 +174,9 @@ impl CoolifyParser {
 
                     if let Some(comp_path) = compose_candidate {
                         if let Ok(content) = std::fs::read_to_string(&comp_path) {
-                            if let Ok((mut w, mut spec, mut ing)) = ComposeParser::parse(&content, workspace) {
+                            if let Ok((mut w, mut spec, mut ing)) =
+                                ComposeParser::parse(&content, workspace)
+                            {
                                 combined_workloads.append(&mut w);
                                 combined_actions.append(&mut spec.actions);
                                 combined_deps.append(&mut spec.dependencies);
@@ -238,7 +277,10 @@ impl CoolifyParser {
         let mut env_vars = HashMap::new();
         if let Some(envs) = app.get("environment_variables").and_then(|e| e.as_array()) {
             for e in envs {
-                if let (Some(k), Some(v)) = (e.get("key").and_then(|k| k.as_str()), e.get("value").and_then(|v| v.as_str())) {
+                if let (Some(k), Some(v)) = (
+                    e.get("key").and_then(|k| k.as_str()),
+                    e.get("value").and_then(|v| v.as_str()),
+                ) {
                     env_vars.insert(k.to_string(), v.to_string());
                 }
             }
@@ -254,7 +296,11 @@ impl CoolifyParser {
         let mut domains = Vec::new();
         if let Some(fqdn) = app.get("fqdn").and_then(|f| f.as_str()) {
             for d in fqdn.split(',') {
-                let clean = d.trim().trim_start_matches("https://").trim_start_matches("http://").trim_matches('/');
+                let clean = d
+                    .trim()
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_matches('/');
                 if !clean.is_empty() {
                     domains.push(clean.to_string());
                 }
@@ -283,7 +329,10 @@ impl CoolifyParser {
             notes.push(format!("Build source repository: {}", repo));
         }
         if !domains.is_empty() {
-            notes.push(format!("Configured automatic HTTPS ingress for domain: {}", domains.join(", ")));
+            notes.push(format!(
+                "Configured automatic HTTPS ingress for domain: {}",
+                domains.join(", ")
+            ));
         }
 
         let action_config = serde_json::json!({
@@ -405,7 +454,10 @@ impl CoolifyParser {
             domains: Vec::new(),
             is_persistent: true,
             depends_on: Vec::new(),
-            notes: vec![format!("Persistent {} database migrated from Coolify with durable volume protection.", provider)],
+            notes: vec![format!(
+                "Persistent {} database migrated from Coolify with durable volume protection.",
+                provider
+            )],
         });
 
         Ok(())

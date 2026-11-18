@@ -100,7 +100,10 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     let mut initial_env = serde_json::Map::new();
     initial_env.insert("NODE_ENV".to_string(), serde_json::json!("production"));
     initial_env.insert("PORT".to_string(), serde_json::json!("3000"));
-    initial_env.insert("DATABASE_URL".to_string(), serde_json::json!("postgres://user:pass@db:5432/app"));
+    initial_env.insert(
+        "DATABASE_URL".to_string(),
+        serde_json::json!("postgres://user:pass@db:5432/app"),
+    );
 
     let res = Resource {
         id: test_resource_id.to_string(),
@@ -120,7 +123,10 @@ async fn test_workload_environment_get_and_update_lifecycle() {
         updated_at: chrono::Utc::now(),
     };
 
-    storage.save_resource(res).await.expect("Failed to seed resource");
+    storage
+        .save_resource(res)
+        .await
+        .expect("Failed to seed resource");
 
     // 2. Test GET /api/workloads/:id/env (Default Masked)
     println!("\n[Test 1] Testing GET /api/workloads/:id/env (Default Masked)...");
@@ -139,7 +145,13 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     assert_eq!(json["env"]["NODE_ENV"], "production");
     assert_eq!(json["env"]["PORT"], "3000");
     assert_eq!(json["is_masked"], true);
-    assert!(json["env"]["DATABASE_URL"].as_str().unwrap().contains("[REDACTED]"), "Default GET must mask sensitive credentials");
+    assert!(
+        json["env"]["DATABASE_URL"]
+            .as_str()
+            .unwrap()
+            .contains("[REDACTED]"),
+        "Default GET must mask sensitive credentials"
+    );
     assert_eq!(json["count"], 3);
 
     // 2b. Test GET /api/workloads/:id/env?reveal=true (Plaintext Reveal for Admin/Operator)
@@ -154,8 +166,13 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     assert_eq!(rev_status, 200);
     let rev_json: serde_json::Value = serde_json::from_str(&rev_body).expect("Valid JSON");
     assert_eq!(rev_json["is_masked"], false);
-    assert_eq!(rev_json["env"]["DATABASE_URL"], "postgres://user:pass@db:5432/app");
-    println!(">>> GET /api/workloads/:id/env verified successfully (masked default & reveal=true).");
+    assert_eq!(
+        rev_json["env"]["DATABASE_URL"],
+        "postgres://user:pass@db:5432/app"
+    );
+    println!(
+        ">>> GET /api/workloads/:id/env verified successfully (masked default & reveal=true)."
+    );
 
     // 3. Test POST /api/workloads/:id/env (Updating environment variables with secret encryption)
     println!("\n[Test 2] Testing POST /api/workloads/:id/env to update environment...");
@@ -178,11 +195,18 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     )
     .await;
 
-    assert_eq!(update_status, 200, "Expected 200 OK for POST env, got: {}. Body: {}", update_status, update_body);
+    assert_eq!(
+        update_status, 200,
+        "Expected 200 OK for POST env, got: {}. Body: {}",
+        update_status, update_body
+    );
     let update_json: serde_json::Value = serde_json::from_str(&update_body).expect("Valid JSON");
     assert_eq!(update_json["success"], true);
     assert_eq!(update_json["env_count"], 4);
-    println!(">>> POST /api/workloads/:id/env succeeded! Updated {} variables.", update_json["env_count"]);
+    println!(
+        ">>> POST /api/workloads/:id/env succeeded! Updated {} variables.",
+        update_json["env_count"]
+    );
 
     // 4. Test GET /api/workloads/:id/env again to confirm persistence
     println!("\n[Test 3] Testing GET /api/workloads/:id/env to verify updated persistence...");
@@ -199,7 +223,10 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     let json_2: serde_json::Value = serde_json::from_str(&get_body_2).expect("Valid JSON");
     assert_eq!(json_2["env"]["PORT"], "8080");
     assert_eq!(json_2["env"]["NEW_FEATURE_FLAG"], "enabled");
-    assert_eq!(json_2["env"]["DATABASE_URL"], "postgres://user:rotated_secret@db:5432/app");
+    assert_eq!(
+        json_2["env"]["DATABASE_URL"],
+        "postgres://user:rotated_secret@db:5432/app"
+    );
     assert_eq!(json_2["count"], 4);
     println!(">>> Verified updated environment variables are actively persisted!");
 
@@ -214,6 +241,9 @@ async fn test_workload_environment_get_and_update_lifecycle() {
     )
     .await;
 
-    assert_eq!(unauth_status, 401, "Expected 401 Unauthorized without token");
+    assert_eq!(
+        unauth_status, 401,
+        "Expected 401 Unauthorized without token"
+    );
     println!(">>> Unauthorized request successfully rejected with 401.");
 }

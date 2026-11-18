@@ -109,11 +109,17 @@ fn test_coolify_json_migration_parsing() {
     assert_eq!(workloads.len(), 2);
     assert_eq!(spec.actions.len(), 2);
 
-    let frontend = workloads.iter().find(|w| w.name == "shop-frontend").unwrap();
+    let frontend = workloads
+        .iter()
+        .find(|w| w.name == "shop-frontend")
+        .unwrap();
     assert_eq!(frontend.service_type, "compute");
     assert_eq!(frontend.domains[0], "shop.coolify.local");
 
-    let db = workloads.iter().find(|w| w.name == "shop-database").unwrap();
+    let db = workloads
+        .iter()
+        .find(|w| w.name == "shop-database")
+        .unwrap();
     assert_eq!(db.service_type, "database");
     assert_eq!(db.provider, "postgres");
     assert!(db.is_persistent);
@@ -147,7 +153,8 @@ databases:
     user: db_admin
 "#;
 
-    let (workloads, spec, _) = ForeignParser::parse_render_blueprint(render_yaml, "default").unwrap();
+    let (workloads, spec, _) =
+        ForeignParser::parse_render_blueprint(render_yaml, "default").unwrap();
 
     assert_eq!(workloads.len(), 2);
     assert_eq!(spec.actions.len(), 2);
@@ -192,14 +199,22 @@ worker: python worker.py
 "#;
     let env_content = "PORT=3000\nENV=production\n";
 
-    let (workloads, spec, _) =
-        ForeignParser::parse_dokku_app(procfile, Some(env_content), Some("sample-dokku"), "default")
-            .unwrap();
+    let (workloads, spec, _) = ForeignParser::parse_dokku_app(
+        procfile,
+        Some(env_content),
+        Some("sample-dokku"),
+        "default",
+    )
+    .unwrap();
 
     assert_eq!(workloads.len(), 2);
     assert_eq!(spec.actions.len(), 2);
-    assert!(workloads.iter().any(|w| w.name == "sample-dokku" && w.service_type == "compute"));
-    assert!(workloads.iter().any(|w| w.name == "sample-dokku-worker" && w.service_type == "worker"));
+    assert!(workloads
+        .iter()
+        .any(|w| w.name == "sample-dokku" && w.service_type == "compute"));
+    assert!(workloads
+        .iter()
+        .any(|w| w.name == "sample-dokku-worker" && w.service_type == "worker"));
 }
 
 #[test]
@@ -263,9 +278,17 @@ impl smoooth::adapters::ProviderAdapter for MockMigrationAdapter {
         Ok(smoooth::models::Resource {
             id: name.to_string(),
             name: name.to_string(),
-            workspace_id: config.get("workspace_id").and_then(|w| w.as_str()).unwrap_or("default").to_string(),
+            workspace_id: config
+                .get("workspace_id")
+                .and_then(|w| w.as_str())
+                .unwrap_or("default")
+                .to_string(),
             provider: self.provider.clone(),
-            service_type: if self.provider == "postgres" { "database".to_string() } else { "compute".to_string() },
+            service_type: if self.provider == "postgres" {
+                "database".to_string()
+            } else {
+                "compute".to_string()
+            },
             status: smoooth::models::ResourceStatus::Active,
             ownership: smoooth::models::ResourceOwnership::SmooothManaged,
             is_persistent,
@@ -275,11 +298,17 @@ impl smoooth::adapters::ProviderAdapter for MockMigrationAdapter {
         })
     }
 
-    async fn inspect(&self, _resource_id: &str) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
+    async fn inspect(
+        &self,
+        _resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::models::ResourceStatus> {
         Ok(smoooth::models::ResourceStatus::Active)
     }
 
-    async fn health_check(&self, _resource_id: &str) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
+    async fn health_check(
+        &self,
+        _resource_id: &str,
+    ) -> smoooth::error::Result<smoooth::adapters::HealthEvidence> {
         Ok(smoooth::adapters::HealthEvidence {
             is_healthy: true,
             latency_ms: Some(2),
@@ -296,7 +325,11 @@ impl smoooth::adapters::ProviderAdapter for MockMigrationAdapter {
         Ok(smoooth::models::ResourceStatus::Active)
     }
 
-    async fn destroy(&self, _resource_id: &str, _preserve_persistent_data: bool) -> smoooth::error::Result<()> {
+    async fn destroy(
+        &self,
+        _resource_id: &str,
+        _preserve_persistent_data: bool,
+    ) -> smoooth::error::Result<()> {
         Ok(())
     }
 }
@@ -320,8 +353,12 @@ services:
 
     let storage = Arc::new(LocalStorage::new_in_memory());
     let mut orchestrator = Orchestrator::new(storage.clone());
-    orchestrator.register_adapter(Arc::new(MockMigrationAdapter { provider: "docker".to_string() }));
-    orchestrator.register_adapter(Arc::new(MockMigrationAdapter { provider: "postgres".to_string() }));
+    orchestrator.register_adapter(Arc::new(MockMigrationAdapter {
+        provider: "docker".to_string(),
+    }));
+    orchestrator.register_adapter(Arc::new(MockMigrationAdapter {
+        provider: "postgres".to_string(),
+    }));
     let orchestrator_arc = Arc::new(orchestrator);
 
     let preview = MigrationEngine::preview(
@@ -341,8 +378,12 @@ services:
 
     assert!(result.success);
     assert_eq!(result.provisioned_resources.len(), 2);
-    assert!(result.provisioned_resources.contains(&"migrated-web".to_string()));
-    assert!(result.provisioned_resources.contains(&"migrated-db".to_string()));
+    assert!(result
+        .provisioned_resources
+        .contains(&"migrated-web".to_string()));
+    assert!(result
+        .provisioned_resources
+        .contains(&"migrated-db".to_string()));
 
     // Verify storage has recorded both resources
     let resources = orchestrator_arc.list_resources("test_workspace").await;

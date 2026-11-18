@@ -46,7 +46,9 @@ impl AcmeKeystoreManager {
             map.values()
                 .find(|v| v.get("Certificates").is_some())
                 .ok_or_else(|| {
-                    SmooothError::NotFound("No ACME resolver found with Certificates in acme.json".to_string())
+                    SmooothError::NotFound(
+                        "No ACME resolver found with Certificates in acme.json".to_string(),
+                    )
                 })?
         } else {
             return Err(SmooothError::Validation(
@@ -66,9 +68,10 @@ impl AcmeKeystoreManager {
 
         let mut certificates = Vec::new();
         for item in certs_val {
-            let entry: AcmeCertificateEntry = serde_json::from_value(item.clone()).map_err(|e| {
-                SmooothError::Validation(format!("Failed to parse certificate entry: {}", e))
-            })?;
+            let entry: AcmeCertificateEntry =
+                serde_json::from_value(item.clone()).map_err(|e| {
+                    SmooothError::Validation(format!("Failed to parse certificate entry: {}", e))
+                })?;
             certificates.push(entry);
         }
 
@@ -106,9 +109,16 @@ impl AcmeKeystoreManager {
             );
         }
 
-        let resolver_map = root_map.get_mut(res_name).unwrap().as_object_mut().ok_or_else(|| {
-            SmooothError::Validation(format!("Resolver '{}' in target must be an object", res_name))
-        })?;
+        let resolver_map = root_map
+            .get_mut(res_name)
+            .unwrap()
+            .as_object_mut()
+            .ok_or_else(|| {
+                SmooothError::Validation(format!(
+                    "Resolver '{}' in target must be an object",
+                    res_name
+                ))
+            })?;
 
         let mut existing_certs: Vec<AcmeCertificateEntry> =
             if let Some(certs_arr) = resolver_map.get("Certificates").and_then(|v| v.as_array()) {
@@ -227,11 +237,14 @@ mod tests {
 
         // First pass: add 2 certs
         let source_certs = AcmeKeystoreManager::parse_traefik_acme(SAMPLE_ACME, None).unwrap();
-        let added = AcmeKeystoreManager::merge_into_traefik_acme(source_certs.clone(), &target_path, None).unwrap();
+        let added =
+            AcmeKeystoreManager::merge_into_traefik_acme(source_certs.clone(), &target_path, None)
+                .unwrap();
         assert_eq!(added, 2);
 
         // Second pass with duplicate certs: should add 0
-        let added_again = AcmeKeystoreManager::merge_into_traefik_acme(source_certs, &target_path, None).unwrap();
+        let added_again =
+            AcmeKeystoreManager::merge_into_traefik_acme(source_certs, &target_path, None).unwrap();
         assert_eq!(added_again, 0);
 
         // Add 1 new cert
@@ -244,7 +257,8 @@ mod tests {
             key: "NEW_KEY".to_string(),
             store: None,
         }];
-        let added_third = AcmeKeystoreManager::merge_into_traefik_acme(new_cert, &target_path, None).unwrap();
+        let added_third =
+            AcmeKeystoreManager::merge_into_traefik_acme(new_cert, &target_path, None).unwrap();
         assert_eq!(added_third, 1);
 
         // Verify final count

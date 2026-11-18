@@ -14,20 +14,13 @@ pub enum Action {
     InspectMetadata,
 
     /// Read stdout/stderr logs from a specific container workload
-    ReadLogs {
-        tail_limit: Option<u32>,
-    },
+    ReadLogs { tail_limit: Option<u32> },
 
     /// Read a specific secret value (requires exact key designation)
-    ReadSecret {
-        key_name: String,
-        purpose: String,
-    },
+    ReadSecret { key_name: String, purpose: String },
 
     /// Update workload environment variables without exposing existing secrets
-    UpdateEnv {
-        allowed_keys: Vec<String>,
-    },
+    UpdateEnv { allowed_keys: Vec<String> },
 
     /// Restart a running container workload
     RestartWorkload,
@@ -41,9 +34,7 @@ pub enum Action {
     },
 
     /// Trigger a database or volume snapshot
-    Snapshot {
-        allow_external_export: bool,
-    },
+    Snapshot { allow_external_export: bool },
 
     /// Reconcile state drift back to approved specification
     Reconcile,
@@ -101,10 +92,14 @@ impl Action {
             (Action::InspectMetadata, Action::InspectMetadata) => true,
 
             (
-                Action::ReadLogs { tail_limit: parent_tail },
-                Action::ReadLogs { tail_limit: child_tail },
+                Action::ReadLogs {
+                    tail_limit: parent_tail,
+                },
+                Action::ReadLogs {
+                    tail_limit: child_tail,
+                },
             ) => match (parent_tail, child_tail) {
-                (None, _) => true, // Parent is unlimited; child can be unlimited or bounded
+                (None, _) => true,        // Parent is unlimited; child can be unlimited or bounded
                 (Some(_), None) => false, // Child cannot escalate bounded tail to unlimited!
                 (Some(p), Some(c)) => *c <= *p, // Child limit cannot exceed parent limit
             },
@@ -121,8 +116,12 @@ impl Action {
             ) => p_key == c_key && p_purpose == c_purpose,
 
             (
-                Action::UpdateEnv { allowed_keys: p_keys },
-                Action::UpdateEnv { allowed_keys: c_keys },
+                Action::UpdateEnv {
+                    allowed_keys: p_keys,
+                },
+                Action::UpdateEnv {
+                    allowed_keys: c_keys,
+                },
             ) => {
                 // Every allowed key in child must be present in parent
                 c_keys.iter().all(|k| p_keys.contains(k))
@@ -163,8 +162,12 @@ impl Action {
             }
 
             (
-                Action::Snapshot { allow_external_export: p_exp },
-                Action::Snapshot { allow_external_export: c_exp },
+                Action::Snapshot {
+                    allow_external_export: p_exp,
+                },
+                Action::Snapshot {
+                    allow_external_export: c_exp,
+                },
             ) => {
                 // If parent disallows export, child cannot enable it
                 if !p_exp && *c_exp {
@@ -178,7 +181,9 @@ impl Action {
             (Action::Destroy(p_scope), Action::Destroy(c_scope)) => match (p_scope, c_scope) {
                 (DestructionScope::ResourceAndPersistentData, _) => true,
                 (DestructionScope::ResourceOnly, DestructionScope::ResourceOnly) => true,
-                (DestructionScope::ResourceOnly, DestructionScope::ResourceAndPersistentData) => false,
+                (DestructionScope::ResourceOnly, DestructionScope::ResourceAndPersistentData) => {
+                    false
+                }
             },
 
             _ => false, // Mismatched action variants cannot attenuate
@@ -211,7 +216,9 @@ pub fn is_subpattern(parent_pat: &str, child_pat: &str) -> bool {
 /// at least one action in `parent_actions` through valid monotonic attenuation.
 pub fn can_attenuate_action_set(parent_actions: &[Action], child_actions: &[Action]) -> bool {
     child_actions.iter().all(|child| {
-        parent_actions.iter().any(|parent| parent.can_attenuate_to(child))
+        parent_actions
+            .iter()
+            .any(|parent| parent.can_attenuate_to(child))
     })
 }
 
@@ -228,9 +235,15 @@ mod tests {
     #[test]
     fn test_read_logs_attenuation_narrowing() {
         let unlimited = Action::ReadLogs { tail_limit: None };
-        let bound_100 = Action::ReadLogs { tail_limit: Some(100) };
-        let bound_50 = Action::ReadLogs { tail_limit: Some(50) };
-        let bound_200 = Action::ReadLogs { tail_limit: Some(200) };
+        let bound_100 = Action::ReadLogs {
+            tail_limit: Some(100),
+        };
+        let bound_50 = Action::ReadLogs {
+            tail_limit: Some(50),
+        };
+        let bound_200 = Action::ReadLogs {
+            tail_limit: Some(200),
+        };
 
         // Unlimited can attenuate to unlimited or bounded
         assert!(unlimited.can_attenuate_to(&unlimited));
@@ -381,8 +394,12 @@ mod tests {
 
     #[test]
     fn test_snapshot_export_attenuation() {
-        let parent_no_export = Action::Snapshot { allow_external_export: false };
-        let parent_with_export = Action::Snapshot { allow_external_export: true };
+        let parent_no_export = Action::Snapshot {
+            allow_external_export: false,
+        };
+        let parent_with_export = Action::Snapshot {
+            allow_external_export: true,
+        };
 
         assert!(parent_with_export.can_attenuate_to(&parent_with_export));
         assert!(parent_with_export.can_attenuate_to(&parent_no_export));
@@ -396,13 +413,17 @@ mod tests {
     fn test_action_set_attenuation() {
         let parent_set = vec![
             Action::InspectMetadata,
-            Action::ReadLogs { tail_limit: Some(100) },
+            Action::ReadLogs {
+                tail_limit: Some(100),
+            },
             Action::Destroy(DestructionScope::ResourceOnly),
         ];
 
         let valid_child_set = vec![
             Action::InspectMetadata,
-            Action::ReadLogs { tail_limit: Some(50) },
+            Action::ReadLogs {
+                tail_limit: Some(50),
+            },
         ];
         assert!(can_attenuate_action_set(&parent_set, &valid_child_set));
 
@@ -410,16 +431,18 @@ mod tests {
         assert!(can_attenuate_action_set(&parent_set, &empty_child_set));
 
         // Child requesting unpermitted action fails
-        let invalid_child_new_action = vec![
-            Action::InspectMetadata,
-            Action::RestartWorkload,
-        ];
-        assert!(!can_attenuate_action_set(&parent_set, &invalid_child_new_action));
+        let invalid_child_new_action = vec![Action::InspectMetadata, Action::RestartWorkload];
+        assert!(!can_attenuate_action_set(
+            &parent_set,
+            &invalid_child_new_action
+        ));
 
         // Child requesting escalated action fails
-        let invalid_child_escalated = vec![
-            Action::Destroy(DestructionScope::ResourceAndPersistentData),
-        ];
-        assert!(!can_attenuate_action_set(&parent_set, &invalid_child_escalated));
+        let invalid_child_escalated =
+            vec![Action::Destroy(DestructionScope::ResourceAndPersistentData)];
+        assert!(!can_attenuate_action_set(
+            &parent_set,
+            &invalid_child_escalated
+        ));
     }
 }

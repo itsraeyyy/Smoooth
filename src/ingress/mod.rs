@@ -221,14 +221,17 @@ mod tests {
 
     #[test]
     fn test_ingress_add_list_and_remove() {
-        let temp_dir = std::env::temp_dir().join(format!("smoooth_test_ingress_{}", Uuid::new_v4().simple()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("smoooth_test_ingress_{}", Uuid::new_v4().simple()));
         let manager = IngressManager::new(&temp_dir);
 
         // Initially empty
         assert!(manager.list_routes().unwrap().is_empty());
 
         // Add route
-        let r1 = manager.add_route("api.myapp.com", "my_api_container", 8080, true, None).unwrap();
+        let r1 = manager
+            .add_route("api.myapp.com", "my_api_container", 8080, true, None)
+            .unwrap();
         assert_eq!(r1.domain, "api.myapp.com");
         assert_eq!(r1.target_port, 8080);
         assert!(r1.tls);
@@ -262,12 +265,17 @@ mod tests {
 
     #[test]
     fn test_invalid_domain_rejection() {
-        let temp_dir = std::env::temp_dir().join(format!("smoooth_test_invalid_{}", Uuid::new_v4().simple()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("smoooth_test_invalid_{}", Uuid::new_v4().simple()));
         let manager = IngressManager::new(&temp_dir);
 
         assert!(manager.add_route("", "target", 80, true, None).is_err());
-        assert!(manager.add_route("bad domain with spaces", "target", 80, true, None).is_err());
-        assert!(manager.add_route("bad/slash", "target", 80, true, None).is_err());
+        assert!(manager
+            .add_route("bad domain with spaces", "target", 80, true, None)
+            .is_err());
+        assert!(manager
+            .add_route("bad/slash", "target", 80, true, None)
+            .is_err());
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

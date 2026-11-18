@@ -525,55 +525,64 @@ async fn main() -> anyhow::Result<()> {
             }
         },
 
-        Some(Commands::Capability { command }) => {
-            match command {
-                CapabilityCommands::Inspect { token } => {
-                    match smoooth::security::CapabilityChain::from_header_string(&token) {
-                        Ok(chain) => {
-                            let leaf = chain.leaf();
-                            println!("\n=== Smoooth Capability Chain Inspection ===");
-                            println!("• Chain Depth      : {}", chain.links.len());
-                            println!("• Capability ID    : {}", leaf.payload.id);
-                            println!("• Parent ID        : {:?}", leaf.payload.parent_id);
-                            println!("• Issuer           : {}", leaf.payload.issuer);
-                            println!("• Holder PK        : {}", leaf.payload.holder_public_key);
-                            println!("• Designated URN   : {}", leaf.payload.target_urn);
-                            println!("• Permitted Actions: {:?}", leaf.payload.actions);
-                            println!("• Caveats          : {:?}", leaf.payload.caveats);
-                            println!("• Can Delegate     : {}", leaf.payload.can_delegate);
-                            println!("• Expires At       : {}", leaf.payload.expires_at);
-                            let is_revoked = orchestrator.storage().is_revoked(&leaf.payload.id).await.unwrap_or(false);
-                            if is_revoked {
-                                println!("• Status           : ❌ REVOKED");
-                            } else {
-                                println!("• Status           : ✅ ACTIVE (Valid)");
-                            }
-                            println!("===========================================\n");
+        Some(Commands::Capability { command }) => match command {
+            CapabilityCommands::Inspect { token } => {
+                match smoooth::security::CapabilityChain::from_header_string(&token) {
+                    Ok(chain) => {
+                        let leaf = chain.leaf();
+                        println!("\n=== Smoooth Capability Chain Inspection ===");
+                        println!("• Chain Depth      : {}", chain.links.len());
+                        println!("• Capability ID    : {}", leaf.payload.id);
+                        println!("• Parent ID        : {:?}", leaf.payload.parent_id);
+                        println!("• Issuer           : {}", leaf.payload.issuer);
+                        println!("• Holder PK        : {}", leaf.payload.holder_public_key);
+                        println!("• Designated URN   : {}", leaf.payload.target_urn);
+                        println!("• Permitted Actions: {:?}", leaf.payload.actions);
+                        println!("• Caveats          : {:?}", leaf.payload.caveats);
+                        println!("• Can Delegate     : {}", leaf.payload.can_delegate);
+                        println!("• Expires At       : {}", leaf.payload.expires_at);
+                        let is_revoked = orchestrator
+                            .storage()
+                            .is_revoked(&leaf.payload.id)
+                            .await
+                            .unwrap_or(false);
+                        if is_revoked {
+                            println!("• Status           : ❌ REVOKED");
+                        } else {
+                            println!("• Status           : ✅ ACTIVE (Valid)");
                         }
-                        Err(e) => {
-                            eprintln!("❌ Failed to parse capability chain: {}", e);
-                            std::process::exit(1);
-                        }
+                        println!("===========================================\n");
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to parse capability chain: {}", e);
+                        std::process::exit(1);
                     }
                 }
-                CapabilityCommands::Revoke { id, reason } => {
-                    let cap_id = match uuid::Uuid::parse_str(&id) {
-                        Ok(u) => u,
-                        Err(e) => {
-                            eprintln!("❌ Invalid capability UUID '{}': {}", id, e);
-                            std::process::exit(1);
-                        }
-                    };
-                    let exp = chrono::Utc::now() + chrono::Duration::days(30);
-                    match orchestrator.storage().record_revocation(&cap_id, &reason, exp).await {
-                        Ok(()) => {
-                            println!("\n✅ Capability '{}' and all derived descendants durably REVOKED.", id);
-                            println!("   Reason: {}\n", reason);
-                        }
-                        Err(e) => {
-                            eprintln!("❌ Failed to record revocation: {}", e);
-                            std::process::exit(1);
-                        }
+            }
+            CapabilityCommands::Revoke { id, reason } => {
+                let cap_id = match uuid::Uuid::parse_str(&id) {
+                    Ok(u) => u,
+                    Err(e) => {
+                        eprintln!("❌ Invalid capability UUID '{}': {}", id, e);
+                        std::process::exit(1);
+                    }
+                };
+                let exp = chrono::Utc::now() + chrono::Duration::days(30);
+                match orchestrator
+                    .storage()
+                    .record_revocation(&cap_id, &reason, exp)
+                    .await
+                {
+                    Ok(()) => {
+                        println!(
+                            "\n✅ Capability '{}' and all derived descendants durably REVOKED.",
+                            id
+                        );
+                        println!("   Reason: {}\n", reason);
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Failed to record revocation: {}", e);
+                        std::process::exit(1);
                     }
                 }
             }
@@ -592,7 +601,9 @@ async fn main() -> anyhow::Result<()> {
                         orchestrator.secret_store(),
                         &workspace,
                         &out,
-                    ).await {
+                    )
+                    .await
+                    {
                         Ok(archive) => {
                             println!("\n✅ Encrypted Backup created successfully!");
                             println!("• Backup UUID      : {}", archive.header.backup_id);
@@ -610,20 +621,25 @@ async fn main() -> anyhow::Result<()> {
                 BackupCommands::Verify { file } => {
                     println!("\n=== Smoooth Backup Sandbox Verification (Non-Destructive) ===");
                     println!("• Archive File     : {}", file);
-                    println!("• Environment      : Ephemeral In-Memory Sandbox (Live Storage Untouched)");
+                    println!(
+                        "• Environment      : Ephemeral In-Memory Sandbox (Live Storage Untouched)"
+                    );
 
-                    let archive = match smoooth::security::BackupManager::load_from_file(&file).await {
-                        Ok(a) => a,
-                        Err(e) => {
-                            eprintln!("❌ Failed to load backup file: {}", e);
-                            std::process::exit(1);
-                        }
-                    };
+                    let archive =
+                        match smoooth::security::BackupManager::load_from_file(&file).await {
+                            Ok(a) => a,
+                            Err(e) => {
+                                eprintln!("❌ Failed to load backup file: {}", e);
+                                std::process::exit(1);
+                            }
+                        };
 
                     match smoooth::security::BackupManager::verify_restore_isolated(
                         &archive,
                         orchestrator.secret_store(),
-                    ).await {
+                    )
+                    .await
+                    {
                         Ok((report, _)) => {
                             println!("\n✅ Backup Verification SUCCEEDED!");
                             println!("• Backup UUID      : {}", report.backup_id);
@@ -650,31 +666,40 @@ async fn main() -> anyhow::Result<()> {
                         eprintln!("\n❌ DESTRUCTIVE SAFETY GUARD BLOCKED RESTORATION!");
                         eprintln!("Restoring a backup overwrites live platform state.");
                         eprintln!("To execute a live restore, you must explicitly pass:");
-                        eprintln!("   --confirm {}", smoooth::security::backup::RESTORE_CONFIRMATION_TOKEN);
+                        eprintln!(
+                            "   --confirm {}",
+                            smoooth::security::backup::RESTORE_CONFIRMATION_TOKEN
+                        );
                         eprintln!("\nTo verify the backup first without touching live infrastructure, run:");
                         eprintln!("   smoooth backup verify -f {}", file);
                         println!();
                         std::process::exit(1);
                     }
 
-                    let archive = match smoooth::security::BackupManager::load_from_file(&file).await {
-                        Ok(a) => a,
-                        Err(e) => {
-                            eprintln!("❌ Failed to load backup file: {}", e);
-                            std::process::exit(1);
-                        }
-                    };
+                    let archive =
+                        match smoooth::security::BackupManager::load_from_file(&file).await {
+                            Ok(a) => a,
+                            Err(e) => {
+                                eprintln!("❌ Failed to load backup file: {}", e);
+                                std::process::exit(1);
+                            }
+                        };
 
                     match smoooth::security::BackupManager::restore_to_live(
                         &archive,
                         orchestrator.secret_store(),
                         orchestrator.storage().as_ref(),
                         &token,
-                    ).await {
+                    )
+                    .await
+                    {
                         Ok(report) => {
                             println!("\n✅ Live State Restoration COMPLETED!");
                             println!("• Backup UUID      : {}", report.backup_id);
-                            println!("• Restored State   : {} resources, {} agents", report.resource_count, report.agent_count);
+                            println!(
+                                "• Restored State   : {} resources, {} agents",
+                                report.resource_count, report.agent_count
+                            );
                             println!("• Applied At       : {}", chrono::Utc::now());
                             println!("• Status           : Verified & Restored\n");
                         }
@@ -685,7 +710,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-        },
+        }
 
         Some(Commands::Tools) => {
             println!("\n=== Smoooth MCP Tool Interface (7-Step Golden Workflow) ===\n");
@@ -930,15 +955,36 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Some(Commands::ReconcileDb { host, port, user, password, dbname }) => {
-            println!("\n🔧 Reconciling multi-role database permissions for PostgreSQL at {}:{}...", host, port);
-            match postgres_adapter.reconcile_supabase_stack(&host, port, &user, &password, &dbname).await {
+        Some(Commands::ReconcileDb {
+            host,
+            port,
+            user,
+            password,
+            dbname,
+        }) => {
+            println!(
+                "\n🔧 Reconciling multi-role database permissions for PostgreSQL at {}:{}...",
+                host, port
+            );
+            match postgres_adapter
+                .reconcile_supabase_stack(&host, port, &user, &password, &dbname)
+                .await
+            {
                 Ok(report) => {
                     if report.detected_supabase {
                         println!("✅ Supabase schema footprint detected!");
-                        println!("   Roles Updated        : {}", report.roles_updated.join(", "));
-                        println!("   Functions Reassigned : {}", report.functions_reassigned.join(", "));
-                        println!("   Schemas Reassigned   : {}", report.schemas_reassigned.join(", "));
+                        println!(
+                            "   Roles Updated        : {}",
+                            report.roles_updated.join(", ")
+                        );
+                        println!(
+                            "   Functions Reassigned : {}",
+                            report.functions_reassigned.join(", ")
+                        );
+                        println!(
+                            "   Schemas Reassigned   : {}",
+                            report.schemas_reassigned.join(", ")
+                        );
                         println!("Reconciliation completed successfully.\n");
                     } else {
                         println!("ℹ️ Connected successfully. Standard PostgreSQL detected (no Supabase roles found).\n");
@@ -979,38 +1025,54 @@ async fn main() -> anyhow::Result<()> {
                         for r in routes {
                             let scheme = if r.tls { "https" } else { "http" };
                             let prefix = r.path_prefix.as_deref().unwrap_or("/");
-                            println!("  • {}://{} (path: {}) -> {} (port {}) [ID: {}]",
+                            println!(
+                                "  • {}://{} (path: {}) -> {} (port {}) [ID: {}]",
                                 scheme, r.domain, prefix, r.target_resource, r.target_port, r.id
                             );
                         }
                         println!();
                     }
                 }
-                IngressCommands::Add { domain, target, port, tls, path_prefix } => {
-                    match ingress_manager.add_route(&domain, &target, port, tls, path_prefix) {
-                        Ok(route) => {
-                            println!("\n✅ Ingress route registered successfully!");
-                            println!("Domain       : {}", route.domain);
-                            println!("Target       : {} (port {})", route.target_resource, route.target_port);
-                            println!("TLS          : {}", if route.tls { "Enabled (HTTPS)" } else { "Disabled (HTTP)" });
-                            println!("Route ID     : {}\n", route.id);
-                        }
-                        Err(e) => {
-                            eprintln!("\n❌ Failed to add ingress route: {}\n", e);
-                        }
+                IngressCommands::Add {
+                    domain,
+                    target,
+                    port,
+                    tls,
+                    path_prefix,
+                } => match ingress_manager.add_route(&domain, &target, port, tls, path_prefix) {
+                    Ok(route) => {
+                        println!("\n✅ Ingress route registered successfully!");
+                        println!("Domain       : {}", route.domain);
+                        println!(
+                            "Target       : {} (port {})",
+                            route.target_resource, route.target_port
+                        );
+                        println!(
+                            "TLS          : {}",
+                            if route.tls {
+                                "Enabled (HTTPS)"
+                            } else {
+                                "Disabled (HTTP)"
+                            }
+                        );
+                        println!("Route ID     : {}\n", route.id);
                     }
-                }
-                IngressCommands::Remove { target } => {
-                    match ingress_manager.remove_route(&target) {
-                        Ok(true) => println!("\n✅ Route '{}' removed successfully.\n", target),
-                        Ok(false) => eprintln!("\n❌ Route '{}' not found.\n", target),
-                        Err(e) => eprintln!("\n❌ Failed to remove route: {}\n", e),
+                    Err(e) => {
+                        eprintln!("\n❌ Failed to add ingress route: {}\n", e);
                     }
-                }
+                },
+                IngressCommands::Remove { target } => match ingress_manager.remove_route(&target) {
+                    Ok(true) => println!("\n✅ Route '{}' removed successfully.\n", target),
+                    Ok(false) => eprintln!("\n❌ Route '{}' not found.\n", target),
+                    Err(e) => eprintln!("\n❌ Failed to remove route: {}\n", e),
+                },
                 IngressCommands::Export { format } => {
                     match ingress_manager.render_upstream_snippet(&format) {
                         Ok(cfg) => {
-                            println!("\n=== Ingress Configuration [{}] ===\n", format.to_uppercase());
+                            println!(
+                                "\n=== Ingress Configuration [{}] ===\n",
+                                format.to_uppercase()
+                            );
                             print!("{}", cfg);
                         }
                         Err(e) => eprintln!("\n❌ Failed to export ingress config: {}\n", e),
@@ -1030,20 +1092,39 @@ async fn main() -> anyhow::Result<()> {
                             }
                         },
                     };
-                    println!("Bridging network '{}' to proxy '{}'...", network, proxy_target);
-                    match smoooth::ingress::ProxyBridgeManager::bridge_network(&proxy_target, &network) {
+                    println!(
+                        "Bridging network '{}' to proxy '{}'...",
+                        network, proxy_target
+                    );
+                    match smoooth::ingress::ProxyBridgeManager::bridge_network(
+                        &proxy_target,
+                        &network,
+                    ) {
                         Ok(status) => {
                             if status.already_connected {
-                                println!("ℹ️ Proxy '{}' was already connected to network '{}'.", status.proxy_container, status.network);
+                                println!(
+                                    "ℹ️ Proxy '{}' was already connected to network '{}'.",
+                                    status.proxy_container, status.network
+                                );
                             } else {
-                                println!("✅ Successfully bridged network '{}' to proxy '{}'.", status.network, status.proxy_container);
+                                println!(
+                                    "✅ Successfully bridged network '{}' to proxy '{}'.",
+                                    status.network, status.proxy_container
+                                );
                             }
                         }
                         Err(e) => eprintln!("❌ Bridge failed: {}", e),
                     }
                 }
-                IngressCommands::SyncCerts { source, target, resolver } => {
-                    println!("Importing certificates from '{}' into '{}' (resolver: {})...", source, target, resolver);
+                IngressCommands::SyncCerts {
+                    source,
+                    target,
+                    resolver,
+                } => {
+                    println!(
+                        "Importing certificates from '{}' into '{}' (resolver: {})...",
+                        source, target, resolver
+                    );
                     let source_path = std::path::Path::new(&source);
                     let target_path = std::path::Path::new(&target);
                     if !source_path.exists() {
@@ -1057,7 +1138,10 @@ async fn main() -> anyhow::Result<()> {
                             return Ok(());
                         }
                     };
-                    let certs = match smoooth::ingress::AcmeKeystoreManager::parse_traefik_acme(&content, Some(&resolver)) {
+                    let certs = match smoooth::ingress::AcmeKeystoreManager::parse_traefik_acme(
+                        &content,
+                        Some(&resolver),
+                    ) {
                         Ok(c) => c,
                         Err(e) => {
                             eprintln!("❌ Failed to parse source acme.json: {}", e);
@@ -1065,7 +1149,11 @@ async fn main() -> anyhow::Result<()> {
                         }
                     };
                     println!("Discovered {} valid certificate(s) in source.", certs.len());
-                    match smoooth::ingress::AcmeKeystoreManager::merge_into_traefik_acme(certs, target_path, Some(&resolver)) {
+                    match smoooth::ingress::AcmeKeystoreManager::merge_into_traefik_acme(
+                        certs,
+                        target_path,
+                        Some(&resolver),
+                    ) {
                         Ok(added) => {
                             println!("✅ Successfully merged {} new certificate(s) into '{}' with strict 0600 permissions.", added, target);
                         }
@@ -1075,66 +1163,89 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Some(Commands::Build { command }) => {
-            match command {
-                BuildCommands::Plan { source } => {
-                    println!("\n📦 Inspecting source for zero-Dockerfile Nixpacks plan: {}\n", source);
-                    match smoooth::build::NixpacksBuilder::plan(&source).await {
-                        Ok(plan_json) => {
-                            let providers = plan_json.get("providers")
-                                .and_then(|p| p.as_array())
-                                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", "))
-                                .unwrap_or_else(|| "generic".to_string());
-                            let start_cmd = plan_json.get("start")
-                                .and_then(|s| s.get("cmd"))
-                                .and_then(|c| c.as_str())
-                                .unwrap_or("none");
-                            println!("Detected Providers : {}", providers);
-                            println!("Start Command      : {}", start_cmd);
-                            println!("\nDetailed Plan Structure:\n{}", serde_json::to_string_pretty(&plan_json).unwrap_or_default());
-                        }
-                        Err(e) => {
-                            eprintln!("\n❌ Nixpacks plan failed: {}\n", e);
-                            std::process::exit(1);
-                        }
+        Some(Commands::Build { command }) => match command {
+            BuildCommands::Plan { source } => {
+                println!(
+                    "\n📦 Inspecting source for zero-Dockerfile Nixpacks plan: {}\n",
+                    source
+                );
+                match smoooth::build::NixpacksBuilder::plan(&source).await {
+                    Ok(plan_json) => {
+                        let providers = plan_json
+                            .get("providers")
+                            .and_then(|p| p.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            })
+                            .unwrap_or_else(|| "generic".to_string());
+                        let start_cmd = plan_json
+                            .get("start")
+                            .and_then(|s| s.get("cmd"))
+                            .and_then(|c| c.as_str())
+                            .unwrap_or("none");
+                        println!("Detected Providers : {}", providers);
+                        println!("Start Command      : {}", start_cmd);
+                        println!(
+                            "\nDetailed Plan Structure:\n{}",
+                            serde_json::to_string_pretty(&plan_json).unwrap_or_default()
+                        );
                     }
-                }
-                BuildCommands::Image { source, name, env } => {
-                    println!("\n🔨 Building container image '{}' from '{}' via Nixpacks...\n", name, source);
-                    let mut env_map = HashMap::new();
-                    for item in env {
-                        if let Some((k, v)) = item.split_once('=') {
-                            env_map.insert(k.to_string(), v.to_string());
-                        }
-                    }
-                    let env_opt = if env_map.is_empty() { None } else { Some(env_map) };
-                    match smoooth::build::NixpacksBuilder::build(&source, &name, env_opt).await {
-                        Ok(out) => {
-                            for line in &out.logs {
-                                println!("{}", line);
-                            }
-                            if out.success {
-                                println!("\n✅ Build succeeded! Tagged image: {}\n", out.image_tag);
-                            } else {
-                                eprintln!("\n❌ Build failed: {}\n", out.error.unwrap_or_default());
-                                std::process::exit(1);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("\n❌ Nixpacks build execution failed: {}\n", e);
-                            std::process::exit(1);
-                        }
+                    Err(e) => {
+                        eprintln!("\n❌ Nixpacks plan failed: {}\n", e);
+                        std::process::exit(1);
                     }
                 }
             }
-        }
+            BuildCommands::Image { source, name, env } => {
+                println!(
+                    "\n🔨 Building container image '{}' from '{}' via Nixpacks...\n",
+                    name, source
+                );
+                let mut env_map = HashMap::new();
+                for item in env {
+                    if let Some((k, v)) = item.split_once('=') {
+                        env_map.insert(k.to_string(), v.to_string());
+                    }
+                }
+                let env_opt = if env_map.is_empty() {
+                    None
+                } else {
+                    Some(env_map)
+                };
+                match smoooth::build::NixpacksBuilder::build(&source, &name, env_opt).await {
+                    Ok(out) => {
+                        for line in &out.logs {
+                            println!("{}", line);
+                        }
+                        if out.success {
+                            println!("\n✅ Build succeeded! Tagged image: {}\n", out.image_tag);
+                        } else {
+                            eprintln!("\n❌ Build failed: {}\n", out.error.unwrap_or_default());
+                            std::process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("\n❌ Nixpacks build execution failed: {}\n", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
 
         Some(Commands::Migrate { command }) => {
             let orchestrator_arc = Arc::new(orchestrator);
             match command {
-                MigrateCommands::Auto { source, apply, workspace } => {
+                MigrateCommands::Auto {
+                    source,
+                    apply,
+                    workspace,
+                } => {
                     let content = read_manifest_or_dir(&source)?;
-                    let preview = smoooth::migration::MigrationEngine::preview(&content, None, &workspace)?;
+                    let preview =
+                        smoooth::migration::MigrationEngine::preview(&content, None, &workspace)?;
                     print_migration_preview(&preview);
                     if apply {
                         execute_migration_cli(&preview, &orchestrator_arc).await?;
@@ -1143,7 +1254,11 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                MigrateCommands::Compose { path, apply, workspace } => {
+                MigrateCommands::Compose {
+                    path,
+                    apply,
+                    workspace,
+                } => {
                     let content = read_manifest_or_dir(&path)?;
                     let preview = smoooth::migration::MigrationEngine::preview(
                         &content,
@@ -1158,7 +1273,12 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                MigrateCommands::Coolify { file, scan_local, apply, workspace } => {
+                MigrateCommands::Coolify {
+                    file,
+                    scan_local,
+                    apply,
+                    workspace,
+                } => {
                     let preview = if scan_local || file.is_none() {
                         smoooth::migration::MigrationEngine::preview(
                             "",
@@ -1167,8 +1287,9 @@ async fn main() -> anyhow::Result<()> {
                         )?
                     } else {
                         let path = file.unwrap();
-                        let content = std::fs::read_to_string(&path)
-                            .map_err(|e| anyhow::anyhow!("Failed to read Coolify file '{}': {}", path, e))?;
+                        let content = std::fs::read_to_string(&path).map_err(|e| {
+                            anyhow::anyhow!("Failed to read Coolify file '{}': {}", path, e)
+                        })?;
                         smoooth::migration::MigrationEngine::preview(
                             &content,
                             Some(smoooth::migration::MigrationSource::CoolifyJson),
@@ -1185,8 +1306,11 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 MigrateCommands::ScanHost { apply, workspace } => {
-                    println!("\n🔍 Inspecting running Docker host containers and Coolify stacks...");
-                    let preview = smoooth::migration::MigrationEngine::scan_host(&workspace).await?;
+                    println!(
+                        "\n🔍 Inspecting running Docker host containers and Coolify stacks..."
+                    );
+                    let preview =
+                        smoooth::migration::MigrationEngine::scan_host(&workspace).await?;
                     print_migration_preview(&preview);
                     if apply {
                         execute_migration_cli(&preview, &orchestrator_arc).await?;
@@ -1196,9 +1320,14 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                MigrateCommands::Render { file, apply, workspace } => {
-                    let content = std::fs::read_to_string(&file)
-                        .map_err(|e| anyhow::anyhow!("Failed to read Render file '{}': {}", file, e))?;
+                MigrateCommands::Render {
+                    file,
+                    apply,
+                    workspace,
+                } => {
+                    let content = std::fs::read_to_string(&file).map_err(|e| {
+                        anyhow::anyhow!("Failed to read Render file '{}': {}", file, e)
+                    })?;
                     let preview = smoooth::migration::MigrationEngine::preview(
                         &content,
                         Some(smoooth::migration::MigrationSource::RenderBlueprint),
@@ -1212,9 +1341,14 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                MigrateCommands::Fly { file, apply, workspace } => {
-                    let content = std::fs::read_to_string(&file)
-                        .map_err(|e| anyhow::anyhow!("Failed to read Fly.io file '{}': {}", file, e))?;
+                MigrateCommands::Fly {
+                    file,
+                    apply,
+                    workspace,
+                } => {
+                    let content = std::fs::read_to_string(&file).map_err(|e| {
+                        anyhow::anyhow!("Failed to read Fly.io file '{}': {}", file, e)
+                    })?;
                     let preview = smoooth::migration::MigrationEngine::preview(
                         &content,
                         Some(smoooth::migration::MigrationSource::FlyToml),
@@ -1228,20 +1362,30 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                MigrateCommands::Dokku { file, env_file, apply, workspace } => {
-                    let procfile = std::fs::read_to_string(&file)
-                        .map_err(|e| anyhow::anyhow!("Failed to read Procfile '{}': {}", file, e))?;
+                MigrateCommands::Dokku {
+                    file,
+                    env_file,
+                    apply,
+                    workspace,
+                } => {
+                    let procfile = std::fs::read_to_string(&file).map_err(|e| {
+                        anyhow::anyhow!("Failed to read Procfile '{}': {}", file, e)
+                    })?;
                     let env_content = env_file.and_then(|ef| std::fs::read_to_string(ef).ok());
-                    let (workloads, canonical_spec, ingress) = smoooth::migration::ForeignParser::parse_dokku_app(
-                        &procfile,
-                        env_content.as_deref(),
-                        None,
-                        &workspace,
-                    )?;
+                    let (workloads, canonical_spec, ingress) =
+                        smoooth::migration::ForeignParser::parse_dokku_app(
+                            &procfile,
+                            env_content.as_deref(),
+                            None,
+                            &workspace,
+                        )?;
                     let preview = smoooth::migration::MigrationPreview {
                         source_format: smoooth::migration::MigrationSource::DokkuApp,
                         workspace_id: workspace.clone(),
-                        summary: format!("Discovered {} Dokku process workload(s)", workloads.len()),
+                        summary: format!(
+                            "Discovered {} Dokku process workload(s)",
+                            workloads.len()
+                        ),
                         dependencies: Vec::new(),
                         ingress_routes: ingress,
                         estimated_monthly_cost_usd: (workloads.len() as f64) * 8.0,
@@ -1278,20 +1422,26 @@ fn read_manifest_or_dir(path_str: &str) -> anyhow::Result<String> {
         let c4 = p.join("fly.toml");
         let c5 = p.join("Procfile");
         if c1.exists() {
-            std::fs::read_to_string(&c1).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c1, e))
+            std::fs::read_to_string(&c1)
+                .map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c1, e))
         } else if c2.exists() {
-            std::fs::read_to_string(&c2).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c2, e))
+            std::fs::read_to_string(&c2)
+                .map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c2, e))
         } else if c3.exists() {
-            std::fs::read_to_string(&c3).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c3, e))
+            std::fs::read_to_string(&c3)
+                .map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c3, e))
         } else if c4.exists() {
-            std::fs::read_to_string(&c4).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c4, e))
+            std::fs::read_to_string(&c4)
+                .map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c4, e))
         } else if c5.exists() {
-            std::fs::read_to_string(&c5).map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c5, e))
+            std::fs::read_to_string(&c5)
+                .map_err(|e| anyhow::anyhow!("Failed to read {:?}: {}", c5, e))
         } else {
             anyhow::bail!("No supported configuration file (docker-compose.yml, render.yaml, fly.toml, Procfile) found in directory '{}'", path_str);
         }
     } else {
-        std::fs::read_to_string(p).map_err(|e| anyhow::anyhow!("Failed to read manifest file '{}': {}", path_str, e))
+        std::fs::read_to_string(p)
+            .map_err(|e| anyhow::anyhow!("Failed to read manifest file '{}': {}", path_str, e))
     }
 }
 
@@ -1300,19 +1450,31 @@ fn print_migration_preview(preview: &smoooth::migration::MigrationPreview) {
     println!("Source Platform    : {}", preview.source_format);
     println!("Target Workspace   : {}", preview.workspace_id);
     println!("Workloads Found    : {}", preview.workloads.len());
-    println!("Risk Tier / Budget : {:?} / ~${:.2}/mo", preview.risk_tier, preview.estimated_monthly_cost_usd);
+    println!(
+        "Risk Tier / Budget : {:?} / ~${:.2}/mo",
+        preview.risk_tier, preview.estimated_monthly_cost_usd
+    );
     println!("Summary            : {}\n", preview.summary);
 
-    println!("{:<24} {:<12} {:<12} {:<26} {:<12}", "WORKLOAD", "TYPE", "PROVIDER", "IMAGE", "PERSISTENT");
-    println!("{:-<24} {:-<12} {:-<12} {:-<26} {:-<12}", "", "", "", "", "");
+    println!(
+        "{:<24} {:<12} {:<12} {:<26} {:<12}",
+        "WORKLOAD", "TYPE", "PROVIDER", "IMAGE", "PERSISTENT"
+    );
+    println!(
+        "{:-<24} {:-<12} {:-<12} {:-<26} {:-<12}",
+        "", "", "", "", ""
+    );
     for w in &preview.workloads {
         let img_display = if w.image.len() > 25 {
             format!("{}...", &w.image[..22])
         } else {
             w.image.clone()
         };
-        println!("{:<24} {:<12} {:<12} {:<26} {:<12}",
-            w.name, w.service_type, w.provider,
+        println!(
+            "{:<24} {:<12} {:<12} {:<26} {:<12}",
+            w.name,
+            w.service_type,
+            w.provider,
             img_display,
             if w.is_persistent { "YES (GUARD)" } else { "NO" }
         );
@@ -1320,11 +1482,26 @@ fn print_migration_preview(preview: &smoooth::migration::MigrationPreview) {
             println!("  ↳ Ingress Domain : {}", w.domains.join(", "));
         }
         if !w.ports.is_empty() {
-            let port_strs: Vec<String> = w.ports.iter().map(|p| format!("{}->{}/{}", p.host_port.unwrap_or(p.container_port), p.container_port, p.protocol)).collect();
+            let port_strs: Vec<String> = w
+                .ports
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{}->{}/{}",
+                        p.host_port.unwrap_or(p.container_port),
+                        p.container_port,
+                        p.protocol
+                    )
+                })
+                .collect();
             println!("  ↳ Port Mappings  : {}", port_strs.join(", "));
         }
         if !w.volumes.is_empty() {
-            let vol_strs: Vec<String> = w.volumes.iter().map(|v| format!("{}:{}", v.source, v.target)).collect();
+            let vol_strs: Vec<String> = w
+                .volumes
+                .iter()
+                .map(|v| format!("{}:{}", v.source, v.target))
+                .collect();
             println!("  ↳ Volume Mounts  : {}", vol_strs.join(", "));
         }
         if !w.depends_on.is_empty() {
@@ -1356,7 +1533,10 @@ async fn execute_migration_cli(
                 println!("  • Active Ingress Routes: {:?}", res.ingress_routes_added);
             }
             println!("\n  All workloads are now fully managed under Smoooth.");
-            println!("  Check status anytime with: `smoooth status --workspace {}`", preview.workspace_id);
+            println!(
+                "  Check status anytime with: `smoooth status --workspace {}`",
+                preview.workspace_id
+            );
             println!("============================================================\n");
             Ok(())
         }
@@ -1368,6 +1548,8 @@ async fn execute_migration_cli(
 }
 
 fn print_apply_hint(subcmd: &str, target: &str) {
-    println!("💡 Dry-run preview generated successfully. To provision these workloads in 1 click, run:");
+    println!(
+        "💡 Dry-run preview generated successfully. To provision these workloads in 1 click, run:"
+    );
     println!("   smoooth migrate {} \"{}\" --apply\n", subcmd, target);
 }

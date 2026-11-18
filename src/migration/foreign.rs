@@ -3,7 +3,9 @@ use std::collections::HashMap;
 
 use super::types::{DetectedWorkload, IngressRoutePreview, PortMapping, VolumeMapping};
 use crate::error::SmooothError;
-use crate::models::{CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints};
+use crate::models::{
+    CanonicalActionSpec, CanonicalExecutionSpec, DependencyEdge, PolicyConstraints,
+};
 
 pub struct ForeignParser;
 
@@ -12,9 +14,17 @@ impl ForeignParser {
     pub fn parse_render_blueprint(
         yaml_content: &str,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
-        let root: serde_yaml::Value = serde_yaml::from_str(yaml_content)
-            .map_err(|e| SmooothError::Validation(format!("Invalid Render Blueprint YAML: {}", e)))?;
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
+        let root: serde_yaml::Value = serde_yaml::from_str(yaml_content).map_err(|e| {
+            SmooothError::Validation(format!("Invalid Render Blueprint YAML: {}", e))
+        })?;
 
         let mut workloads = Vec::new();
         let mut canonical_actions = Vec::new();
@@ -96,10 +106,7 @@ impl ForeignParser {
                     .to_lowercase()
                     .replace(' ', "-");
 
-                let svc_type = svc
-                    .get("type")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("web");
+                let svc_type = svc.get("type").and_then(|t| t.as_str()).unwrap_or("web");
 
                 let is_web = svc_type == "web";
 
@@ -113,7 +120,8 @@ impl ForeignParser {
                             if let Some(v) = e.get("value").and_then(|v| v.as_str()) {
                                 env_vars.insert(k.to_string(), v.to_string());
                             } else if let Some(from_db) = e.get("fromDatabase") {
-                                if let Some(db_name) = from_db.get("name").and_then(|d| d.as_str()) {
+                                if let Some(db_name) = from_db.get("name").and_then(|d| d.as_str())
+                                {
                                     let clean_db = db_name.to_lowercase().replace(' ', "-");
                                     service_deps.push(clean_db.clone());
                                     dependencies.push(DependencyEdge {
@@ -145,7 +153,11 @@ impl ForeignParser {
                 canonical_actions.push(CanonicalActionSpec {
                     resource_name: name.clone(),
                     provider: "docker".to_string(),
-                    service_type: if is_web { "compute".to_string() } else { "worker".to_string() },
+                    service_type: if is_web {
+                        "compute".to_string()
+                    } else {
+                        "worker".to_string()
+                    },
                     action_type: "create".to_string(),
                     config: action_config,
                     is_persistent: false,
@@ -154,7 +166,11 @@ impl ForeignParser {
 
                 workloads.push(DetectedWorkload {
                     name,
-                    service_type: if is_web { "compute".to_string() } else { "worker".to_string() },
+                    service_type: if is_web {
+                        "compute".to_string()
+                    } else {
+                        "worker".to_string()
+                    },
                     provider: "docker".to_string(),
                     image: effective_image,
                     build_source: Some(".".to_string()),
@@ -172,13 +188,18 @@ impl ForeignParser {
                     domains: Vec::new(),
                     is_persistent: false,
                     depends_on: service_deps,
-                    notes: vec![format!("Render {} service converted to zero-Dockerfile Nixpacks build.", svc_type)],
+                    notes: vec![format!(
+                        "Render {} service converted to zero-Dockerfile Nixpacks build.",
+                        svc_type
+                    )],
                 });
             }
         }
 
         if workloads.is_empty() {
-            return Err(SmooothError::Validation("No services found in render.yaml".to_string()));
+            return Err(SmooothError::Validation(
+                "No services found in render.yaml".to_string(),
+            ));
         }
 
         let canonical_spec = CanonicalExecutionSpec {
@@ -203,7 +224,14 @@ impl ForeignParser {
     pub fn parse_fly_toml(
         toml_content: &str,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let root: toml::Value = toml::from_str(toml_content)
             .map_err(|e| SmooothError::Validation(format!("Invalid Fly.io fly.toml: {}", e)))?;
 
@@ -265,7 +293,10 @@ impl ForeignParser {
         }];
 
         let mut ports_map = serde_json::Map::new();
-        ports_map.insert(format!("{}/tcp", internal_port), serde_json::json!(internal_port));
+        ports_map.insert(
+            format!("{}/tcp", internal_port),
+            serde_json::json!(internal_port),
+        );
 
         let action_config = serde_json::json!({
             "image": effective_image,
@@ -301,7 +332,10 @@ impl ForeignParser {
             domains: vec![fly_domain],
             is_persistent: false,
             depends_on: Vec::new(),
-            notes: vec!["Migrated from Fly.io fly.toml definition with automatic HTTPS ingress route.".to_string()],
+            notes: vec![
+                "Migrated from Fly.io fly.toml definition with automatic HTTPS ingress route."
+                    .to_string(),
+            ],
         };
 
         let canonical_spec = CanonicalExecutionSpec {
@@ -328,7 +362,14 @@ impl ForeignParser {
         env_content: Option<&str>,
         app_name_hint: Option<&str>,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let app_name = app_name_hint
             .unwrap_or("dokku-app")
             .to_lowercase()
@@ -342,7 +383,10 @@ impl ForeignParser {
                     continue;
                 }
                 if let Some((k, v)) = trimmed.split_once('=') {
-                    env_vars.insert(k.trim().to_string(), v.trim().trim_matches('"').trim_matches('\'').to_string());
+                    env_vars.insert(
+                        k.trim().to_string(),
+                        v.trim().trim_matches('"').trim_matches('\'').to_string(),
+                    );
                 }
             }
         }
@@ -385,7 +429,11 @@ impl ForeignParser {
                 canonical_actions.push(CanonicalActionSpec {
                     resource_name: sub_name.clone(),
                     provider: "docker".to_string(),
-                    service_type: if is_web { "compute".to_string() } else { "worker".to_string() },
+                    service_type: if is_web {
+                        "compute".to_string()
+                    } else {
+                        "worker".to_string()
+                    },
                     action_type: "create".to_string(),
                     config: action_config,
                     is_persistent: false,
@@ -394,7 +442,11 @@ impl ForeignParser {
 
                 workloads.push(DetectedWorkload {
                     name: sub_name,
-                    service_type: if is_web { "compute".to_string() } else { "worker".to_string() },
+                    service_type: if is_web {
+                        "compute".to_string()
+                    } else {
+                        "worker".to_string()
+                    },
                     provider: "docker".to_string(),
                     image: effective_image,
                     build_source: Some(".".to_string()),
@@ -412,13 +464,18 @@ impl ForeignParser {
                     domains: Vec::new(),
                     is_persistent: false,
                     depends_on: Vec::new(),
-                    notes: vec![format!("Dokku Procfile '{}' process mapped to zero-Dockerfile container.", role_clean)],
+                    notes: vec![format!(
+                        "Dokku Procfile '{}' process mapped to zero-Dockerfile container.",
+                        role_clean
+                    )],
                 });
             }
         }
 
         if workloads.is_empty() {
-            return Err(SmooothError::Validation("No processes defined in Procfile".to_string()));
+            return Err(SmooothError::Validation(
+                "No processes defined in Procfile".to_string(),
+            ));
         }
 
         let canonical_spec = CanonicalExecutionSpec {
@@ -444,9 +501,17 @@ impl ForeignParser {
         json_content: &str,
         app_name_hint: Option<&str>,
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
-        let root: Value = serde_json::from_str(json_content)
-            .map_err(|e| SmooothError::Validation(format!("Invalid CapRover captain-definition JSON: {}", e)))?;
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
+        let root: Value = serde_json::from_str(json_content).map_err(|e| {
+            SmooothError::Validation(format!("Invalid CapRover captain-definition JSON: {}", e))
+        })?;
 
         let app_name = app_name_hint
             .unwrap_or("caprover-app")

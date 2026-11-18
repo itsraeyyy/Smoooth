@@ -10,12 +10,24 @@ impl DockerHostScanner {
     /// Inspect running containers via Docker CLI or daemon and generate Smoooth migration workloads
     pub async fn scan(
         workspace: &str,
-    ) -> Result<(Vec<DetectedWorkload>, CanonicalExecutionSpec, Vec<IngressRoutePreview>), SmooothError> {
+    ) -> Result<
+        (
+            Vec<DetectedWorkload>,
+            CanonicalExecutionSpec,
+            Vec<IngressRoutePreview>,
+        ),
+        SmooothError,
+    > {
         let output = tokio::process::Command::new("docker")
             .args(["ps", "-a", "--format", "{{.ID}}"])
             .output()
             .await
-            .map_err(|e| SmooothError::Adapter(format!("Failed to execute 'docker ps': {}. Ensure Docker daemon is running.", e)))?;
+            .map_err(|e| {
+                SmooothError::Adapter(format!(
+                    "Failed to execute 'docker ps': {}. Ensure Docker daemon is running.",
+                    e
+                ))
+            })?;
 
         if !output.status.success() {
             return Err(SmooothError::Adapter(format!(
@@ -25,7 +37,11 @@ impl DockerHostScanner {
         }
 
         let id_list = String::from_utf8_lossy(&output.stdout);
-        let container_ids: Vec<&str> = id_list.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        let container_ids: Vec<&str> = id_list
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
 
         if container_ids.is_empty() {
             return Err(SmooothError::Validation(
@@ -38,7 +54,9 @@ impl DockerHostScanner {
             .args(&container_ids)
             .output()
             .await
-            .map_err(|e| SmooothError::Adapter(format!("Failed to execute 'docker inspect': {}", e)))?;
+            .map_err(|e| {
+                SmooothError::Adapter(format!("Failed to execute 'docker inspect': {}", e))
+            })?;
 
         if !inspect_output.status.success() {
             return Err(SmooothError::Adapter(format!(
@@ -48,10 +66,14 @@ impl DockerHostScanner {
         }
 
         let inspect_json: serde_json::Value = serde_json::from_slice(&inspect_output.stdout)
-            .map_err(|e| SmooothError::Adapter(format!("Failed to parse Docker inspect JSON: {}", e)))?;
+            .map_err(|e| {
+                SmooothError::Adapter(format!("Failed to parse Docker inspect JSON: {}", e))
+            })?;
 
         let containers = inspect_json.as_array().ok_or_else(|| {
-            SmooothError::Adapter("Unexpected Docker inspect response format (expected array)".to_string())
+            SmooothError::Adapter(
+                "Unexpected Docker inspect response format (expected array)".to_string(),
+            )
         })?;
 
         let mut workloads = Vec::new();
@@ -60,8 +82,14 @@ impl DockerHostScanner {
         let mut ingress_routes = Vec::new();
 
         for c in containers {
-            let raw_name = c.get("Name").and_then(|n| n.as_str()).unwrap_or("container");
-            let clean_name = raw_name.trim_start_matches('/').to_lowercase().replace('_', "-");
+            let raw_name = c
+                .get("Name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("container");
+            let clean_name = raw_name
+                .trim_start_matches('/')
+                .to_lowercase()
+                .replace('_', "-");
 
             // Filter out Smoooth itself or internal helper containers
             if clean_name.starts_with("smoooth-control") || clean_name == "smoooth" {
@@ -77,7 +105,11 @@ impl DockerHostScanner {
 
             // Extract environment variables
             let mut env_vars = HashMap::new();
-            if let Some(envs) = c.get("Config").and_then(|cfg| cfg.get("Env")).and_then(|e| e.as_array()) {
+            if let Some(envs) = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Env"))
+                .and_then(|e| e.as_array())
+            {
                 for item in envs {
                     if let Some(line) = item.as_str() {
                         if let Some((k, v)) = line.split_once('=') {
@@ -89,9 +121,15 @@ impl DockerHostScanner {
 
             // Extract ports
             let mut ports = Vec::new();
-            if let Some(ports_obj) = c.get("NetworkSettings").and_then(|n| n.get("Ports")).and_then(|p| p.as_object()) {
+            if let Some(ports_obj) = c
+                .get("NetworkSettings")
+                .and_then(|n| n.get("Ports"))
+                .and_then(|p| p.as_object())
+            {
                 for (port_proto, bindings) in ports_obj {
-                    let (cp_str, proto) = port_proto.split_once('/').unwrap_or((port_proto.as_str(), "tcp"));
+                    let (cp_str, proto) = port_proto
+                        .split_once('/')
+                        .unwrap_or((port_proto.as_str(), "tcp"));
                     let cp = cp_str.parse::<u16>().unwrap_or(8080);
                     let mut host_port = None;
                     if let Some(b_arr) = bindings.as_array() {
@@ -116,7 +154,11 @@ impl DockerHostScanner {
                     let src = m.get("Source").and_then(|s| s.as_str()).unwrap_or("");
                     let dst = m.get("Destination").and_then(|d| d.as_str()).unwrap_or("");
                     let m_type = m.get("Type").and_then(|t| t.as_str()).unwrap_or("");
-                    let ro = m.get("RW").and_then(|rw| rw.as_bool()).map(|rw| !rw).unwrap_or(false);
+                    let ro = m
+                        .get("RW")
+                        .and_then(|rw| rw.as_bool())
+                        .map(|rw| !rw)
+                        .unwrap_or(false);
 
                     if !src.is_empty() && !dst.is_empty() {
                         volumes.push(VolumeMapping {
@@ -134,7 +176,11 @@ impl DockerHostScanner {
             let mut is_coolify_managed = false;
             let mut notes = Vec::new();
 
-            if let Some(labels) = c.get("Config").and_then(|cfg| cfg.get("Labels")).and_then(|l| l.as_object()) {
+            if let Some(labels) = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Labels"))
+                .and_then(|l| l.as_object())
+            {
                 for (k, v) in labels {
                     if let Some(v_str) = v.as_str() {
                         if k.starts_with("coolify") {
@@ -146,7 +192,11 @@ impl DockerHostScanner {
                             if let Some(start) = v_str.find("Host(") {
                                 let rest = &v_str[start + 5..];
                                 if let Some(end) = rest.find(')') {
-                                    let d = rest[..end].trim().trim_matches('`').trim_matches('"').trim_matches('\'');
+                                    let d = rest[..end]
+                                        .trim()
+                                        .trim_matches('`')
+                                        .trim_matches('"')
+                                        .trim_matches('\'');
                                     if !d.is_empty() && !domains.contains(&d.to_string()) {
                                         domains.push(d.to_string());
                                     }
@@ -154,7 +204,11 @@ impl DockerHostScanner {
                             }
                         } else if k == "coolify.fqdn" || k == "caddy" || k == "fqdn" {
                             for d in v_str.split(',') {
-                                let clean = d.trim().trim_start_matches("https://").trim_start_matches("http://").trim_matches('/');
+                                let clean = d
+                                    .trim()
+                                    .trim_start_matches("https://")
+                                    .trim_start_matches("http://")
+                                    .trim_matches('/');
                                 if !clean.is_empty() && !domains.contains(&clean.to_string()) {
                                     domains.push(clean.to_string());
                                 }
@@ -191,7 +245,10 @@ impl DockerHostScanner {
             let mut ports_map = serde_json::Map::new();
             for p in &ports {
                 let hp = p.host_port.unwrap_or(p.container_port);
-                ports_map.insert(format!("{}/{}", p.container_port, p.protocol), serde_json::json!(hp));
+                ports_map.insert(
+                    format!("{}/{}", p.container_port, p.protocol),
+                    serde_json::json!(hp),
+                );
             }
 
             let action_config = serde_json::json!({
@@ -251,13 +308,23 @@ impl DockerHostScanner {
         let img_lower = image.to_lowercase();
         let name_lower = name.to_lowercase();
 
-        if img_lower.contains("postgres") || name_lower.contains("postgres") || name_lower.contains("psql") {
+        if img_lower.contains("postgres")
+            || name_lower.contains("postgres")
+            || name_lower.contains("psql")
+        {
             ("postgres".to_string(), "database".to_string(), true)
-        } else if img_lower.contains("redis") || name_lower.contains("redis") || img_lower.contains("dragonfly") || img_lower.contains("keydb") {
+        } else if img_lower.contains("redis")
+            || name_lower.contains("redis")
+            || img_lower.contains("dragonfly")
+            || img_lower.contains("keydb")
+        {
             ("redis".to_string(), "cache".to_string(), true)
         } else if img_lower.contains("mongo") || name_lower.contains("mongo") {
             ("mongo".to_string(), "database".to_string(), true)
-        } else if img_lower.contains("mysql") || img_lower.contains("mariadb") || name_lower.contains("mysql") {
+        } else if img_lower.contains("mysql")
+            || img_lower.contains("mariadb")
+            || name_lower.contains("mysql")
+        {
             ("docker".to_string(), "database".to_string(), true)
         } else if name_lower.contains("worker") || img_lower.contains("worker") {
             ("docker".to_string(), "worker".to_string(), false)

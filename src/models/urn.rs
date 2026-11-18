@@ -1,6 +1,6 @@
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{Result, SmooothError};
 
@@ -257,6 +257,29 @@ impl ResourceUrn {
         })
     }
 
+    /// Construct a valid ResourceUrn from workspace, service_type, and resource name
+    pub fn for_resource(workspace: &str, service_type: &str, resource_id: &str) -> Result<Self> {
+        let clean_ws = if workspace.is_empty() {
+            "default"
+        } else {
+            workspace
+        };
+        let seg_type = match service_type.to_lowercase().as_str() {
+            "database" | "postgres" | "db" => "databases",
+            "network" => "networks",
+            "volume" | "storage" => "volumes",
+            "secret" => "secrets",
+            "ingress" => "ingresses",
+            _ => "workloads",
+        };
+        let clean_id = resource_id.trim().to_lowercase().replace(' ', "-");
+        let urn_str = format!(
+            "smoooth://workspaces/{}/{}/{}",
+            clean_ws, seg_type, clean_id
+        );
+        Self::parse(&urn_str)
+    }
+
     /// Construct a new child URN by appending a valid segment.
     /// Rejects nonsensical hierarchies.
     pub fn child(&self, segment: UrnSegment) -> Result<Self> {
@@ -339,7 +362,9 @@ fn validate_workspace_identifier(ws: &str) -> Result<()> {
             "Workspace identifier cannot start or end with a hyphen".into(),
         ));
     }
-    let valid = ws.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let valid = ws
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if !valid {
         return Err(SmooothError::InvalidResourceUrn(format!(
             "Workspace identifier '{ws}' must be strictly lowercase alphanumeric and hyphens"
@@ -472,20 +497,23 @@ mod tests {
     #[test]
     fn test_invalid_workspace_identifiers_rejected() {
         let invalid_workspaces = vec![
-            "smoooth://workspaces/Prod",              // uppercase forbidden in workspace
-            "smoooth://workspaces/-prod",             // leading hyphen
-            "smoooth://workspaces/prod-",             // trailing hyphen
-            "smoooth://workspaces/prod_test",         // underscore forbidden in workspace
-            "smoooth://workspaces/prod..staging",     // path traversal
-            "smoooth://workspaces/prod/sub",          // slash without segment type
-            "smoooth://workspaces/",                  // empty workspace
-            "smoooth://workspaces/prod space",        // spaces
-            "smoooth://workspaces/prod:test",         // colons
+            "smoooth://workspaces/Prod",          // uppercase forbidden in workspace
+            "smoooth://workspaces/-prod",         // leading hyphen
+            "smoooth://workspaces/prod-",         // trailing hyphen
+            "smoooth://workspaces/prod_test",     // underscore forbidden in workspace
+            "smoooth://workspaces/prod..staging", // path traversal
+            "smoooth://workspaces/prod/sub",      // slash without segment type
+            "smoooth://workspaces/",              // empty workspace
+            "smoooth://workspaces/prod space",    // spaces
+            "smoooth://workspaces/prod:test",     // colons
         ];
 
         for case in invalid_workspaces {
             let res = ResourceUrn::parse(case);
-            assert!(res.is_err(), "Expected failure for invalid workspace: {case}");
+            assert!(
+                res.is_err(),
+                "Expected failure for invalid workspace: {case}"
+            );
         }
     }
 
@@ -503,7 +531,10 @@ mod tests {
 
         for case in invalid_ids {
             let res = ResourceUrn::parse(case);
-            assert!(res.is_err(), "Expected failure for invalid resource ID: {case}");
+            assert!(
+                res.is_err(),
+                "Expected failure for invalid resource ID: {case}"
+            );
         }
     }
 
@@ -538,7 +569,10 @@ mod tests {
             let res = ResourceUrn::parse(case);
             assert!(res.is_err(), "Expected hierarchy rejection for: {case}");
             if let Err(SmooothError::InvalidResourceUrn(msg)) = res {
-                assert!(msg.contains("Hierarchy violation"), "Message should mention hierarchy violation: {msg}");
+                assert!(
+                    msg.contains("Hierarchy violation"),
+                    "Message should mention hierarchy violation: {msg}"
+                );
             } else {
                 panic!("Expected InvalidResourceUrn error variant");
             }
@@ -567,11 +601,18 @@ mod tests {
     fn test_hierarchical_containment_encompasses() {
         let ws_root = ResourceUrn::parse("smoooth://workspaces/production").unwrap();
         let staging_root = ResourceUrn::parse("smoooth://workspaces/staging").unwrap();
-        let workload_web = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
-        let workload_web_prefix = ResourceUrn::parse("smoooth://workspaces/production/workloads/web").unwrap();
-        let workload_logs = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/logs/stdout").unwrap();
-        let workload_secret = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/secrets/jwt").unwrap();
-        let db_prod = ResourceUrn::parse("smoooth://workspaces/production/databases/postgres").unwrap();
+        let workload_web =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+        let workload_web_prefix =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web").unwrap();
+        let workload_logs =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/logs/stdout")
+                .unwrap();
+        let workload_secret =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/secrets/jwt")
+                .unwrap();
+        let db_prod =
+            ResourceUrn::parse("smoooth://workspaces/production/databases/postgres").unwrap();
 
         // 1. Workspace root encompasses child workloads and databases in same workspace
         assert!(ws_root.encompasses(&workload_web));
@@ -602,10 +643,16 @@ mod tests {
     fn test_child_builder_respects_hierarchy() {
         let ws = ResourceUrn::new_workspace("production").unwrap();
         let wl = ws.child(UrnSegment::Workload("web-api".into())).unwrap();
-        assert_eq!(wl.to_canonical_string(), "smoooth://workspaces/production/workloads/web-api");
+        assert_eq!(
+            wl.to_canonical_string(),
+            "smoooth://workspaces/production/workloads/web-api"
+        );
 
         let logs = wl.child(UrnSegment::Logs("stdout".into())).unwrap();
-        assert_eq!(logs.to_canonical_string(), "smoooth://workspaces/production/workloads/web-api/logs/stdout");
+        assert_eq!(
+            logs.to_canonical_string(),
+            "smoooth://workspaces/production/workloads/web-api/logs/stdout"
+        );
 
         // Attempting to add child to leaf logs must fail
         let invalid_child = logs.child(UrnSegment::Snapshot("snap".into()));

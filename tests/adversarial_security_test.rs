@@ -103,12 +103,7 @@ async fn test_read_only_agent_rejected_on_plan_creation_execution_and_deletion()
 
     // Pair a read_only agent
     let (identity, _raw_token) = orchestrator
-        .pair_agent(
-            "reader-agent",
-            "ws-test",
-            vec![AgentScope::ReadOnly],
-            None,
-        )
+        .pair_agent("reader-agent", "ws-test", vec![AgentScope::ReadOnly], None)
         .await
         .unwrap();
 
@@ -120,14 +115,14 @@ async fn test_read_only_agent_rejected_on_plan_creation_execution_and_deletion()
     // 1. Attempt create_plan -> MUST FAIL
     let spec = build_dummy_plan_spec("ws-test", false);
     let create_res = mcp
-        .dispatch_tool_with_caller(
-            "create_plan",
-            serde_json::json!({ "spec": spec }),
-            &caller,
-        )
+        .dispatch_tool_with_caller("create_plan", serde_json::json!({ "spec": spec }), &caller)
         .await;
     assert!(create_res.is_err(), "ReadOnly agent must NOT create plans");
-    assert!(create_res.err().unwrap().to_string().contains("Scope policy violation"));
+    assert!(create_res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("Scope policy violation"));
 
     // 2. Attempt execute_plan -> MUST FAIL
     let exec_res = mcp
@@ -147,15 +142,14 @@ async fn test_read_only_agent_rejected_on_plan_creation_execution_and_deletion()
             &caller,
         )
         .await;
-    assert!(rec_res.is_err(), "ReadOnly agent must NOT reconcile resources");
+    assert!(
+        rec_res.is_err(),
+        "ReadOnly agent must NOT reconcile resources"
+    );
 
     // 4. Allowed read-only operations
     let list_res = mcp
-        .dispatch_tool_with_caller(
-            "list_capabilities",
-            serde_json::json!({}),
-            &caller,
-        )
+        .dispatch_tool_with_caller("list_capabilities", serde_json::json!({}), &caller)
         .await;
     assert!(list_res.is_ok(), "ReadOnly agent must inspect capabilities");
 }
@@ -184,13 +178,12 @@ async fn test_plan_agent_rejected_on_execution() {
     // 1. create_plan MUST SUCCEED
     let spec = build_dummy_plan_spec("ws-test", false);
     let create_res = mcp
-        .dispatch_tool_with_caller(
-            "create_plan",
-            serde_json::json!({ "spec": spec }),
-            &caller,
-        )
+        .dispatch_tool_with_caller("create_plan", serde_json::json!({ "spec": spec }), &caller)
         .await;
-    assert!(create_res.is_ok(), "Plan agent should succeed creating plan");
+    assert!(
+        create_res.is_ok(),
+        "Plan agent should succeed creating plan"
+    );
     let plan_id = create_res.unwrap()["plan_id"].as_str().unwrap().to_string();
 
     // 2. execute_plan MUST FAIL (Requires Deploy scope)
@@ -202,7 +195,11 @@ async fn test_plan_agent_rejected_on_execution() {
         )
         .await;
     assert!(exec_res.is_err(), "Plan agent must NOT execute plans");
-    assert!(exec_res.err().unwrap().to_string().contains("Scope policy violation"));
+    assert!(exec_res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("Scope policy violation"));
 }
 
 #[tokio::test]
@@ -234,8 +231,15 @@ async fn test_deploy_agent_rejected_on_destructive_deletion_and_cross_workspace(
             &caller,
         )
         .await;
-    assert!(cross_ws_res.is_err(), "Agent bound to ws-alpha must NOT access ws-beta");
-    assert!(cross_ws_res.err().unwrap().to_string().contains("Cross-workspace boundary violation"));
+    assert!(
+        cross_ws_res.is_err(),
+        "Agent bound to ws-alpha must NOT access ws-beta"
+    );
+    assert!(cross_ws_res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("Cross-workspace boundary violation"));
 
     // 2. Create a plan with a DESTRUCTIVE delete action
     let delete_spec = build_dummy_plan_spec("ws-alpha", true);
@@ -257,8 +261,15 @@ async fn test_deploy_agent_rejected_on_destructive_deletion_and_cross_workspace(
             &caller,
         )
         .await;
-    assert!(exec_res.is_err(), "Agent without 'destructive' scope must NOT execute deletion plans");
-    assert!(exec_res.err().unwrap().to_string().contains("requires 'destructive' scope"));
+    assert!(
+        exec_res.is_err(),
+        "Agent without 'destructive' scope must NOT execute deletion plans"
+    );
+    assert!(exec_res
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("requires 'destructive' scope"));
 }
 
 #[tokio::test]
@@ -292,7 +303,8 @@ async fn test_revoked_token_rejected_on_both_mcp_and_rest() {
     orchestrator.revoke_agent(&identity.agent_id).await.unwrap();
 
     // Attempt REST access with revoked token -> MUST RETURN 401
-    let (status_revoked, _) = raw_http_call(addr, "GET", "/api/status", Some(&raw_token), None).await;
+    let (status_revoked, _) =
+        raw_http_call(addr, "GET", "/api/status", Some(&raw_token), None).await;
     assert_eq!(status_revoked, 401);
 
     // Attempt MCP access with revoked token -> MUST RETURN 401
@@ -300,8 +312,10 @@ async fn test_revoked_token_rejected_on_both_mcp_and_rest() {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/list"
-    })).unwrap();
-    let (status_mcp, _) = raw_http_call(addr, "POST", "/mcp", Some(&raw_token), Some(&mcp_body)).await;
+    }))
+    .unwrap();
+    let (status_mcp, _) =
+        raw_http_call(addr, "POST", "/mcp", Some(&raw_token), Some(&mcp_body)).await;
     assert_eq!(status_mcp, 401);
 }
 
@@ -329,8 +343,7 @@ async fn test_unauthorized_requests_rejected_across_all_protected_endpoints() {
     for (method, path) in protected_paths {
         let (status, _) = raw_http_call(addr, method, path, None, None).await;
         assert_eq!(
-            status,
-            401,
+            status, 401,
             "Endpoint {} must reject unauthenticated requests",
             path
         );
@@ -341,8 +354,7 @@ async fn test_unauthorized_requests_rejected_across_all_protected_endpoints() {
     for path in public_paths {
         let (status, _) = raw_http_call(addr, "GET", path, None, None).await;
         assert_eq!(
-            status,
-            200,
+            status, 200,
             "Public endpoint {} must be reachable without auth",
             path
         );
@@ -366,7 +378,8 @@ async fn test_zero_secret_leakage_in_api_responses_and_audits() {
         "name": "audit-test-agent",
         "workspace_id": "default",
         "scopes": "read_only"
-    })).unwrap();
+    }))
+    .unwrap();
 
     let (status, pair_resp) = raw_http_call(
         addr,
@@ -374,7 +387,8 @@ async fn test_zero_secret_leakage_in_api_responses_and_audits() {
         "/api/agents/pair",
         Some("master_secret_123"),
         Some(&pair_body),
-    ).await;
+    )
+    .await;
     assert_eq!(status, 200);
 
     let pair_json: serde_json::Value = serde_json::from_str(&pair_resp).unwrap();
@@ -387,30 +401,32 @@ async fn test_zero_secret_leakage_in_api_responses_and_audits() {
     assert!(pair_json["agent"].get("token_hash").is_none());
 
     // 1. Inspect GET /api/agents -> MUST NOT contain raw_token OR token_hash
-    let (list_status, list_body) = raw_http_call(
-        addr,
-        "GET",
-        "/api/agents",
-        Some("master_secret_123"),
-        None,
-    ).await;
+    let (list_status, list_body) =
+        raw_http_call(addr, "GET", "/api/agents", Some("master_secret_123"), None).await;
     assert_eq!(list_status, 200);
 
-    assert!(!list_body.contains(&raw_token), "Raw token must NEVER appear in agent listing");
-    assert!(!list_body.contains("token_hash"), "token_hash must NEVER appear in agent listing API response");
+    assert!(
+        !list_body.contains(&raw_token),
+        "Raw token must NEVER appear in agent listing"
+    );
+    assert!(
+        !list_body.contains("token_hash"),
+        "token_hash must NEVER appear in agent listing API response"
+    );
 
     // 2. Inspect GET /api/audit -> MUST NOT contain raw_token OR token_hash
-    let (audit_status, audit_body) = raw_http_call(
-        addr,
-        "GET",
-        "/api/audit",
-        Some("master_secret_123"),
-        None,
-    ).await;
+    let (audit_status, audit_body) =
+        raw_http_call(addr, "GET", "/api/audit", Some("master_secret_123"), None).await;
     assert_eq!(audit_status, 200);
 
-    assert!(!audit_body.contains(&raw_token), "Raw token must NEVER appear in audit events");
-    assert!(!audit_body.contains("token_hash"), "token_hash must NEVER appear in audit events");
+    assert!(
+        !audit_body.contains(&raw_token),
+        "Raw token must NEVER appear in audit events"
+    );
+    assert!(
+        !audit_body.contains("token_hash"),
+        "token_hash must NEVER appear in audit events"
+    );
 }
 
 #[tokio::test]
@@ -524,7 +540,10 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 403, "Cross-workspace env inspection must be forbidden");
+    assert_eq!(
+        status, 403,
+        "Cross-workspace env inspection must be forbidden"
+    );
     assert!(body.contains("workspace 'workspace-beta'"));
 
     // Test 3a: Authorized deployer inspects env in their own workspace -> sensitive credentials are masked by default!
@@ -537,8 +556,14 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
     )
     .await;
     assert_eq!(status, 200);
-    assert!(body.contains("[REDACTED]"), "Default inspection must mask sensitive credentials");
-    assert!(!body.contains("secret@"), "Plaintext password must NEVER appear in unrevealed response");
+    assert!(
+        body.contains("[REDACTED]"),
+        "Default inspection must mask sensitive credentials"
+    );
+    assert!(
+        !body.contains("secret@"),
+        "Plaintext password must NEVER appear in unrevealed response"
+    );
 
     // Test 3b: Deployer without Admin scope cannot reveal plaintext secrets
     let (status, body) = raw_http_call(
@@ -549,7 +574,10 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 403, "Deployer without Admin scope cannot reveal plaintext secrets");
+    assert_eq!(
+        status, 403,
+        "Deployer without Admin scope cannot reveal plaintext secrets"
+    );
     assert!(body.contains("Admin privileges or operator access required"));
 
     // Test 3c: Master operator token CAN reveal plaintext secrets
@@ -562,7 +590,10 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
     )
     .await;
     assert_eq!(status, 200);
-    assert!(body.contains("postgres://alpha:secret@localhost:5432/alphadb"), "Authorized reveal must return plaintext");
+    assert!(
+        body.contains("postgres://alpha:secret@localhost:5432/alphadb"),
+        "Authorized reveal must return plaintext"
+    );
 
     // Test 4: Cross-workspace status query: agent-alpha cannot query workspace-beta
     let (status, body) = raw_http_call(
@@ -573,18 +604,14 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 403, "Cross-workspace status queries must be forbidden");
+    assert_eq!(
+        status, 403,
+        "Cross-workspace status queries must be forbidden"
+    );
     assert!(body.contains("Bound workspace: 'workspace-alpha'"));
 
     // Test 5: Status query defaulting to bound workspace
-    let (status, body) = raw_http_call(
-        addr,
-        "GET",
-        "/api/status",
-        Some(&raw_ro_token),
-        None,
-    )
-    .await;
+    let (status, body) = raw_http_call(addr, "GET", "/api/status", Some(&raw_ro_token), None).await;
     assert_eq!(status, 200);
     let status_json: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(status_json["workspace"], "workspace-alpha");
@@ -599,18 +626,15 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 403, "Deployer without Destructive scope cannot delete workload");
+    assert_eq!(
+        status, 403,
+        "Deployer without Destructive scope cannot delete workload"
+    );
     assert!(body.contains("Destructive scope required"));
 
     // Test 7: Non-admin agent cannot list agents
-    let (status, body) = raw_http_call(
-        addr,
-        "GET",
-        "/api/agents",
-        Some(&raw_deploy_token),
-        None,
-    )
-    .await;
+    let (status, body) =
+        raw_http_call(addr, "GET", "/api/agents", Some(&raw_deploy_token), None).await;
     assert_eq!(status, 403, "Non-admin agent cannot list platform agents");
     assert!(body.contains("Admin privileges required"));
 
@@ -623,7 +647,10 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 200, "Destructive agent can delete workload in own workspace");
+    assert_eq!(
+        status, 200,
+        "Destructive agent can delete workload in own workspace"
+    );
 
     // Test 9: Cross-workspace audit log query rejected
     let (status, body) = raw_http_call(
@@ -634,6 +661,224 @@ async fn test_adversarial_workspace_isolation_and_env_secrets() {
         None,
     )
     .await;
-    assert_eq!(status, 403, "Cross-workspace audit inspection must be forbidden");
+    assert_eq!(
+        status, 403,
+        "Cross-workspace audit inspection must be forbidden"
+    );
     assert!(body.contains("workspace 'workspace-beta'"));
+}
+
+#[tokio::test]
+async fn test_agent_deploy_to_production_returns_202_awaiting_approval() {
+    let storage = Arc::new(LocalStorage::new_in_memory());
+    let orchestrator = Arc::new(Orchestrator::new(storage.clone()));
+    let master_token = "operator_secret_master_99".to_string();
+    let (app, _) = build_app(orchestrator.clone(), master_token.clone());
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    // Pair an agent with Deploy scope
+    let (identity, agent_token) = orchestrator
+        .pair_agent(
+            "prod-agent",
+            "default",
+            vec![AgentScope::Deploy, AgentScope::Plan, AgentScope::ReadOnly],
+            None,
+        )
+        .await
+        .unwrap();
+
+    let deploy_payload = serde_json::to_string(&serde_json::json!({
+        "name": "critical-api",
+        "image": "my-org/critical-api:v1.0.0",
+        "port": 8080,
+        "env_vars": {
+            "ENVIRONMENT": "production"
+        }
+    }))
+    .unwrap();
+
+    // Agent attempts to deploy to production -> MUST RETURN 202 Accepted (awaiting_approval)
+    let (status, body) = raw_http_call(
+        addr,
+        "POST",
+        "/api/workloads/deploy",
+        Some(&agent_token),
+        Some(&deploy_payload),
+    )
+    .await;
+
+    assert_eq!(
+        status, 202,
+        "Agent deployment to production MUST return 202 Accepted awaiting approval, got: {}",
+        status
+    );
+    let resp_json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(resp_json["status"], "awaiting_approval");
+    let expected_creator = format!("agent:{}", identity.agent_id);
+    assert_eq!(resp_json["created_by"], expected_creator);
+
+    // Verify plan is stored and NOT approved yet
+    let plan_id = resp_json["plan_id"].as_str().unwrap();
+    let stored_plan = orchestrator
+        .get_plan(plan_id)
+        .await
+        .unwrap()
+        .expect("Plan must exist");
+    assert!(
+        !stored_plan.is_approval_valid(),
+        "Plan must NOT be approved upon initial agent creation"
+    );
+    assert_eq!(stored_plan.created_by, expected_creator);
+}
+
+#[tokio::test]
+async fn test_agent_self_approval_rejected_in_mcp() {
+    let storage = Arc::new(LocalStorage::new_in_memory());
+    let orchestrator = Arc::new(Orchestrator::new(storage.clone()));
+    let mcp = McpServer::new(orchestrator.clone());
+
+    // Pair an agent with Admin scope to test that even an Admin-scoped agent cannot self-approve
+    let (identity, _raw_token) = orchestrator
+        .pair_agent(
+            "autonomous-builder",
+            "ws-safe",
+            vec![
+                AgentScope::Admin,
+                AgentScope::Deploy,
+                AgentScope::Plan,
+                AgentScope::ReadOnly,
+            ],
+            None,
+        )
+        .await
+        .unwrap();
+
+    let caller = CallerContext {
+        is_operator: false,
+        identity: Some(identity.clone()),
+    };
+
+    // 1. Agent creates a plan
+    let spec = build_dummy_plan_spec("ws-safe", false);
+    let create_res = mcp
+        .dispatch_tool_with_caller("create_plan", serde_json::json!({ "spec": spec }), &caller)
+        .await
+        .unwrap();
+    let plan_id = create_res["plan_id"].as_str().unwrap().to_string();
+    let plan_hash = create_res["plan_hash"].as_str().unwrap().to_string();
+
+    // 2. The SAME agent attempts to approve its own plan -> MUST BE REJECTED!
+    let approve_res = mcp
+        .dispatch_tool_with_caller(
+            "approve_plan",
+            serde_json::json!({ "plan_id": plan_id, "plan_hash": plan_hash }),
+            &caller,
+        )
+        .await;
+
+    assert!(
+        approve_res.is_err(),
+        "Agent self-approval MUST be rejected with a policy violation error"
+    );
+    let err_msg = approve_res.err().unwrap().to_string();
+    assert!(
+        err_msg.contains("cannot approve its own plan"),
+        "Expected self-approval policy error, got: {}",
+        err_msg
+    );
+
+    // 3. Human operator CAN approve the plan
+    let operator_caller = CallerContext {
+        is_operator: true,
+        identity: None,
+    };
+    let op_approve_res = mcp
+        .dispatch_tool_with_caller(
+            "approve_plan",
+            serde_json::json!({ "plan_id": plan_id, "plan_hash": plan_hash }),
+            &operator_caller,
+        )
+        .await;
+    assert!(
+        op_approve_res.is_ok(),
+        "Human operator must be permitted to approve pending plans"
+    );
+}
+
+#[tokio::test]
+async fn test_workload_spec_enforces_container_isolation_and_rejects_host_escapes() {
+    use smoooth::models::workload::{WorkloadResourceLimits, WorkloadSpec, WorkloadVolumeMount};
+    use std::collections::HashMap;
+
+    // 1. Host path bind mount rejection
+    let bad_mount_spec = WorkloadSpec {
+        name: "malicious-app".to_string(),
+        image: "alpine:latest".to_string(),
+        digest: None,
+        cmd: None,
+        env: HashMap::new(),
+        ports: vec![],
+        volumes: vec![WorkloadVolumeMount {
+            volume_name: "/var/run/docker.sock".to_string(),
+            container_path: "/var/run/docker.sock".to_string(),
+            read_only: false,
+        }],
+        network: None,
+        restart_policy: "unless-stopped".to_string(),
+        limits: WorkloadResourceLimits::default(),
+        health_check: None,
+    };
+    assert!(
+        bad_mount_spec.validate().is_err(),
+        "WorkloadSpec must reject host path bind mount"
+    );
+
+    // 2. Protected system path rejection
+    let bad_sys_mount = WorkloadSpec {
+        name: "root-escaper".to_string(),
+        image: "alpine:latest".to_string(),
+        digest: None,
+        cmd: None,
+        env: HashMap::new(),
+        ports: vec![],
+        volumes: vec![WorkloadVolumeMount {
+            volume_name: "valid_named_volume".to_string(),
+            container_path: "/proc/sys/kernel".to_string(),
+            read_only: false,
+        }],
+        network: None,
+        restart_policy: "unless-stopped".to_string(),
+        limits: WorkloadResourceLimits::default(),
+        health_check: None,
+    };
+    assert!(
+        bad_sys_mount.validate().is_err(),
+        "WorkloadSpec must reject mounting into /proc"
+    );
+
+    // 3. Dangerous environment variable rejection (LD_PRELOAD)
+    let mut dangerous_env = HashMap::new();
+    dangerous_env.insert("LD_PRELOAD".to_string(), "/lib/inject.so".to_string());
+    let bad_env_spec = WorkloadSpec {
+        name: "injector-app".to_string(),
+        image: "alpine:latest".to_string(),
+        digest: None,
+        cmd: None,
+        env: dangerous_env,
+        ports: vec![],
+        volumes: vec![],
+        network: None,
+        restart_policy: "unless-stopped".to_string(),
+        limits: WorkloadResourceLimits::default(),
+        health_check: None,
+    };
+    assert!(
+        bad_env_spec.validate().is_err(),
+        "WorkloadSpec must reject dangerous environment variable LD_PRELOAD"
+    );
 }

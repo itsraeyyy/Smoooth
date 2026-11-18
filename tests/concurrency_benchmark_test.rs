@@ -1,12 +1,14 @@
-use std::sync::Arc;
-use std::time::Instant;
 use chrono::Utc;
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Barrier;
 use uuid::Uuid;
 
 use smoooth::models::{Action, ResourceUrn};
-use smoooth::security::{AuthorizationEngine, CapabilityChain, CapabilityPayload, ProofOfPossession};
+use smoooth::security::{
+    AuthorizationEngine, CapabilityChain, CapabilityPayload, ProofOfPossession,
+};
 use smoooth::storage::LocalStorage;
 
 fn make_keypair() -> (SigningKey, VerifyingKey) {
@@ -24,7 +26,8 @@ async fn test_concurrency_authorization_throughput_and_nonce_tracking() {
     let storage = Arc::new(LocalStorage::new_in_memory());
     let engine = Arc::new(AuthorizationEngine::new(issuer_vk));
 
-    let target_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+    let target_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
 
     let root_payload = CapabilityPayload {
         id: Uuid::new_v4(),
@@ -111,7 +114,10 @@ async fn test_concurrency_authorization_throughput_and_nonce_tracking() {
     let ops_per_sec = (total_requests as f64) / elapsed.as_secs_f64();
 
     println!("\n=== High-Concurrency Capability Authorization Benchmark ===");
-    println!("• Total Authorized Requests : {} / {}", total_successful, total_requests);
+    println!(
+        "• Total Authorized Requests : {} / {}",
+        total_successful, total_requests
+    );
     println!("• Concurrent Tasks          : {}", num_tasks);
     println!("• Total Time Elapsed        : {:?}", elapsed);
     println!("• Throughput                : {:.2} req/sec", ops_per_sec);
@@ -127,7 +133,8 @@ async fn test_adversarial_concurrent_race_condition_replay_defense() {
     let storage = Arc::new(LocalStorage::new_in_memory());
     let engine = Arc::new(AuthorizationEngine::new(issuer_vk));
 
-    let target_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+    let target_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
 
     let root_payload = CapabilityPayload {
         id: Uuid::new_v4(),
@@ -210,10 +217,19 @@ async fn test_adversarial_concurrent_race_condition_replay_defense() {
 
     println!("\n=== Concurrent Race Condition Nonce Replay Defense ===");
     println!("• Simultaneous Attackers : {}", num_attackers);
-    println!("• Succeeded Requests     : {} (must be exactly 1)", success_count);
-    println!("• Replay Rejected        : {} (must be exactly 19)", rejected_count);
+    println!(
+        "• Succeeded Requests     : {} (must be exactly 1)",
+        success_count
+    );
+    println!(
+        "• Replay Rejected        : {} (must be exactly 19)",
+        rejected_count
+    );
     println!("======================================================\n");
 
     assert_eq!(success_count, 1, "Exactly ONE request must succeed");
-    assert_eq!(rejected_count, 19, "All 19 concurrent duplicates must be rejected");
+    assert_eq!(
+        rejected_count, 19,
+        "All 19 concurrent duplicates must be rejected"
+    );
 }

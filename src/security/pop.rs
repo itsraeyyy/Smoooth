@@ -139,7 +139,9 @@ impl ProofOfPossession {
         let pk_bytes = hex::decode(&self.holder_public_key)
             .map_err(|e| SmooothError::CryptoError(format!("Invalid public key hex: {e}")))?;
         if pk_bytes.len() != 32 {
-            return Err(SmooothError::CryptoError("Public key must be 32 bytes".into()));
+            return Err(SmooothError::CryptoError(
+                "Public key must be 32 bytes".into(),
+            ));
         }
         let verifying_key = VerifyingKey::from_bytes(pk_bytes[..32].try_into().unwrap())
             .map_err(|e| SmooothError::CryptoError(format!("Failed to parse public key: {e}")))?;
@@ -148,7 +150,9 @@ impl ProofOfPossession {
         let sig_bytes = hex::decode(&self.signature)
             .map_err(|e| SmooothError::CryptoError(format!("Invalid signature hex: {e}")))?;
         if sig_bytes.len() != 64 {
-            return Err(SmooothError::CryptoError("Signature must be 64 bytes".into()));
+            return Err(SmooothError::CryptoError(
+                "Signature must be 64 bytes".into(),
+            ));
         }
         let signature = Signature::from_slice(&sig_bytes)
             .map_err(|e| SmooothError::CryptoError(format!("Failed to parse signature: {e}")))?;
@@ -156,7 +160,11 @@ impl ProofOfPossession {
         // 6. Verify signature
         verifying_key
             .verify(&expected_digest, &signature)
-            .map_err(|e| SmooothError::Security(format!("Proof of possession signature verification failed: {e}")))?;
+            .map_err(|e| {
+                SmooothError::Security(format!(
+                    "Proof of possession signature verification failed: {e}"
+                ))
+            })?;
 
         Ok(expected_digest)
     }
@@ -183,14 +191,7 @@ mod tests {
         let body = b"{\"grace_period_seconds\": 30}";
         let nonce = "nonce_123456789abcdef".to_string();
 
-        let pop = ProofOfPossession::generate(
-            &sk,
-            cap_id,
-            method,
-            uri,
-            body,
-            nonce,
-        ).unwrap();
+        let pop = ProofOfPossession::generate(&sk, cap_id, method, uri, body, nonce).unwrap();
 
         let expected_pk_hex = hex::encode(vk.as_bytes());
 
@@ -200,11 +201,15 @@ mod tests {
 
         // Tampering with body fails
         let tampered_body = b"{\"grace_period_seconds\": 0}";
-        assert!(pop.verify(&expected_pk_hex, method, uri, tampered_body, 30).is_err());
+        assert!(pop
+            .verify(&expected_pk_hex, method, uri, tampered_body, 30)
+            .is_err());
 
         // Tampering with URI fails
         let tampered_uri = "/api/workloads/production/database/restart";
-        assert!(pop.verify(&expected_pk_hex, method, tampered_uri, body, 30).is_err());
+        assert!(pop
+            .verify(&expected_pk_hex, method, tampered_uri, body, 30)
+            .is_err());
 
         // Wrong expected holder key fails
         let (_other_sk, other_vk) = make_keypair();
@@ -221,14 +226,7 @@ mod tests {
         let body = b"";
         let nonce = "nonce_skew_test".to_string();
 
-        let mut pop = ProofOfPossession::generate(
-            &sk,
-            cap_id,
-            method,
-            uri,
-            body,
-            nonce,
-        ).unwrap();
+        let mut pop = ProofOfPossession::generate(&sk, cap_id, method, uri, body, nonce).unwrap();
 
         // Artificially age the timestamp by 2 minutes
         pop.timestamp = Utc::now() - chrono::Duration::seconds(120);

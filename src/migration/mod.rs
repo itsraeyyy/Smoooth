@@ -52,14 +52,18 @@ impl MigrationEngine {
 
         // 3. Render Blueprint YAML
         if trimmed.contains("fromDatabase:")
-            || (trimmed.contains("services:") && trimmed.contains("type: web") && trimmed.contains("buildCommand:"))
+            || (trimmed.contains("services:")
+                && trimmed.contains("type: web")
+                && trimmed.contains("buildCommand:"))
         {
             return MigrationSource::RenderBlueprint;
         }
 
         // 4. Docker Compose YAML
         if trimmed.contains("services:")
-            && (trimmed.contains("image:") || trimmed.contains("build:") || trimmed.contains("ports:"))
+            && (trimmed.contains("image:")
+                || trimmed.contains("build:")
+                || trimmed.contains("ports:"))
         {
             return MigrationSource::DockerCompose;
         }
@@ -87,11 +91,17 @@ impl MigrationEngine {
         let (workloads, canonical_spec, ingress_routes) = match &source {
             MigrationSource::DockerCompose => ComposeParser::parse(content, workspace)?,
             MigrationSource::CoolifyJson => CoolifyParser::parse_json(content, workspace)?,
-            MigrationSource::RenderBlueprint => ForeignParser::parse_render_blueprint(content, workspace)?,
+            MigrationSource::RenderBlueprint => {
+                ForeignParser::parse_render_blueprint(content, workspace)?
+            }
             MigrationSource::FlyToml => ForeignParser::parse_fly_toml(content, workspace)?,
-            MigrationSource::DokkuApp => ForeignParser::parse_dokku_app(content, None, None, workspace)?,
+            MigrationSource::DokkuApp => {
+                ForeignParser::parse_dokku_app(content, None, None, workspace)?
+            }
             MigrationSource::CapRover => ForeignParser::parse_caprover(content, None, workspace)?,
-            MigrationSource::CoolifyLocal => CoolifyParser::scan_local_data_dir("/data/coolify", workspace)?,
+            MigrationSource::CoolifyLocal => {
+                CoolifyParser::scan_local_data_dir("/data/coolify", workspace)?
+            }
             MigrationSource::Unknown | MigrationSource::AutoDetected(_) => {
                 // Try Docker Compose first, then Coolify JSON
                 if let Ok(res) = ComposeParser::parse(content, workspace) {
@@ -201,7 +211,11 @@ impl MigrationEngine {
         orchestrator: &Arc<Orchestrator>,
         approver: &str,
     ) -> Result<MigrationResult, SmooothError> {
-        let plan_id = format!("migrate_{}_{}", preview.workspace_id, Uuid::new_v4().simple());
+        let plan_id = format!(
+            "migrate_{}_{}",
+            preview.workspace_id,
+            Uuid::new_v4().simple()
+        );
         let mut plan = Plan::new(
             plan_id.clone(),
             preview.canonical_spec.clone(),
@@ -215,7 +229,9 @@ impl MigrationEngine {
         orchestrator.save_plan(plan.clone()).await?;
 
         let idemp_key = format!("migrate_exec_{}", Uuid::new_v4().simple());
-        let op = orchestrator.execute_plan_sync(plan.clone(), idemp_key).await?;
+        let op = orchestrator
+            .execute_plan_sync(plan.clone(), idemp_key)
+            .await?;
 
         // Register any discovered ingress routes
         let ingress_mgr = IngressManager::default_local();
@@ -228,7 +244,10 @@ impl MigrationEngine {
                 r.tls,
                 r.path_prefix.clone(),
             ) {
-                routes_added.push(format!("{} -> {} ({})", route.domain, route.target_resource, route.target_port));
+                routes_added.push(format!(
+                    "{} -> {} ({})",
+                    route.domain, route.target_resource, route.target_port
+                ));
             }
         }
 
@@ -249,7 +268,8 @@ impl MigrationEngine {
         let bridge_statuses = crate::ingress::bridge::ProxyBridgeManager::auto_bridge_networks(
             None,
             &networks_to_bridge,
-        ).unwrap_or_default();
+        )
+        .unwrap_or_default();
 
         let mut bridged_summary = Vec::new();
         for bs in bridge_statuses {
@@ -258,11 +278,7 @@ impl MigrationEngine {
             }
         }
 
-        let provisioned: Vec<String> = preview
-            .workloads
-            .iter()
-            .map(|w| w.name.clone())
-            .collect();
+        let provisioned: Vec<String> = preview.workloads.iter().map(|w| w.name.clone()).collect();
 
         Ok(MigrationResult {
             success: true,

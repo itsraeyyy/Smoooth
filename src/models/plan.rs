@@ -188,6 +188,10 @@ pub struct PlanApproval {
     pub expires_at: DateTime<Utc>,
 }
 
+fn default_created_by() -> String {
+    "operator".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Plan {
     pub id: String,
@@ -198,6 +202,8 @@ pub struct Plan {
     pub approved_plan_hash: Option<String>,
     pub approved_by: Option<String>,
     pub approval: Option<PlanApproval>,
+    #[serde(default = "default_created_by")]
+    pub created_by: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -226,8 +232,14 @@ impl Plan {
             approved_plan_hash: None,
             approved_by: None,
             approval: None,
+            created_by: default_created_by(),
             created_at: Utc::now(),
         }
+    }
+
+    pub fn with_creator(mut self, creator: String) -> Self {
+        self.created_by = creator;
+        self
     }
 
     pub fn is_approval_valid(&self) -> bool {
@@ -272,6 +284,10 @@ impl Plan {
 
     pub fn requires_approval(&self) -> bool {
         self.risk_tier != RiskTier::Low
+            || self.spec.environment == "production"
+            || self.spec.actions.iter().any(|a| {
+                (a.is_persistent && a.action_type == "delete") || a.exposes_network_publicly
+            })
     }
 
     pub fn approve(&mut self, approver: String) {

@@ -9,7 +9,9 @@ pub mod operation;
 pub mod plan;
 pub mod reconciliation;
 pub mod resource;
+pub mod tenancy;
 pub mod urn;
+pub mod workload;
 
 pub use action::*;
 pub use agent::*;
@@ -22,4 +24,6 @@ pub use operation::*;
 pub use plan::*;
 pub use reconciliation::*;
 pub use resource::*;
+pub use tenancy::*;
 pub use urn::*;
+pub use workload::*;

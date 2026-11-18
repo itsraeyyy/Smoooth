@@ -209,9 +209,55 @@ impl McpServer {
                         })
                     }
                     Err(e) => {
+                        let err_str = e.to_string();
+                        let (error_code, remediation) = match &e {
+                            SmooothError::Security(msg) if msg.contains("self-approval") => (
+                                "SELF_APPROVAL_FORBIDDEN",
+                                "Agents cannot approve their own plans. Request independent human operator approval or run 'smoooth approve <plan_id>'."
+                            ),
+                            SmooothError::Security(_) => (
+                                "SECURITY_VIOLATION",
+                                "The requested action violated security constraints (e.g. host path mount or protected path)."
+                            ),
+                            SmooothError::PolicyViolation(msg) if msg.contains("Scope policy violation") => (
+                                "SCOPE_POLICY_VIOLATION",
+                                "Your agent does not hold the required permission scope for this action."
+                            ),
+                            SmooothError::PolicyViolation(msg) if msg.contains("Cross-workspace") => (
+                                "CROSS_WORKSPACE_VIOLATION",
+                                "Your agent is constrained to its designated workspace boundary."
+                            ),
+                            SmooothError::PolicyViolation(_) => (
+                                "POLICY_VIOLATION",
+                                "The requested plan or action violates system policy envelopes."
+                            ),
+                            SmooothError::Validation(_) => (
+                                "VALIDATION_ERROR",
+                                "Inspect the tool input arguments against schema definitions."
+                            ),
+                            SmooothError::NotFound(_) => (
+                                "NOT_FOUND",
+                                "Verify the resource identifier, plan id, or workspace."
+                            ),
+                            SmooothError::FencingViolation(_) => (
+                                "FENCING_VIOLATION",
+                                "A newer worker or lease has superseded this operation. Refresh state."
+                            ),
+                            _ => (
+                                "EXECUTION_ERROR",
+                                "Inspect system logs or rerun with 'doctor'."
+                            ),
+                        };
+
+                        let structured_err = serde_json::json!({
+                            "error": &err_str,
+                            "error_code": error_code,
+                            "remediation": remediation,
+                        });
+
                         let content = vec![serde_json::json!({
                             "type": "text",
-                            "text": format!("Tool execution error: {}", e)
+                            "text": format!("Tool execution error: {}\n\nStructured Diagnostics:\n{}", err_str, serde_json::to_string_pretty(&structured_err).unwrap_or_default())
                         })];
                         Some(JsonRpcResponse {
                             jsonrpc: "2.0".to_string(),
@@ -255,7 +301,7 @@ impl McpServer {
         // Enforce Server-Side Scopes and Workspace Isolation for Authenticated Agents
         if let Some(agent) = &caller.identity {
             let required_scope = match name {
-                "create_plan" => crate::models::AgentScope::Plan,
+                "create_plan" | "infrastructure_plan" => crate::models::AgentScope::Plan,
                 "migrate_stack" | "smoooth_migrate" => {
                     let apply = args.get("apply").and_then(|a| a.as_bool()).unwrap_or(false);
                     if apply {
@@ -264,11 +310,19 @@ impl McpServer {
                         crate::models::AgentScope::Plan
                     }
                 }
-                "execute_plan" | "create_service_binding" | "reconcile_resource" | "configure_ingress" => {
-                    crate::models::AgentScope::Deploy
-                }
+                "execute_plan"
+                | "infrastructure_apply"
+                | "create_service_binding"
+                | "reconcile_resource"
+                | "configure_ingress"
+                | "restart_workload"
+                | "create_database_backup"
+                | "verify_database_backup" => crate::models::AgentScope::Deploy,
                 "approve_plan" | "revoke_capability" => crate::models::AgentScope::Admin,
-                "inspect_capability" => crate::models::AgentScope::ReadOnly,
+                "inspect_capability"
+                | "get_workload_logs"
+                | "workload_logs"
+                | "infrastructure_inspect" => crate::models::AgentScope::ReadOnly,
                 _ => crate::models::AgentScope::ReadOnly,
             };
 
@@ -356,7 +410,9 @@ impl McpServer {
             }
 
             "doctor" | "smoooth_doctor" => {
-                let report = crate::doctor::Doctor::run_diagnostics("smoooth_state.json", "127.0.0.1", 4040).await;
+                let report =
+                    crate::doctor::Doctor::run_diagnostics("smoooth_state.json", "127.0.0.1", 4040)
+                        .await;
                 Ok(serde_json::to_value(report).unwrap_or_default())
             }
 
@@ -370,14 +426,19 @@ impl McpServer {
             }
 
             "migrate_stack" | "smoooth_migrate" => {
-                let source_raw = args
-                    .get("source")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'source' argument (manifest content or file path)".to_string()))?;
+                let source_raw = args.get("source").and_then(|v| v.as_str()).ok_or_else(|| {
+                    SmooothError::Validation(
+                        "Missing 'source' argument (manifest content or file path)".to_string(),
+                    )
+                })?;
 
                 let content = if std::path::Path::new(source_raw).exists() {
-                    std::fs::read_to_string(source_raw)
-                        .map_err(|e| SmooothError::Validation(format!("Failed to read file '{}': {}", source_raw, e)))?
+                    std::fs::read_to_string(source_raw).map_err(|e| {
+                        SmooothError::Validation(format!(
+                            "Failed to read file '{}': {}",
+                            source_raw, e
+                        ))
+                    })?
                 } else {
                     source_raw.to_string()
                 };
@@ -387,14 +448,20 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .unwrap_or("default");
 
-                let forced = args.get("format").and_then(|f| f.as_str()).and_then(|f| match f.to_lowercase().as_str() {
-                    "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
-                    "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
-                    "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
-                    "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
-                    "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
-                    "caprover" => Some(crate::migration::MigrationSource::CapRover),
-                    _ => None,
+                let forced = args.get("format").and_then(|f| f.as_str()).and_then(|f| {
+                    match f.to_lowercase().as_str() {
+                        "compose" | "docker-compose" => {
+                            Some(crate::migration::MigrationSource::DockerCompose)
+                        }
+                        "coolify" | "coolify-json" => {
+                            Some(crate::migration::MigrationSource::CoolifyJson)
+                        }
+                        "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
+                        "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
+                        "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
+                        "caprover" => Some(crate::migration::MigrationSource::CapRover),
+                        _ => None,
+                    }
                 });
 
                 let preview = crate::migration::MigrationEngine::preview(&content, forced, ws)?;
@@ -406,7 +473,12 @@ impl McpServer {
                     } else {
                         "mcp_agent".to_string()
                     };
-                    let result = crate::migration::MigrationEngine::apply(&preview, &self.orchestrator, &approver).await?;
+                    let result = crate::migration::MigrationEngine::apply(
+                        &preview,
+                        &self.orchestrator,
+                        &approver,
+                    )
+                    .await?;
                     Ok(serde_json::to_value(result).unwrap_or_default())
                 } else {
                     Ok(serde_json::to_value(preview).unwrap_or_default())
@@ -461,7 +533,7 @@ impl McpServer {
                 let spec = CanonicalExecutionSpec {
                     schema_version: 1,
                     workspace_id,
-                    environment: env,
+                    environment: env.clone(),
                     target_id: "local_docker_node".to_string(),
                     actions,
                     dependencies,
@@ -469,8 +541,20 @@ impl McpServer {
                     policy_envelope,
                 };
 
+                let created_by = if let Some(agent) = &caller.identity {
+                    format!("agent:{}", agent.agent_id)
+                } else {
+                    "operator".to_string()
+                };
+
+                let risk_tier = if env == "production" {
+                    RiskTier::High
+                } else {
+                    RiskTier::Moderate
+                };
+
                 let plan_id = format!("plan_{}", uuid::Uuid::new_v4().simple());
-                let plan = Plan::new(plan_id, spec, RiskTier::Moderate, Some(15.0));
+                let plan = Plan::new(plan_id, spec, risk_tier, Some(15.0)).with_creator(created_by);
 
                 self.orchestrator.save_plan(plan.clone()).await?;
 
@@ -560,6 +644,59 @@ impl McpServer {
                     )));
                 }
 
+                // Security Enforcement: Anti-Self-Approval and Production Approval Rules
+                if let Some(agent) = &caller.identity {
+                    let agent_creator = format!("agent:{}", agent.agent_id);
+                    if plan.created_by == agent_creator || plan.created_by == agent.name {
+                        let err_msg = format!(
+                            "Agent self-approval policy violation: Agent '{}' cannot approve its own plan '{}'. Independent operator approval is required.",
+                            agent.name, plan_id
+                        );
+                        let _ = self
+                            .orchestrator
+                            .storage()
+                            .record_audit(crate::storage::AuditEvent {
+                                id: 0,
+                                workspace_id: plan.spec.workspace_id.clone(),
+                                actor: format!("agent:{}", agent.agent_id),
+                                action: "mcp_tool:approve_plan".to_string(),
+                                target_resource_id: None,
+                                plan_hash: Some(plan.plan_hash.clone()),
+                                outcome: "denied".to_string(),
+                                redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
+                                timestamp: chrono::Utc::now(),
+                            })
+                            .await;
+                        return Err(SmooothError::PolicyViolation(err_msg));
+                    }
+
+                    if plan.requires_approval()
+                        || plan.spec.environment == "production"
+                        || plan.risk_tier != RiskTier::Low
+                    {
+                        let err_msg = format!(
+                            "Authorization policy violation: Plan '{}' targets environment '{}' with risk tier '{:?}'. Independent human operator approval is strictly required.",
+                            plan_id, plan.spec.environment, plan.risk_tier
+                        );
+                        let _ = self
+                            .orchestrator
+                            .storage()
+                            .record_audit(crate::storage::AuditEvent {
+                                id: 0,
+                                workspace_id: plan.spec.workspace_id.clone(),
+                                actor: format!("agent:{}", agent.agent_id),
+                                action: "mcp_tool:approve_plan".to_string(),
+                                target_resource_id: None,
+                                plan_hash: Some(plan.plan_hash.clone()),
+                                outcome: "denied".to_string(),
+                                redacted_evidence: Some(serde_json::json!({ "reason": err_msg })),
+                                timestamp: chrono::Utc::now(),
+                            })
+                            .await;
+                        return Err(SmooothError::PolicyViolation(err_msg));
+                    }
+                }
+
                 plan.approve_with_ttl(approved_by.to_string(), ttl_seconds);
                 self.orchestrator.save_plan(plan.clone()).await?;
 
@@ -576,11 +713,17 @@ impl McpServer {
                 let chain_header = args
                     .get("chain_header")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'chain_header'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'chain_header'".to_string())
+                    })?;
 
                 let chain = crate::security::CapabilityChain::from_header_string(chain_header)?;
                 let leaf = chain.leaf();
-                let is_revoked = self.orchestrator.storage().is_revoked(&leaf.payload.id).await?;
+                let is_revoked = self
+                    .orchestrator
+                    .storage()
+                    .is_revoked(&leaf.payload.id)
+                    .await?;
 
                 Ok(serde_json::json!({
                     "capability_id": leaf.payload.id,
@@ -598,10 +741,13 @@ impl McpServer {
                 let cap_id_str = args
                     .get("capability_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'capability_id'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'capability_id'".to_string())
+                    })?;
 
-                let cap_id = uuid::Uuid::parse_str(cap_id_str)
-                    .map_err(|e| SmooothError::Validation(format!("Invalid capability UUID: {e}")))?;
+                let cap_id = uuid::Uuid::parse_str(cap_id_str).map_err(|e| {
+                    SmooothError::Validation(format!("Invalid capability UUID: {e}"))
+                })?;
 
                 let reason = args
                     .get("reason")
@@ -610,7 +756,11 @@ impl McpServer {
 
                 self.orchestrator
                     .storage()
-                    .record_revocation(&cap_id, reason, chrono::Utc::now() + chrono::Duration::days(30))
+                    .record_revocation(
+                        &cap_id,
+                        reason,
+                        chrono::Utc::now() + chrono::Duration::days(30),
+                    )
                     .await?;
 
                 Ok(serde_json::json!({
@@ -812,16 +962,23 @@ impl McpServer {
                 let target_resource = args
                     .get("target_resource")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'target_resource'".to_string()))?;
+                    .ok_or_else(|| {
+                        SmooothError::Validation("Missing 'target_resource'".to_string())
+                    })?;
                 let target_port = args
                     .get("target_port")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| SmooothError::Validation("Missing 'target_port'".to_string()))? as u16;
+                    .ok_or_else(|| SmooothError::Validation("Missing 'target_port'".to_string()))?
+                    as u16;
                 let tls = args.get("tls").and_then(|v| v.as_bool()).unwrap_or(true);
-                let path_prefix = args.get("path_prefix").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let path_prefix = args
+                    .get("path_prefix")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
 
                 let ingress = crate::ingress::IngressManager::default_local();
-                let route = ingress.add_route(domain, target_resource, target_port, tls, path_prefix)?;
+                let route =
+                    ingress.add_route(domain, target_resource, target_port, tls, path_prefix)?;
                 let mode = crate::ingress::IngressManager::detect_mode();
 
                 Ok(serde_json::json!({
@@ -856,7 +1013,8 @@ impl McpServer {
                     }
                 });
 
-                let result = crate::build::NixpacksBuilder::build(source, image_tag, env_vars).await?;
+                let result =
+                    crate::build::NixpacksBuilder::build(source, image_tag, env_vars).await?;
                 Ok(serde_json::to_value(result).unwrap_or_default())
             }
 
@@ -983,6 +1141,134 @@ impl McpServer {
                     "workspace_id": ws,
                     "resources": list,
                     "count": list.len(),
+                }))
+            }
+
+            "infrastructure_inspect" => {
+                Box::pin(self.dispatch_tool_with_caller("list_capabilities", args, caller)).await
+            }
+
+            "infrastructure_plan" => {
+                Box::pin(self.dispatch_tool_with_caller("create_plan", args, caller)).await
+            }
+
+            "infrastructure_apply" => {
+                Box::pin(self.dispatch_tool_with_caller("execute_plan", args, caller)).await
+            }
+
+            "get_workload_logs" | "workload_logs" => {
+                let resource_id = args
+                    .get("resource_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'resource_id'".to_string()))?;
+                let tail = args.get("tail").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
+
+                let runtime = crate::runtime::default_runtime_provider();
+                let logs = runtime
+                    .logs(resource_id, tail)
+                    .await
+                    .unwrap_or_else(|e| format!("Unable to fetch container logs: {}", e));
+
+                Ok(serde_json::json!({
+                    "resource_id": resource_id,
+                    "logs": logs,
+                    "tail": tail,
+                }))
+            }
+
+            "restart_workload" => {
+                let resource_id = args
+                    .get("resource_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'resource_id'".to_string()))?;
+
+                let runtime = crate::runtime::default_runtime_provider();
+                runtime.restart(resource_id, 10).await?;
+
+                Ok(serde_json::json!({
+                    "resource_id": resource_id,
+                    "status": "restarted",
+                    "message": format!("Workload '{}' restarted successfully", resource_id)
+                }))
+            }
+
+            "create_database_backup" => {
+                let resource_id = args
+                    .get("resource_id")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| SmooothError::Validation("Missing 'resource_id'".to_string()))?;
+
+                let res = self
+                    .orchestrator
+                    .get_resource(resource_id)
+                    .await?
+                    .ok_or_else(|| {
+                        SmooothError::NotFound(format!("Resource '{}' not found", resource_id))
+                    })?;
+
+                let host = res
+                    .configuration
+                    .get("host")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("127.0.0.1");
+                let port = res
+                    .configuration
+                    .get("port")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(5432) as u16;
+                let user = res
+                    .configuration
+                    .get("user")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("smoooth_user");
+                let password = res
+                    .configuration
+                    .get("password")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let dbname = res
+                    .configuration
+                    .get("database")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("smoooth_db");
+
+                let archive = crate::adapters::postgres::backup::PostgresBackupManager::create_database_backup(
+                    host, port, user, password, dbname, &self.secret_store, &res.workspace_id
+                ).await?;
+
+                Ok(serde_json::json!({
+                    "success": true,
+                    "backup_id": archive.header.backup_id,
+                    "database_name": archive.header.database_name,
+                    "uncompressed_bytes": archive.header.uncompressed_bytes,
+                    "plaintext_sha256": archive.header.plaintext_sha256,
+                    "created_at": archive.header.created_at,
+                    "archive": archive,
+                }))
+            }
+
+            "verify_database_backup" => {
+                let archive_val = args.get("archive").ok_or_else(|| {
+                    SmooothError::Validation("Missing 'archive' payload".to_string())
+                })?;
+                let archive: crate::adapters::postgres::backup::PostgresBackupArchive =
+                    serde_json::from_value(archive_val.clone()).map_err(|e| {
+                        SmooothError::Validation(format!("Invalid backup archive format: {}", e))
+                    })?;
+
+                let decrypted =
+                    crate::adapters::postgres::backup::PostgresBackupManager::verify_and_decrypt(
+                        &archive,
+                        &self.secret_store,
+                    )?;
+
+                Ok(serde_json::json!({
+                    "success": true,
+                    "backup_id": archive.header.backup_id,
+                    "database_name": archive.header.database_name,
+                    "integrity_verified": true,
+                    "sha256_matched": true,
+                    "decrypted_bytes": decrypted.len(),
                 }))
             }
 

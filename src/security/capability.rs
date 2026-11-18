@@ -35,18 +35,18 @@ impl Caveat {
             Caveat::DisallowPersistentDataLoss => {
                 child_caveats.contains(&Caveat::DisallowPersistentDataLoss)
             }
-            Caveat::RequireOperatorApproval { plan_digest: p_digest } => {
-                child_caveats.iter().any(|c| match c {
-                    Caveat::RequireOperatorApproval { plan_digest: c_digest } => p_digest == c_digest,
-                    _ => false,
-                })
-            }
-            Caveat::SourceCidr { cidr: p_cidr } => {
-                child_caveats.iter().any(|c| match c {
-                    Caveat::SourceCidr { cidr: c_cidr } => p_cidr == c_cidr,
-                    _ => false,
-                })
-            }
+            Caveat::RequireOperatorApproval {
+                plan_digest: p_digest,
+            } => child_caveats.iter().any(|c| match c {
+                Caveat::RequireOperatorApproval {
+                    plan_digest: c_digest,
+                } => p_digest == c_digest,
+                _ => false,
+            }),
+            Caveat::SourceCidr { cidr: p_cidr } => child_caveats.iter().any(|c| match c {
+                Caveat::SourceCidr { cidr: c_cidr } => p_cidr == c_cidr,
+                _ => false,
+            }),
         }
     }
 }
@@ -197,14 +197,18 @@ impl CapabilityLink {
         let sig_bytes = hex::decode(&self.signature)
             .map_err(|e| SmooothError::CryptoError(format!("Invalid signature hex: {e}")))?;
         if sig_bytes.len() != 64 {
-            return Err(SmooothError::CryptoError("Signature must be exactly 64 bytes".into()));
+            return Err(SmooothError::CryptoError(
+                "Signature must be exactly 64 bytes".into(),
+            ));
         }
         let signature = Signature::from_slice(&sig_bytes)
             .map_err(|e| SmooothError::CryptoError(format!("Failed to parse signature: {e}")))?;
 
         expected_verifying_key
             .verify(&digest, &signature)
-            .map_err(|e| SmooothError::CryptoError(format!("Capability signature verification failed: {e}")))?;
+            .map_err(|e| {
+                SmooothError::CryptoError(format!("Capability signature verification failed: {e}"))
+            })?;
 
         Ok(())
     }
@@ -221,9 +225,14 @@ pub struct CapabilityChain {
 
 impl CapabilityChain {
     /// Initializes a new chain with a root capability signed by the issuer.
-    pub fn new_root(root_payload: CapabilityPayload, issuer_signing_key: &SigningKey) -> Result<Self> {
+    pub fn new_root(
+        root_payload: CapabilityPayload,
+        issuer_signing_key: &SigningKey,
+    ) -> Result<Self> {
         if root_payload.parent_id.is_some() {
-            return Err(SmooothError::Validation("Root capability must have no parent_id".into()));
+            return Err(SmooothError::Validation(
+                "Root capability must have no parent_id".into(),
+            ));
         }
         if root_payload.remaining_depth > MAX_DELEGATION_DEPTH {
             return Err(SmooothError::Validation(format!(
@@ -265,14 +274,17 @@ impl CapabilityChain {
 
         // 4. Validate chain limits
         if new_chain.links.len() > (MAX_DELEGATION_DEPTH as usize + 1) {
-            return Err(SmooothError::Security("Delegation chain exceeds maximum depth limit".into()));
+            return Err(SmooothError::Security(
+                "Delegation chain exceeds maximum depth limit".into(),
+            ));
         }
         let chain_bytes = serde_json::to_vec(&new_chain)
             .map_err(|e| SmooothError::Validation(format!("Failed to serialize chain: {e}")))?;
         if chain_bytes.len() > MAX_CHAIN_SIZE_BYTES {
             return Err(SmooothError::Security(format!(
                 "Delegation chain size {} bytes exceeds maximum limit {}",
-                chain_bytes.len(), MAX_CHAIN_SIZE_BYTES
+                chain_bytes.len(),
+                MAX_CHAIN_SIZE_BYTES
             )));
         }
 
@@ -286,13 +298,17 @@ impl CapabilityChain {
 
     /// Returns a reference to the active leaf capability link.
     pub fn leaf(&self) -> &CapabilityLink {
-        self.links.last().expect("Chain must have at least one link")
+        self.links
+            .last()
+            .expect("Chain must have at least one link")
     }
 
     /// Verifies the entire cryptographic and attenuation validity of the chain back to the issuer.
     pub fn verify(&self, trusted_issuer_key: &VerifyingKey) -> Result<()> {
         if self.links.is_empty() {
-            return Err(SmooothError::Security("Capability chain cannot be empty".into()));
+            return Err(SmooothError::Security(
+                "Capability chain cannot be empty".into(),
+            ));
         }
 
         // 1. Verify root signature using trusted issuer key
@@ -305,13 +321,19 @@ impl CapabilityChain {
             let child_link = &self.links[i];
 
             // A. Parse parent holder's verifying key
-            let parent_pk_bytes = hex::decode(&parent_link.payload.holder_public_key)
-                .map_err(|e| SmooothError::CryptoError(format!("Invalid parent holder key hex: {e}")))?;
+            let parent_pk_bytes =
+                hex::decode(&parent_link.payload.holder_public_key).map_err(|e| {
+                    SmooothError::CryptoError(format!("Invalid parent holder key hex: {e}"))
+                })?;
             if parent_pk_bytes.len() != 32 {
-                return Err(SmooothError::CryptoError("Public key must be 32 bytes".into()));
+                return Err(SmooothError::CryptoError(
+                    "Public key must be 32 bytes".into(),
+                ));
             }
             let parent_vk = VerifyingKey::from_bytes(parent_pk_bytes[..32].try_into().unwrap())
-                .map_err(|e| SmooothError::CryptoError(format!("Failed to parse parent public key: {e}")))?;
+                .map_err(|e| {
+                    SmooothError::CryptoError(format!("Failed to parse parent public key: {e}"))
+                })?;
 
             // B. Verify child signature using parent public key
             child_link.verify_signature(&parent_vk)?;
@@ -335,7 +357,9 @@ impl CapabilityChain {
         let bytes = hex::decode(header)
             .map_err(|e| SmooothError::Validation(format!("Header hex decode error: {e}")))?;
         if bytes.len() > MAX_CHAIN_SIZE_BYTES {
-            return Err(SmooothError::Security("Chain header exceeds maximum allowed size".into()));
+            return Err(SmooothError::Security(
+                "Chain header exceeds maximum allowed size".into(),
+            ));
         }
         serde_json::from_slice(&bytes)
             .map_err(|e| SmooothError::Validation(format!("Header deserialization error: {e}")))
@@ -367,7 +391,12 @@ mod tests {
             issuer: "smoooth:control-plane".into(),
             holder_public_key: hex::encode(agent_vk.as_bytes()),
             target_urn: urn,
-            actions: vec![Action::InspectMetadata, Action::ReadLogs { tail_limit: Some(100) }],
+            actions: vec![
+                Action::InspectMetadata,
+                Action::ReadLogs {
+                    tail_limit: Some(100),
+                },
+            ],
             caveats: vec![Caveat::DisallowPersistentDataLoss],
             can_delegate: true,
             remaining_depth: 3,
@@ -394,7 +423,8 @@ mod tests {
         let (_subagent_sk, subagent_vk) = make_keypair();
 
         // 1. Root capability for lead agent
-        let root_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+        let root_urn =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
         let root_id = Uuid::new_v4();
         let now = Utc::now();
         let root_payload = CapabilityPayload {
@@ -405,7 +435,9 @@ mod tests {
             target_urn: root_urn,
             actions: vec![
                 Action::InspectMetadata,
-                Action::ReadLogs { tail_limit: Some(100) },
+                Action::ReadLogs {
+                    tail_limit: Some(100),
+                },
                 Action::RestartWorkload,
             ],
             caveats: vec![Caveat::DisallowPersistentDataLoss],
@@ -419,20 +451,24 @@ mod tests {
         let root_chain = CapabilityChain::new_root(root_payload, &issuer_sk).unwrap();
 
         // 2. Lead agent delegates narrowed authority to subagent
-        let child_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/logs/stdout").unwrap();
+        let child_urn =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api/logs/stdout")
+                .unwrap();
         let child_payload = CapabilityPayload {
             id: Uuid::new_v4(),
             parent_id: Some(root_id),
             issuer: hex::encode(lead_vk.as_bytes()),
             holder_public_key: hex::encode(subagent_vk.as_bytes()),
             target_urn: child_urn,
-            actions: vec![Action::ReadLogs { tail_limit: Some(50) }], // Narrowed action & tail
-            caveats: vec![Caveat::DisallowPersistentDataLoss],          // Preserved caveat
-            can_delegate: false,                                       // No further delegation
-            remaining_depth: 1,                                        // Decreased depth
+            actions: vec![Action::ReadLogs {
+                tail_limit: Some(50),
+            }], // Narrowed action & tail
+            caveats: vec![Caveat::DisallowPersistentDataLoss], // Preserved caveat
+            can_delegate: false,                               // No further delegation
+            remaining_depth: 1,                                // Decreased depth
             issued_at: now,
             not_before: now,
-            expires_at: now + chrono::Duration::minutes(10),           // Shorter expiry
+            expires_at: now + chrono::Duration::minutes(10), // Shorter expiry
         };
 
         let delegated_chain = root_chain.delegate(child_payload, &lead_sk).unwrap();
@@ -448,7 +484,8 @@ mod tests {
         let (lead_sk, lead_vk) = make_keypair();
         let (_subagent_sk, subagent_vk) = make_keypair();
 
-        let root_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+        let root_urn =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
         let root_id = Uuid::new_v4();
         let now = Utc::now();
         let root_payload = CapabilityPayload {
@@ -469,7 +506,8 @@ mod tests {
         let root_chain = CapabilityChain::new_root(root_payload, &issuer_sk).unwrap();
 
         // Lead tries to delegate Destroy action that it does not possess!
-        let child_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+        let child_urn =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
         let child_payload = CapabilityPayload {
             id: Uuid::new_v4(),
             parent_id: Some(root_id),
@@ -495,7 +533,8 @@ mod tests {
         let (lead_sk, lead_vk) = make_keypair();
         let (_subagent_sk, subagent_vk) = make_keypair();
 
-        let root_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+        let root_urn =
+            ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
         let root_id = Uuid::new_v4();
         let now = Utc::now();
         let root_payload = CapabilityPayload {
@@ -521,7 +560,8 @@ mod tests {
             parent_id: Some(root_id),
             issuer: hex::encode(lead_vk.as_bytes()),
             holder_public_key: hex::encode(subagent_vk.as_bytes()),
-            target_urn: ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap(),
+            target_urn: ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api")
+                .unwrap(),
             actions: vec![Action::InspectMetadata],
             caveats: vec![],
             can_delegate: false,

@@ -270,6 +270,90 @@ pub fn get_available_tools() -> Vec<McpToolDefinition> {
                 }
             }),
         },
+        McpToolDefinition {
+            name: "get_workload_logs".to_string(),
+            description: "Fetch live trailing stdout and stderr log stream from a containerized workload".to_string(),
+            step: "07 Operate".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["resource_id"],
+                "properties": {
+                    "resource_id": { "type": "string", "description": "Target container workload identifier" },
+                    "tail": { "type": "integer", "description": "Number of trailing lines to fetch (default: 100)" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "restart_workload".to_string(),
+            description: "Restart a running or stopped containerized workload safely with graceful stop timeout".to_string(),
+            step: "07 Operate".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["resource_id"],
+                "properties": {
+                    "resource_id": { "type": "string", "description": "Target container workload identifier" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "create_database_backup".to_string(),
+            description: "Create a tamper-evident, AES-256-GCM encrypted streaming backup archive of a PostgreSQL database with SHA-256 digest manifest".to_string(),
+            step: "07 Operate".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["resource_id"],
+                "properties": {
+                    "resource_id": { "type": "string", "description": "Resource identifier of PostgreSQL database" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "verify_database_backup".to_string(),
+            description: "Cryptographically verify and authenticate a PostgreSQL backup archive without touching production data".to_string(),
+            step: "07 Operate".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["archive"],
+                "properties": {
+                    "archive": { "type": "object", "description": "The PostgresBackupArchive payload" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "infrastructure_inspect".to_string(),
+            description: "Standardized agent discovery: inspect host capabilities, schemas, and provider guarantees (alias to list_capabilities)".to_string(),
+            step: "01 Discover".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        McpToolDefinition {
+            name: "infrastructure_plan".to_string(),
+            description: "Standardized agent planning: propose a stack and receive a cost-aware plan with canonical hash (alias to create_plan)".to_string(),
+            step: "02 Plan".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["workspace_id", "spec"],
+                "properties": {
+                    "workspace_id": { "type": "string" },
+                    "spec": { "type": "object" }
+                }
+            }),
+        },
+        McpToolDefinition {
+            name: "infrastructure_apply".to_string(),
+            description: "Standardized agent execution: execute and provision an approved plan idempotently (alias to execute_plan)".to_string(),
+            step: "04 Provision".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "required": ["plan_id", "idempotency_key"],
+                "properties": {
+                    "plan_id": { "type": "string" },
+                    "idempotency_key": { "type": "string" }
+                }
+            }),
+        },
     ]
 }
 

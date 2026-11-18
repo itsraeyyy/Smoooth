@@ -1,4 +1,9 @@
+pub mod backup;
 pub mod reconcile;
+pub use backup::{
+    PostgresBackupArchive, PostgresBackupHeader, PostgresBackupManager,
+    PostgresSandboxRestoreReport,
+};
 pub use reconcile::{SupabaseReconciliationReport, SupabaseRoleReconciler};
 
 use async_trait::async_trait;
@@ -87,9 +92,15 @@ impl PostgresAdapter {
             "host={} port={} user={} password={} dbname={} connect_timeout=5",
             host, port, user, admin_password, dbname
         );
-        let (client, connection) = tokio_postgres::connect(&conn_str, NoTls)
-            .await
-            .map_err(|e| SmooothError::PostgresFailed(format!("Failed connecting to Postgres for reconciliation: {}", e)))?;
+        let (client, connection) =
+            tokio_postgres::connect(&conn_str, NoTls)
+                .await
+                .map_err(|e| {
+                    SmooothError::PostgresFailed(format!(
+                        "Failed connecting to Postgres for reconciliation: {}",
+                        e
+                    ))
+                })?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -157,8 +168,12 @@ impl ProviderAdapter for PostgresAdapter {
             p
         } else {
             let mut rand_bytes = [0u8; 16];
-            getrandom::getrandom(&mut rand_bytes)
-                .map_err(|e| SmooothError::Internal(anyhow::anyhow!("Failed to generate secure DB password: {}", e)))?;
+            getrandom::getrandom(&mut rand_bytes).map_err(|e| {
+                SmooothError::Internal(anyhow::anyhow!(
+                    "Failed to generate secure DB password: {}",
+                    e
+                ))
+            })?;
             generated_password = format!("pg_{}", hex::encode(rand_bytes));
             &generated_password
         };

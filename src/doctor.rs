@@ -93,7 +93,9 @@ impl Doctor {
                     category: "Platform".to_string(),
                     name: "Operating System".to_string(),
                     status: "warn".to_string(),
-                    message: "Linux distribution detected. Official verified target is Ubuntu 24.04.".to_string(),
+                    message:
+                        "Linux distribution detected. Official verified target is Ubuntu 24.04."
+                            .to_string(),
                     recommendation: Some(
                         "Ensure standard systemd and Docker packages are installed.".to_string(),
                     ),
@@ -212,7 +214,9 @@ impl Doctor {
                 category: "Coexistence & Ingress".to_string(),
                 name: "Standard Ingress Ports".to_string(),
                 status: "pass".to_string(),
-                message: "Standard HTTP/HTTPS ports (80/443) are available for Smoooth managed ingress.".to_string(),
+                message:
+                    "Standard HTTP/HTTPS ports (80/443) are available for Smoooth managed ingress."
+                        .to_string(),
                 recommendation: None,
             });
         }

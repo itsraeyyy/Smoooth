@@ -27,7 +27,11 @@ impl ProxyBridgeManager {
         }
 
         let names_str = String::from_utf8_lossy(&output.stdout);
-        let names: Vec<&str> = names_str.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        let names: Vec<&str> = names_str
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
 
         // Priority list of known reverse proxies
         let known_proxies = [
@@ -61,7 +65,12 @@ impl ProxyBridgeManager {
                 "{{json .NetworkSettings.Networks}}",
             ])
             .output()
-            .map_err(|e| SmooothError::Adapter(format!("Failed to inspect container '{}': {}", container_name, e)))?;
+            .map_err(|e| {
+                SmooothError::Adapter(format!(
+                    "Failed to inspect container '{}': {}",
+                    container_name, e
+                ))
+            })?;
 
         if !output.status.success() {
             return Err(SmooothError::Adapter(format!(
@@ -71,7 +80,8 @@ impl ProxyBridgeManager {
         }
 
         let json_str = String::from_utf8_lossy(&output.stdout);
-        let networks_map: serde_json::Value = serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Null);
+        let networks_map: serde_json::Value =
+            serde_json::from_str(&json_str).unwrap_or(serde_json::Value::Null);
 
         if let Some(obj) = networks_map.as_object() {
             return Ok(obj.contains_key(network_name));
@@ -95,7 +105,9 @@ impl ProxyBridgeManager {
         let output = Command::new("docker")
             .args(["network", "connect", target_network, proxy_container])
             .output()
-            .map_err(|e| SmooothError::Adapter(format!("Failed to execute 'docker network connect': {}", e)))?;
+            .map_err(|e| {
+                SmooothError::Adapter(format!("Failed to execute 'docker network connect': {}", e))
+            })?;
 
         if !output.status.success() {
             let err_msg = String::from_utf8_lossy(&output.stderr);
@@ -143,7 +155,12 @@ impl ProxyBridgeManager {
             match Self::bridge_network(&proxy, net) {
                 Ok(status) => results.push(status),
                 Err(e) => {
-                    tracing::warn!("Failed bridging network '{}' to proxy '{}': {}", net, proxy, e);
+                    tracing::warn!(
+                        "Failed bridging network '{}' to proxy '{}': {}",
+                        net,
+                        proxy,
+                        e
+                    );
                 }
             }
         }
@@ -179,7 +196,10 @@ impl ProxyBridgeManager {
             let safe_id = r.id.replace('_', "-");
             yaml.push_str(&format!("    smoooth-{}:\n", safe_id));
             yaml.push_str("      loadBalancer:\n        servers:\n");
-            yaml.push_str(&format!("          - url: \"http://{}:{}\"\n", r.target_resource, r.target_port));
+            yaml.push_str(&format!(
+                "          - url: \"http://{}:{}\"\n",
+                r.target_resource, r.target_port
+            ));
         }
 
         yaml

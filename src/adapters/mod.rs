@@ -66,6 +66,42 @@ pub trait ProviderAdapter: Send + Sync {
     /// Safe destruction with persistent volume preservation safeguards
     async fn destroy(&self, resource_id: &str, preserve_persistent_data: bool) -> Result<()>;
 
+    /// Authorized resource provisioning requiring a verified execution permit
+    async fn authorized_provision(
+        &self,
+        permit: &crate::security::VerifiedExecutionPermit<'_>,
+        target_urn: &crate::models::ResourceUrn,
+        expected_digest: [u8; 32],
+        name: &str,
+        config: &serde_json::Value,
+        is_persistent: bool,
+        current_epoch: u64,
+    ) -> Result<Resource> {
+        if std::time::Instant::now() > permit.deadline_monotonic {
+            return Err(crate::error::SmooothError::Security(
+                "Execution permit expired by monotonic deadline".into(),
+            ));
+        }
+        if permit.fencing_epoch != current_epoch {
+            return Err(crate::error::SmooothError::Security(format!(
+                "Fencing epoch mismatch: permit={}, current={}",
+                permit.fencing_epoch, current_epoch
+            )));
+        }
+        if &permit.target_urn != target_urn {
+            return Err(crate::error::SmooothError::Security(format!(
+                "Target URN mismatch: permit={}, requested={}",
+                permit.target_urn, target_urn
+            )));
+        }
+        if permit.operation_digest != expected_digest {
+            return Err(crate::error::SmooothError::Security(
+                "Operation payload digest mismatch".into(),
+            ));
+        }
+        self.provision(name, config, is_persistent).await
+    }
+
     /// Authorized destruction requiring a verified execution permit
     async fn authorized_destroy(
         &self,
@@ -99,7 +135,9 @@ pub trait ProviderAdapter: Send + Sync {
         }
         match (&permit.permitted_action, scope) {
             (
-                crate::models::Action::Destroy(crate::models::DestructionScope::ResourceAndPersistentData),
+                crate::models::Action::Destroy(
+                    crate::models::DestructionScope::ResourceAndPersistentData,
+                ),
                 crate::models::DestructionScope::ResourceAndPersistentData,
             ) => {}
             (
@@ -111,7 +149,8 @@ pub trait ProviderAdapter: Send + Sync {
                 crate::models::DestructionScope::ResourceAndPersistentData,
             ) => {
                 return Err(crate::error::SmooothError::Security(
-                    "Permit authorizes ResourceOnly destruction; cannot destroy persistent data".into(),
+                    "Permit authorizes ResourceOnly destruction; cannot destroy persistent data"
+                        .into(),
                 ));
             }
             _ => {

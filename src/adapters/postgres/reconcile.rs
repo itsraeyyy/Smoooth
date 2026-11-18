@@ -22,10 +22,9 @@ impl SupabaseRoleReconciler {
             FROM information_schema.schemata 
             WHERE schema_name IN ('auth', 'storage', 'vault');
         ";
-        let row = client
-            .query_one(query, &[])
-            .await
-            .map_err(|e| SmooothError::PostgresFailed(format!("Failed to query schemata: {}", e)))?;
+        let row = client.query_one(query, &[]).await.map_err(|e| {
+            SmooothError::PostgresFailed(format!("Failed to query schemata: {}", e))
+        })?;
 
         let schema_count: i64 = row.get(0);
         if schema_count > 0 {
@@ -77,10 +76,9 @@ impl SupabaseRoleReconciler {
             END
             $$;
         ";
-        client
-            .batch_execute(grant_sql)
-            .await
-            .map_err(|e| SmooothError::PostgresFailed(format!("Failed to grant postgres role: {}", e)))?;
+        client.batch_execute(grant_sql).await.map_err(|e| {
+            SmooothError::PostgresFailed(format!("Failed to grant postgres role: {}", e))
+        })?;
 
         // 2. Align role passwords
         let target_roles = [
@@ -92,10 +90,9 @@ impl SupabaseRoleReconciler {
 
         for role in target_roles {
             let check_sql = "SELECT 1 FROM pg_roles WHERE rolname = $1;";
-            let rows = client
-                .query(check_sql, &[&role])
-                .await
-                .map_err(|e| SmooothError::PostgresFailed(format!("Failed checking role '{}': {}", role, e)))?;
+            let rows = client.query(check_sql, &[&role]).await.map_err(|e| {
+                SmooothError::PostgresFailed(format!("Failed checking role '{}': {}", role, e))
+            })?;
 
             if !rows.is_empty() {
                 // Alter password
@@ -104,7 +101,10 @@ impl SupabaseRoleReconciler {
                     .execute(&alter_sql, &[&target_password])
                     .await
                     .map_err(|e| {
-                        SmooothError::PostgresFailed(format!("Failed to alter password for role '{}': {}", role, e))
+                        SmooothError::PostgresFailed(format!(
+                            "Failed to alter password for role '{}': {}",
+                            role, e
+                        ))
                     })?;
                 roles_updated.push(role.to_string());
             }
@@ -119,13 +119,18 @@ impl SupabaseRoleReconciler {
                 JOIN pg_namespace n ON p.pronamespace = n.oid 
                 WHERE n.nspname = 'auth' AND p.proname = $1;
             ";
-            let rows = client
-                .query(func_check, &[&func])
-                .await
-                .map_err(|e| SmooothError::PostgresFailed(format!("Failed checking function 'auth.{}': {}", func, e)))?;
+            let rows = client.query(func_check, &[&func]).await.map_err(|e| {
+                SmooothError::PostgresFailed(format!(
+                    "Failed checking function 'auth.{}': {}",
+                    func, e
+                ))
+            })?;
 
             if !rows.is_empty() {
-                let alter_func_sql = format!("ALTER FUNCTION auth.{}() OWNER TO supabase_auth_admin;", func);
+                let alter_func_sql = format!(
+                    "ALTER FUNCTION auth.{}() OWNER TO supabase_auth_admin;",
+                    func
+                );
                 if client.batch_execute(&alter_func_sql).await.is_ok() {
                     functions_reassigned.push(format!("auth.{}()", func));
                 }
@@ -133,11 +138,11 @@ impl SupabaseRoleReconciler {
         }
 
         // 4. Storage schema privileges and ownership
-        let storage_check = "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'storage';";
-        let storage_rows = client
-            .query(storage_check, &[])
-            .await
-            .map_err(|e| SmooothError::PostgresFailed(format!("Failed checking storage schema: {}", e)))?;
+        let storage_check =
+            "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'storage';";
+        let storage_rows = client.query(storage_check, &[]).await.map_err(|e| {
+            SmooothError::PostgresFailed(format!("Failed checking storage schema: {}", e))
+        })?;
 
         if !storage_rows.is_empty() {
             let storage_sql = "
@@ -173,7 +178,10 @@ mod tests {
     fn test_report_serialization() {
         let report = SupabaseReconciliationReport {
             detected_supabase: true,
-            roles_updated: vec!["supabase_auth_admin".to_string(), "supabase_storage_admin".to_string()],
+            roles_updated: vec![
+                "supabase_auth_admin".to_string(),
+                "supabase_storage_admin".to_string(),
+            ],
             functions_reassigned: vec!["auth.uid()".to_string()],
             schemas_reassigned: vec!["storage".to_string()],
             success: true,

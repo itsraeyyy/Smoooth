@@ -1,13 +1,11 @@
-use std::sync::Arc;
 use chrono::Utc;
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use smoooth::adapters::ProviderAdapter;
 use smoooth::error::SmooothError;
-use smoooth::models::{
-    Action, AgentIdentity, AgentScope, DestructionScope, ResourceUrn,
-};
+use smoooth::models::{Action, AgentIdentity, AgentScope, DestructionScope, ResourceUrn};
 use smoooth::security::{
     AuthorizationEngine, CapabilityChain, CapabilityPayload, ProofOfPossession,
 };
@@ -29,7 +27,8 @@ async fn test_adversarial_stolen_token_rejected_without_pop_private_key() {
     let storage = LocalStorage::new_in_memory();
     let engine = AuthorizationEngine::new(issuer_vk);
 
-    let target_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+    let target_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
 
     // Legitimate capability issued to Victim
     let root_payload = CapabilityPayload {
@@ -54,14 +53,9 @@ async fn test_adversarial_stolen_token_rejected_without_pop_private_key() {
     let body = b"{}";
     let thief_nonce = "thief_nonce_123".to_string();
 
-    let thief_pop = ProofOfPossession::generate(
-        &thief_sk,
-        root_payload.id,
-        method,
-        uri,
-        body,
-        thief_nonce,
-    ).unwrap();
+    let thief_pop =
+        ProofOfPossession::generate(&thief_sk, root_payload.id, method, uri, body, thief_nonce)
+            .unwrap();
 
     let res = engine
         .authorize_capability_request(
@@ -76,7 +70,10 @@ async fn test_adversarial_stolen_token_rejected_without_pop_private_key() {
         )
         .await;
 
-    assert!(res.is_err(), "Stolen capability token used with thief key must fail");
+    assert!(
+        res.is_err(),
+        "Stolen capability token used with thief key must fail"
+    );
     if let Err(SmooothError::Security(msg)) = res {
         assert!(msg.contains("Proof of possession holder key does not match capability holder"));
     } else {
@@ -91,7 +88,8 @@ async fn test_adversarial_nonce_replay_rejected() {
     let storage = LocalStorage::new_in_memory();
     let engine = AuthorizationEngine::new(issuer_vk);
 
-    let target_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+    let target_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
     let root_payload = CapabilityPayload {
         id: Uuid::new_v4(),
         parent_id: None,
@@ -113,14 +111,8 @@ async fn test_adversarial_nonce_replay_rejected() {
     let body = b"{}";
     let nonce = "unique_fixed_nonce".to_string();
 
-    let pop = ProofOfPossession::generate(
-        &agent_sk,
-        root_payload.id,
-        method,
-        uri,
-        body,
-        nonce,
-    ).unwrap();
+    let pop =
+        ProofOfPossession::generate(&agent_sk, root_payload.id, method, uri, body, nonce).unwrap();
 
     // 1. Initial invocation succeeds
     let first = engine
@@ -180,7 +172,12 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
         issuer: "smoooth:control-plane".into(),
         holder_public_key: hex::encode(lead_vk.as_bytes()),
         target_urn: root_urn.clone(),
-        actions: vec![Action::InspectMetadata, Action::ReadLogs { tail_limit: Some(100) }],
+        actions: vec![
+            Action::InspectMetadata,
+            Action::ReadLogs {
+                tail_limit: Some(100),
+            },
+        ],
         caveats: vec![],
         can_delegate: true,
         remaining_depth: 3,
@@ -197,7 +194,9 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
         issuer: hex::encode(lead_vk.as_bytes()),
         holder_public_key: hex::encode(subagent_vk.as_bytes()),
         target_urn: root_urn.clone(),
-        actions: vec![Action::ReadLogs { tail_limit: Some(50) }],
+        actions: vec![Action::ReadLogs {
+            tail_limit: Some(50),
+        }],
         caveats: vec![],
         can_delegate: true,
         remaining_depth: 2,
@@ -214,7 +213,9 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
         issuer: hex::encode(subagent_vk.as_bytes()),
         holder_public_key: hex::encode(worker_vk.as_bytes()),
         target_urn: root_urn.clone(),
-        actions: vec![Action::ReadLogs { tail_limit: Some(25) }],
+        actions: vec![Action::ReadLogs {
+            tail_limit: Some(25),
+        }],
         caveats: vec![],
         can_delegate: false,
         remaining_depth: 1,
@@ -236,7 +237,8 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
         uri,
         body,
         "worker_nonce_1".into(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let pre_revocation = engine
         .authorize_capability_request(
@@ -247,14 +249,20 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
             uri,
             body,
             &root_urn,
-            &Action::ReadLogs { tail_limit: Some(10) },
+            &Action::ReadLogs {
+                tail_limit: Some(10),
+            },
         )
         .await;
     assert!(pre_revocation.is_ok());
 
     // 5. Root capability is durably revoked!
     storage
-        .record_revocation(&root_id, "Key compromise detected", now + chrono::Duration::hours(1))
+        .record_revocation(
+            &root_id,
+            "Key compromise detected",
+            now + chrono::Duration::hours(1),
+        )
         .await
         .unwrap();
 
@@ -266,7 +274,8 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
         uri,
         body,
         "worker_nonce_2".into(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let post_revocation = engine
         .authorize_capability_request(
@@ -277,11 +286,16 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
             uri,
             body,
             &root_urn,
-            &Action::ReadLogs { tail_limit: Some(10) },
+            &Action::ReadLogs {
+                tail_limit: Some(10),
+            },
         )
         .await;
 
-    assert!(post_revocation.is_err(), "Worker should fail because root ancestor is revoked");
+    assert!(
+        post_revocation.is_err(),
+        "Worker should fail because root ancestor is revoked"
+    );
     if let Err(SmooothError::Security(msg)) = post_revocation {
         assert!(msg.contains("has been revoked"));
     } else {
@@ -291,7 +305,8 @@ async fn test_adversarial_cascading_revocation_invalidates_descendants() {
 
 #[tokio::test]
 async fn test_adversarial_adapter_digest_and_scope_checks() {
-    let target_urn = ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
+    let target_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/workloads/web-api").unwrap();
     let expected_digest = [42u8; 32];
     let fencing_epoch = 1u64;
 
@@ -337,13 +352,16 @@ async fn test_adversarial_adapter_digest_and_scope_checks() {
         .await;
     assert!(res_scope.is_err());
     if let Err(SmooothError::Security(msg)) = res_scope {
-        assert!(msg.contains("Permit authorizes ResourceOnly destruction; cannot destroy persistent data"));
+        assert!(msg.contains(
+            "Permit authorizes ResourceOnly destruction; cannot destroy persistent data"
+        ));
     } else {
         panic!("Expected destruction scope violation security error");
     }
 
     // 3. Calling adapter with mismatched target URN must fail
-    let different_urn = ResourceUrn::parse("smoooth://workspaces/production/databases/postgres").unwrap();
+    let different_urn =
+        ResourceUrn::parse("smoooth://workspaces/production/databases/postgres").unwrap();
     let res_urn = adapter
         .authorized_destroy(
             &permit,
@@ -398,7 +416,8 @@ async fn test_adversarial_cross_workspace_capability_rejection() {
         uri,
         body,
         "nonce_cross_ws".into(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let res = engine
         .authorize_capability_request(
@@ -413,7 +432,10 @@ async fn test_adversarial_cross_workspace_capability_rejection() {
         )
         .await;
 
-    assert!(res.is_err(), "Cross-workspace capability execution must be rejected");
+    assert!(
+        res.is_err(),
+        "Cross-workspace capability execution must be rejected"
+    );
     if let Err(SmooothError::Security(msg)) = res {
         assert!(msg.contains("does not encompass target resource"));
     } else {
@@ -445,12 +467,7 @@ async fn test_adversarial_dual_mode_legacy_scope_synthesis() {
 
     // Synthesizing permit for RestartWorkload succeeds
     let restart_res = orchestrator
-        .synthesize_legacy_permit(
-            &deploy_agent,
-            &prod_urn,
-            Action::RestartWorkload,
-            [0u8; 32],
-        )
+        .synthesize_legacy_permit(&deploy_agent, &prod_urn, Action::RestartWorkload, [0u8; 32])
         .await;
     assert!(restart_res.is_ok());
 
@@ -463,18 +480,27 @@ async fn test_adversarial_dual_mode_legacy_scope_synthesis() {
             [0u8; 32],
         )
         .await;
-    assert!(destroy_res.is_err(), "Deploy scope cannot synthesize Destroy permit");
+    assert!(
+        destroy_res.is_err(),
+        "Deploy scope cannot synthesize Destroy permit"
+    );
 
     // Synthesizing permit for ReadSecret fails closed (Deploy scope cannot read secrets!)
     let secret_res = orchestrator
         .synthesize_legacy_permit(
             &deploy_agent,
             &prod_urn,
-            Action::ReadSecret { key_name: "PASS".into(), purpose: "dump".into() },
+            Action::ReadSecret {
+                key_name: "PASS".into(),
+                purpose: "dump".into(),
+            },
             [0u8; 32],
         )
         .await;
-    assert!(secret_res.is_err(), "Deploy scope cannot synthesize ReadSecret permit");
+    assert!(
+        secret_res.is_err(),
+        "Deploy scope cannot synthesize ReadSecret permit"
+    );
 
     // Attempting cross-workspace synthesis fails closed!
     let staging_urn = ResourceUrn::parse("smoooth://workspaces/staging/workloads/web-api").unwrap();
@@ -486,13 +512,19 @@ async fn test_adversarial_dual_mode_legacy_scope_synthesis() {
             [0u8; 32],
         )
         .await;
-    assert!(cross_ws_res.is_err(), "Cross-workspace synthesis must fail closed");
+    assert!(
+        cross_ws_res.is_err(),
+        "Cross-workspace synthesis must fail closed"
+    );
 }
 
 #[tokio::test]
 async fn test_adversarial_durable_restart_survives_process_termination() {
     let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join(format!("smoooth_durable_restart_test_{}.json", Uuid::new_v4()));
+    let temp_file = temp_dir.join(format!(
+        "smoooth_durable_restart_test_{}.json",
+        Uuid::new_v4()
+    ));
 
     let cap_id = Uuid::new_v4();
     let nonce = "nonce_must_survive_restart_987".to_string();
@@ -519,7 +551,10 @@ async fn test_adversarial_durable_restart_survives_process_termination() {
     } // storage dropped here (process termination simulation)
 
     // Ensure state file exists on disk
-    assert!(temp_file.exists(), "State snapshot file must exist after drop");
+    assert!(
+        temp_file.exists(),
+        "State snapshot file must exist after drop"
+    );
 
     // 2. Restarted process: load fresh LocalStorage from the persisted file
     {
@@ -530,14 +565,20 @@ async fn test_adversarial_durable_restart_survives_process_termination() {
             .is_revoked(&cap_id)
             .await
             .expect("is_revoked should succeed");
-        assert!(is_revoked, "Revocation record must survive full process restart");
+        assert!(
+            is_revoked,
+            "Revocation record must survive full process restart"
+        );
 
         // Verify nonce survived restart
         let is_nonce_used = restarted_storage
             .is_nonce_used(&nonce)
             .await
             .expect("is_nonce_used should succeed");
-        assert!(is_nonce_used, "Nonce record must survive full process restart");
+        assert!(
+            is_nonce_used,
+            "Nonce record must survive full process restart"
+        );
 
         // Verify unknown nonce is false
         let unused_nonce = restarted_storage
@@ -582,7 +623,12 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         issuer: "smoooth:control-plane".into(),
         holder_public_key: hex::encode(root_vk.as_bytes()),
         target_urn: urn.clone(),
-        actions: vec![Action::InspectMetadata, Action::ReadLogs { tail_limit: Some(100) }],
+        actions: vec![
+            Action::InspectMetadata,
+            Action::ReadLogs {
+                tail_limit: Some(100),
+            },
+        ],
         caveats: vec![],
         can_delegate: true,
         remaining_depth: 3,
@@ -599,7 +645,9 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         issuer: hex::encode(root_vk.as_bytes()),
         holder_public_key: hex::encode(child_vk.as_bytes()),
         target_urn: urn.clone(),
-        actions: vec![Action::ReadLogs { tail_limit: Some(50) }],
+        actions: vec![Action::ReadLogs {
+            tail_limit: Some(50),
+        }],
         caveats: vec![],
         can_delegate: true,
         remaining_depth: 2,
@@ -616,7 +664,9 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         issuer: hex::encode(child_vk.as_bytes()),
         holder_public_key: hex::encode(grandchild_vk.as_bytes()),
         target_urn: urn.clone(),
-        actions: vec![Action::ReadLogs { tail_limit: Some(25) }],
+        actions: vec![Action::ReadLogs {
+            tail_limit: Some(25),
+        }],
         caveats: vec![],
         can_delegate: false,
         remaining_depth: 1,
@@ -629,7 +679,11 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
 
     // 4. Revoking the intermediate Child capability
     storage
-        .record_revocation(&child_id, "Intermediate tier compromised", now + chrono::Duration::hours(1))
+        .record_revocation(
+            &child_id,
+            "Intermediate tier compromised",
+            now + chrono::Duration::hours(1),
+        )
         .await
         .unwrap();
 
@@ -644,7 +698,8 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         uri,
         body,
         "nonce_gc_test".into(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let res_grandchild = engine
         .authorize_capability_request(
@@ -655,11 +710,16 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
             uri,
             body,
             &urn,
-            &Action::ReadLogs { tail_limit: Some(10) },
+            &Action::ReadLogs {
+                tail_limit: Some(10),
+            },
         )
         .await;
 
-    assert!(res_grandchild.is_err(), "Grandchild must fail when intermediate parent is revoked");
+    assert!(
+        res_grandchild.is_err(),
+        "Grandchild must fail when intermediate parent is revoked"
+    );
     if let Err(SmooothError::Security(msg)) = res_grandchild {
         assert!(msg.contains("has been revoked"));
     } else {
@@ -692,7 +752,8 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         uri,
         body,
         "nonce_sibling_test".into(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let res_sibling = engine
         .authorize_capability_request(
@@ -707,5 +768,8 @@ async fn test_adversarial_grandchild_revocation_at_intermediate_tier() {
         )
         .await;
 
-    assert!(res_sibling.is_ok(), "Sibling branch under root must remain valid");
+    assert!(
+        res_sibling.is_ok(),
+        "Sibling branch under root must remain valid"
+    );
 }

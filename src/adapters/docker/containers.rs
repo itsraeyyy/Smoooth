@@ -111,7 +111,10 @@ impl ContainerManager {
                     Some(pm.host_port.to_string())
                 },
             };
-            port_map.insert(format!("{}/{}", pm.container_port, proto), Some(vec![binding]));
+            port_map.insert(
+                format!("{}/{}", pm.container_port, proto),
+                Some(vec![binding]),
+            );
         }
 
         let binds: Vec<String> = spec

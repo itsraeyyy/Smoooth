@@ -1,6 +1,7 @@
 pub mod adapters;
 pub mod api;
 pub mod build;
+pub mod cloud;
 pub mod dashboard;
 pub mod doctor;
 pub mod engine;
@@ -9,6 +10,7 @@ pub mod ingress;
 pub mod mcp;
 pub mod migration;
 pub mod models;
+pub mod runtime;
 pub mod security;
 pub mod storage;
 

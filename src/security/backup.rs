@@ -140,9 +140,8 @@ impl BackupManager {
                 SmooothError::Storage(format!("Failed to read backup file from disk: {}", e))
             })?;
 
-        serde_json::from_str(&data).map_err(|e| {
-            SmooothError::Storage(format!("Invalid backup archive format: {}", e))
-        })
+        serde_json::from_str(&data)
+            .map_err(|e| SmooothError::Storage(format!("Invalid backup archive format: {}", e)))
     }
 
     /// Verifies restoration in a completely isolated sandbox environment.
@@ -205,7 +204,10 @@ impl BackupManager {
         // Verify structural resource invariants
         for (res_id, res) in &payload.snapshot.resources {
             // Confirm valid URN construction
-            let target_urn_str = format!("smoooth://workspaces/{}/workloads/{}", res.workspace_id, res_id);
+            let target_urn_str = format!(
+                "smoooth://workspaces/{}/workloads/{}",
+                res.workspace_id, res_id
+            );
             if let Err(e) = ResourceUrn::parse(&target_urn_str) {
                 return Err(SmooothError::Security(format!(
                     "Backup contains corrupt resource identifier '{res_id}': {e}"
@@ -390,7 +392,12 @@ mod tests {
         assert!(res.is_err(), "Must reject unconfirmed live restore");
 
         // Attempt with confirmation token
-        let res2 = BackupManager::restore_to_live(&archive, &store, &storage, RESTORE_CONFIRMATION_TOKEN).await;
-        assert!(res2.is_ok(), "Must succeed with explicit confirmation token");
+        let res2 =
+            BackupManager::restore_to_live(&archive, &store, &storage, RESTORE_CONFIRMATION_TOKEN)
+                .await;
+        assert!(
+            res2.is_ok(),
+            "Must succeed with explicit confirmation token"
+        );
     }
 }

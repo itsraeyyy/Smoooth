@@ -59,7 +59,9 @@ async fn docker_exec(
         .expect("create_exec should succeed");
 
     let mut output = String::new();
-    if let StartExecResults::Attached { output: mut stream, .. } = docker
+    if let StartExecResults::Attached {
+        output: mut stream, ..
+    } = docker
         .start_exec(&exec.id, None)
         .await
         .expect("start_exec should succeed")
@@ -115,7 +117,11 @@ async fn test_live_postgres_persistence_across_container_replacement() {
     // 1. Provision initial PostgreSQL instance
     println!(">>> Provisioning initial PostgreSQL container with persistent volume...");
     let res1 = postgres.provision(service_name, &config, true).await;
-    assert!(res1.is_ok(), "Initial PG provisioning must succeed: {:?}", res1.as_ref().err());
+    assert!(
+        res1.is_ok(),
+        "Initial PG provisioning must succeed: {:?}",
+        res1.as_ref().err()
+    );
     let res_obj = res1.unwrap();
     assert!(res_obj.is_persistent);
 
@@ -159,7 +165,11 @@ async fn test_live_postgres_persistence_across_container_replacement() {
     // 4. Provision replacement container bound to the same persistent volume
     println!(">>> Provisioning replacement PG container on existing volume...");
     let res2 = postgres.provision(service_name, &config, true).await;
-    assert!(res2.is_ok(), "Replacement PG provisioning must succeed: {:?}", res2.as_ref().err());
+    assert!(
+        res2.is_ok(),
+        "Replacement PG provisioning must succeed: {:?}",
+        res2.as_ref().err()
+    );
 
     // Wait for replacement readiness
     let h2 = postgres.health_check(service_name).await.unwrap();
@@ -232,7 +242,10 @@ async fn test_live_redis_persistence_and_health_check() {
         .await
         .expect("Failed to send SET command");
     let mut buf = [0u8; 128];
-    let n = stream.read(&mut buf).await.expect("Failed to read SET response");
+    let n = stream
+        .read(&mut buf)
+        .await
+        .expect("Failed to read SET response");
     let set_resp = String::from_utf8_lossy(&buf[..n]);
     assert!(set_resp.contains("+OK"), "SET must return +OK");
 
@@ -241,7 +254,10 @@ async fn test_live_redis_persistence_and_health_check() {
         .write_all(b"*1\r\n$4\r\nSAVE\r\n")
         .await
         .expect("Failed to send SAVE command");
-    let n = stream.read(&mut buf).await.expect("Failed to read SAVE response");
+    let n = stream
+        .read(&mut buf)
+        .await
+        .expect("Failed to read SAVE response");
     let save_resp = String::from_utf8_lossy(&buf[..n]);
     assert!(save_resp.contains("+OK"), "SAVE must return +OK");
 
@@ -250,7 +266,10 @@ async fn test_live_redis_persistence_and_health_check() {
         .write_all(b"*2\r\n$3\r\nGET\r\n$11\r\nsmoooth_key\r\n")
         .await
         .expect("Failed to send GET command");
-    let n = stream.read(&mut buf).await.expect("Failed to read GET response");
+    let n = stream
+        .read(&mut buf)
+        .await
+        .expect("Failed to read GET response");
     let get_resp = String::from_utf8_lossy(&buf[..n]);
     assert!(
         get_resp.contains("redis_persisted_data"),
@@ -298,7 +317,11 @@ async fn test_live_mongodb_provision_query_and_persistence() {
     // 1. Provision MongoDB instance
     println!(">>> Provisioning MongoDB container (mongo:7-jammy) with persistent volume...");
     let res1 = mongo.provision("live-test", &config, true).await;
-    assert!(res1.is_ok(), "MongoDB provisioning must succeed: {:?}", res1.err());
+    assert!(
+        res1.is_ok(),
+        "MongoDB provisioning must succeed: {:?}",
+        res1.err()
+    );
 
     // 2. Insert test document using mongosh inside the container
     println!(">>> Inserting test document into MongoDB via mongosh...");
@@ -329,17 +352,28 @@ async fn test_live_mongodb_provision_query_and_persistence() {
         last_out = out1;
         sleep(Duration::from_millis(500)).await;
     }
-    assert!(inserted, "Inserting document into Mongo must succeed. Last output: {}", last_out);
+    assert!(
+        inserted,
+        "Inserting document into Mongo must succeed. Last output: {}",
+        last_out
+    );
 
     // 3. Stop and remove the container without destroying the volume
-    println!(">>> Destroying MongoDB container while preserving volume '{}'...", vol_name);
+    println!(
+        ">>> Destroying MongoDB container while preserving volume '{}'...",
+        vol_name
+    );
     let stop_res = ContainerManager::stop_and_remove(&client, service_name).await;
     assert!(stop_res.is_ok(), "Mongo container removal must succeed");
 
     // 4. Provision replacement MongoDB container bound to existing volume
     println!(">>> Provisioning replacement MongoDB container with same volume...");
     let res2 = mongo.provision("live-test", &config, true).await;
-    assert!(res2.is_ok(), "Replacement MongoDB provisioning must succeed: {:?}", res2.err());
+    assert!(
+        res2.is_ok(),
+        "Replacement MongoDB provisioning must succeed: {:?}",
+        res2.err()
+    );
 
     // 5. Query document from replacement container to verify persistence
     println!(">>> Verifying data survived in replacement MongoDB container...");
@@ -404,7 +438,9 @@ async fn test_live_sqlite_persistent_volume_retention_across_replacement() {
         .expect("Volume creation must succeed");
 
     // 2. Launch initial container that installs sqlite3, creates /data/app.db, and writes data
-    println!(">>> Starting first container to write to SQLite database file on persistent volume...");
+    println!(
+        ">>> Starting first container to write to SQLite database file on persistent volume..."
+    );
     let spec1 = ContainerSpec {
         name: c1_name.to_string(),
         image: "alpine:latest".to_string(),
@@ -436,14 +472,18 @@ async fn test_live_sqlite_persistent_volume_retention_across_replacement() {
     // Poll until writer container completes SQLite initialization
     let mut writer_done = false;
     for _ in 0..120 {
-        let (code, _) = docker_exec(client.inner(), c1_name, vec!["ls", "/data/writer_done.txt"]).await;
+        let (code, _) =
+            docker_exec(client.inner(), c1_name, vec!["ls", "/data/writer_done.txt"]).await;
         if code == 0 {
             writer_done = true;
             break;
         }
         sleep(Duration::from_millis(500)).await;
     }
-    assert!(writer_done, "Writer container must finish writing to SQLite database");
+    assert!(
+        writer_done,
+        "Writer container must finish writing to SQLite database"
+    );
 
     // 3. Stop and completely destroy writer container
     println!(">>> Completely destroying writer container...");
@@ -481,22 +521,22 @@ async fn test_live_sqlite_persistent_volume_retention_across_replacement() {
     // Poll until reader container completes query
     let mut reader_done = false;
     for _ in 0..120 {
-        let (code, _) = docker_exec(client.inner(), c2_name, vec!["ls", "/data/reader_done.txt"]).await;
+        let (code, _) =
+            docker_exec(client.inner(), c2_name, vec!["ls", "/data/reader_done.txt"]).await;
         if code == 0 {
             reader_done = true;
             break;
         }
         sleep(Duration::from_millis(500)).await;
     }
-    assert!(reader_done, "Reader container must finish reading from SQLite database");
+    assert!(
+        reader_done,
+        "Reader container must finish reading from SQLite database"
+    );
 
     // 5. Query /data/output.txt inside container 2
-    let (exit_code, output) = docker_exec(
-        client.inner(),
-        c2_name,
-        vec!["cat", "/data/output.txt"],
-    )
-    .await;
+    let (exit_code, output) =
+        docker_exec(client.inner(), c2_name, vec!["cat", "/data/output.txt"]).await;
 
     assert_eq!(exit_code, 0, "Reading output.txt must succeed");
     assert!(

@@ -101,6 +101,7 @@ pub struct AppState {
     pub mcp_server: Arc<McpServer>,
     pub auth_token: String,
     pub sse_sessions: Arc<RwLock<HashMap<String, SseSender>>>,
+    pub runtime: Arc<dyn crate::runtime::RuntimeProvider>,
 }
 
 #[derive(Serialize)]
@@ -158,7 +159,10 @@ pub fn redact_sensitive_json(val: &serde_json::Value) -> serde_json::Value {
             let mut redacted = serde_json::Map::new();
             for (k, v) in map {
                 if is_sensitive_key(k) {
-                    redacted.insert(k.clone(), serde_json::Value::String("[REDACTED]".to_string()));
+                    redacted.insert(
+                        k.clone(),
+                        serde_json::Value::String("[REDACTED]".to_string()),
+                    );
                 } else {
                     redacted.insert(k.clone(), redact_sensitive_json(v));
                 }
@@ -195,6 +199,11 @@ pub struct ApprovePlanRequest {
     pub plan_hash: String,
     pub approver: Option<String>,
     pub ttl_seconds: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct RejectPlanRequest {
+    pub reason: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -241,12 +250,14 @@ pub struct AddIngressRequest {
 pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router, AppState) {
     let mcp_server = Arc::new(McpServer::new(orchestrator.clone()));
     let sse_sessions = Arc::new(RwLock::new(HashMap::new()));
+    let runtime = crate::runtime::default_runtime_provider();
 
     let state = AppState {
         orchestrator,
         mcp_server,
         auth_token,
         sse_sessions,
+        runtime,
     };
 
     // Hardened CORS: Restrictive by default; no permissive wildcard access
@@ -281,8 +292,10 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/status", get(status_handler))
         .route("/api/capabilities", get(capabilities_handler))
         .route("/api/tools", get(tools_handler))
+        .route("/api/plans/pending", get(list_pending_plans_handler))
         .route("/api/plans/:id", get(get_plan_handler))
         .route("/api/plans/:id/approve", post(approve_plan_handler))
+        .route("/api/plans/:id/reject", post(reject_plan_handler))
         .route("/api/operations", get(list_operations_handler))
         .route("/api/operations/:id", get(get_operation_handler))
         .route("/api/reconcile/:resource_id", post(reconcile_handler))
@@ -297,7 +310,10 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/build/plan", post(build_plan_handler))
         .route("/api/build/nixpacks", post(build_nixpacks_handler))
         // Ingress & Custom Domains
-        .route("/api/ingress", get(list_ingress_handler).post(add_ingress_handler))
+        .route(
+            "/api/ingress",
+            get(list_ingress_handler).post(add_ingress_handler),
+        )
         .route("/api/ingress/:domain", delete(remove_ingress_handler))
         .route("/api/ingress/export/:format", get(export_ingress_handler))
         // Real-Time Container Logs (Overseer Drawer)
@@ -306,7 +322,10 @@ pub fn build_app(orchestrator: Arc<Orchestrator>, auth_token: String) -> (Router
         .route("/api/workloads/deploy", post(deploy_workload_handler))
         .route("/api/workloads/:id", delete(delete_workload_handler))
         .route("/api/workloads/:id/restart", post(restart_workload_handler))
-        .route("/api/workloads/:id/env", get(get_workload_env_handler).post(update_workload_env_handler))
+        .route(
+            "/api/workloads/:id/env",
+            get(get_workload_env_handler).post(update_workload_env_handler),
+        )
         // Migration Engine (Coolify, Compose, Render, Fly, Dokku, Host Scanner)
         .route("/api/migrate/detect", post(migrate_detect_handler))
         .route("/api/migrate/preview", post(migrate_preview_handler))
@@ -487,9 +506,11 @@ async fn sse_connect_handler(
         sessions.insert(session_id.clone(), tx);
     }
 
-    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
-        rx.recv().await.map(|ev| (ev, rx))
-    });
+    let stream =
+        futures_util::stream::unfold(
+            rx,
+            |mut rx| async move { rx.recv().await.map(|ev| (ev, rx)) },
+        );
 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
@@ -661,6 +682,23 @@ async fn approve_plan_handler(
         ));
     }
 
+    // SEC-02 & SEC-05: Strict Anti-Self-Approval Rule
+    if let Some(agent) = &caller.identity {
+        let agent_creator = format!("agent:{}", agent.agent_id);
+        if plan.created_by == agent_creator || plan.created_by == agent.name {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({
+                    "error": "PolicyViolation",
+                    "message": format!(
+                        "Agent self-approval policy violation: Agent '{}' cannot approve its own plan '{}'. Independent human operator approval is required.",
+                        agent.name, id
+                    )
+                })),
+            ));
+        }
+    }
+
     let approver = body
         .approver
         .unwrap_or_else(|| "remote_operator".to_string());
@@ -684,6 +722,127 @@ async fn approve_plan_handler(
         "plan_hash": plan.plan_hash,
         "approved_by": approver,
         "ttl_seconds": ttl
+    })))
+}
+
+/// List all plans currently awaiting human operator approval
+async fn list_pending_plans_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let plans = state.orchestrator.list_plans().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+
+    let pending: Vec<serde_json::Value> = plans
+        .into_iter()
+        .filter(|p| !p.is_approval_valid())
+        .filter(|p| {
+            if let Some(agent) = &caller.identity {
+                p.spec.workspace_id == agent.workspace_id || agent.workspace_id == "*"
+            } else {
+                true
+            }
+        })
+        .map(|p| {
+            serde_json::json!({
+                "id": p.id,
+                "plan_hash": p.plan_hash,
+                "workspace_id": p.spec.workspace_id,
+                "environment": p.spec.environment,
+                "risk_tier": p.risk_tier,
+                "created_by": p.created_by,
+                "estimated_cost_usd": p.estimated_monthly_cost_usd,
+                "actions_count": p.spec.actions.len(),
+                "created_at": p.created_at,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "pending_plans": pending,
+        "total": pending.len(),
+    })))
+}
+
+/// Reject a pending deployment plan with reason
+async fn reject_plan_handler(
+    State(state): State<AppState>,
+    Extension(caller): Extension<AuthenticatedCaller>,
+    Path(id): Path<String>,
+    Json(body): Json<RejectPlanRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    if !caller.is_operator
+        && !caller
+            .identity
+            .as_ref()
+            .is_some_and(|i| i.has_scope(&AgentScope::Admin))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "Forbidden",
+                "message": "Admin or operator privileges required to reject plans"
+            })),
+        ));
+    }
+
+    let plan = state.orchestrator.get_plan(&id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+    })?;
+
+    let plan = match plan {
+        Some(p) => p,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": format!("Plan '{}' not found", id) })),
+            ));
+        }
+    };
+
+    let reason = body
+        .reason
+        .unwrap_or_else(|| "Operator rejected deployment".to_string());
+
+    // Record audit event for rejection
+    let _ = state
+        .orchestrator
+        .storage()
+        .record_audit(crate::storage::AuditEvent {
+            id: 0,
+            workspace_id: plan.spec.workspace_id.clone(),
+            actor: caller
+                .identity
+                .as_ref()
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "operator".to_string()),
+            action: "plan_reject".to_string(),
+            target_resource_id: None,
+            plan_hash: Some(plan.plan_hash.clone()),
+            outcome: "rejected".to_string(),
+            redacted_evidence: Some(serde_json::json!({
+                "plan_id": plan.id,
+                "reason": reason,
+            })),
+            timestamp: chrono::Utc::now(),
+        })
+        .await;
+
+    // Delete rejected plan
+    let _ = state.orchestrator.delete_plan(&id).await;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "plan_id": id,
+        "status": "rejected",
+        "reason": reason,
     })))
 }
 
@@ -903,11 +1062,7 @@ async fn audit_handler(
     Query(query): Query<AuditQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let ws = if caller.is_operator
-        || caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            == Some("*")
+        || caller.identity.as_ref().map(|i| i.workspace_id.as_str()) == Some("*")
     {
         query.workspace.unwrap_or_else(|| "*".to_string())
     } else if let Some(ref identity) = caller.identity {
@@ -1019,10 +1174,14 @@ async fn remove_ingress_handler(
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let ingress = crate::ingress::IngressManager::default_local();
     match ingress.remove_route(&domain) {
-        Ok(true) => Ok(Json(serde_json::json!({ "success": true, "domain": domain }))),
+        Ok(true) => Ok(Json(
+            serde_json::json!({ "success": true, "domain": domain }),
+        )),
         Ok(false) => Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": format!("Route for domain '{}' not found", domain) })),
+            Json(
+                serde_json::json!({ "error": format!("Route for domain '{}' not found", domain) }),
+            ),
         )),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1037,9 +1196,14 @@ async fn export_ingress_handler(
     Path(format): Path<String>,
 ) -> impl IntoResponse {
     let ingress = crate::ingress::IngressManager::default_local();
-    let config = ingress.render_upstream_snippet(&format).unwrap_or_else(|e| format!("# Error generating config: {}", e));
+    let config = ingress
+        .render_upstream_snippet(&format)
+        .unwrap_or_else(|e| format!("# Error generating config: {}", e));
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
         config,
     )
 }
@@ -1064,11 +1228,7 @@ async fn resource_logs_handler(
             ));
         }
     } else if !caller.is_operator
-        && caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            != Some("*")
+        && caller.identity.as_ref().map(|i| i.workspace_id.as_str()) != Some("*")
     {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1079,28 +1239,16 @@ async fn resource_logs_handler(
         ));
     }
 
-    let logs_cmd = tokio::process::Command::new("docker")
-        .args(["logs", "--tail", "150", &id])
-        .output()
-        .await;
+    let logs = state
+        .runtime
+        .logs(&id, 150)
+        .await
+        .unwrap_or_else(|e| format!("Unable to fetch container logs: {}", e));
 
-    match logs_cmd {
-        Ok(output) => {
-            let combined = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            Ok(Json(serde_json::json!({
-                "resource_id": id,
-                "logs": combined,
-            })))
-        }
-        Err(e) => Ok(Json(serde_json::json!({
-            "resource_id": id,
-            "logs": format!("Unable to fetch container logs: {}", e),
-        }))),
-    }
+    Ok(Json(serde_json::json!({
+        "resource_id": id,
+        "logs": logs,
+    })))
 }
 
 #[derive(Debug, Deserialize)]
@@ -1154,7 +1302,9 @@ async fn deploy_workload_handler(
     let service_type = body.service_type.unwrap_or_else(|| "web".to_string());
     let port = body.port.unwrap_or(8080);
     let mut env_vars = body.env_vars.unwrap_or_default();
-    env_vars.entry("PORT".to_string()).or_insert_with(|| port.to_string());
+    env_vars
+        .entry("PORT".to_string())
+        .or_insert_with(|| port.to_string());
 
     let container_port = if clean_image.contains("nginx") {
         80
@@ -1202,16 +1352,66 @@ async fn deploy_workload_handler(
         },
     };
 
-    let plan_id = format!("plan_{}", uuid::Uuid::new_v4().simple());
-    let mut plan = crate::models::Plan::new(plan_id, spec, crate::models::RiskTier::Low, Some(10.0));
-    plan.approve_with_ttl("operator_dashboard".to_string(), 3600);
+    let (creator, is_agent) = if let Some(ref agent) = caller.identity {
+        (format!("agent:{}", agent.agent_id), true)
+    } else {
+        ("operator".to_string(), false)
+    };
 
-    state.orchestrator.save_plan(plan.clone()).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
-        )
-    })?;
+    let risk_tier = if spec.environment == "production" {
+        crate::models::RiskTier::High
+    } else {
+        crate::models::RiskTier::Moderate
+    };
+
+    let plan_id = format!("plan_{}", uuid::Uuid::new_v4().simple());
+    let mut plan =
+        crate::models::Plan::new(plan_id, spec, risk_tier, Some(10.0)).with_creator(creator);
+
+    // Security Gate: Agents are strictly prohibited from auto-approving plans.
+    // If an agent calls deploy, save plan in pending state and return 202 Accepted.
+    if is_agent {
+        state
+            .orchestrator
+            .save_plan(plan.clone())
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": e.to_string() })),
+                )
+            })?;
+
+        return Ok((
+            StatusCode::ACCEPTED,
+            Json(serde_json::json!({
+                "status": "awaiting_approval",
+                "plan_id": plan.id,
+                "plan_hash": plan.plan_hash,
+                "created_by": plan.created_by,
+                "environment": plan.spec.environment,
+                "risk_tier": plan.risk_tier,
+                "requires_approval": true,
+                "message": format!(
+                    "Deployment plan '{}' for environment '{}' created and awaiting operator approval. Run 'smoooth approve {}' or approve in the dashboard.",
+                    plan.id, plan.spec.environment, plan.id
+                )
+            })),
+        ));
+    }
+
+    // Operator direct deployment from dashboard
+    plan.approve_with_ttl("operator_dashboard".to_string(), 3600);
+    state
+        .orchestrator
+        .save_plan(plan.clone())
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+        })?;
 
     let idemp_key = format!("ui_deploy_{}", uuid::Uuid::new_v4().simple());
     let op = state
@@ -1234,14 +1434,17 @@ async fn deploy_workload_handler(
         }
     }
 
-    Ok(Json(serde_json::json!({
-        "success": true,
-        "resource_id": clean_name,
-        "operation_id": op.id,
-        "status": format!("{:?}", op.status),
-        "plan_id": plan.id,
-        "port": port
-    })))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success": true,
+            "resource_id": clean_name,
+            "operation_id": op.id,
+            "status": format!("{:?}", op.status),
+            "plan_id": plan.id,
+            "port": port
+        })),
+    ))
 }
 
 /// Restart Workload Container Handler
@@ -1278,11 +1481,7 @@ async fn restart_workload_handler(
             ));
         }
     } else if !caller.is_operator
-        && caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            != Some("*")
+        && caller.identity.as_ref().map(|i| i.workspace_id.as_str()) != Some("*")
     {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1293,27 +1492,18 @@ async fn restart_workload_handler(
         ));
     }
 
-    let output = tokio::process::Command::new("docker")
-        .args(["restart", &id])
-        .output()
-        .await;
-
-    match output {
-        Ok(o) if o.status.success() => Ok(Json(serde_json::json!({
+    match state.runtime.restart(&id, 10).await {
+        Ok(_) => Ok(Json(serde_json::json!({
             "success": true,
             "resource_id": id,
             "message": "Container restarted successfully."
         }))),
-        Ok(o) => Err((
+        Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
                 "error": "Restart failed",
-                "message": String::from_utf8_lossy(&o.stderr).to_string()
+                "message": e.to_string()
             })),
-        )),
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e.to_string() })),
         )),
     }
 }
@@ -1339,7 +1529,8 @@ async fn delete_workload_handler(
         ));
     }
 
-    let target_ws = if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
+    let target_ws = if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await
+    {
         if !caller.allows_workspace(&resource.workspace_id) {
             return Err((
                 StatusCode::FORBIDDEN,
@@ -1354,11 +1545,7 @@ async fn delete_workload_handler(
         }
         resource.workspace_id
     } else if !caller.is_operator
-        && caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            != Some("*")
+        && caller.identity.as_ref().map(|i| i.workspace_id.as_str()) != Some("*")
     {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1371,11 +1558,8 @@ async fn delete_workload_handler(
         "default".to_string()
     };
 
-    // Stop and remove container via docker CLI
-    let _ = tokio::process::Command::new("docker")
-        .args(["rm", "-f", &id])
-        .output()
-        .await;
+    // Stop and remove container via unified runtime provider
+    let _ = state.runtime.delete(&id, true).await;
 
     // Delete from state storage
     let _ = state.orchestrator.delete_resource(&id).await;
@@ -1448,11 +1632,7 @@ async fn get_workload_env_handler(
             ));
         }
     } else if !caller.is_operator
-        && caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            != Some("*")
+        && caller.identity.as_ref().map(|i| i.workspace_id.as_str()) != Some("*")
     {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1497,14 +1677,25 @@ async fn get_workload_env_handler(
                     if let Some(name) = c.get("Name").and_then(|n| n.as_str()) {
                         container_name = name.trim_start_matches('/').to_string();
                     }
-                    if let Some(img) = c.get("Config").and_then(|cfg| cfg.get("Image")).and_then(|i| i.as_str()) {
+                    if let Some(img) = c
+                        .get("Config")
+                        .and_then(|cfg| cfg.get("Image"))
+                        .and_then(|i| i.as_str())
+                    {
                         image_name = img.to_string();
                     }
-                    if let Some(envs) = c.get("Config").and_then(|cfg| cfg.get("Env")).and_then(|e| e.as_array()) {
+                    if let Some(envs) = c
+                        .get("Config")
+                        .and_then(|cfg| cfg.get("Env"))
+                        .and_then(|e| e.as_array())
+                    {
                         for item in envs {
                             if let Some(line) = item.as_str() {
                                 if let Some((k, v)) = line.split_once('=') {
-                                    env_map.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+                                    env_map.insert(
+                                        k.to_string(),
+                                        serde_json::Value::String(v.to_string()),
+                                    );
                                 }
                             }
                         }
@@ -1518,19 +1709,32 @@ async fn get_workload_env_handler(
     if env_map.is_empty() {
         if let Ok(Some(resource)) = state.orchestrator.storage().get_resource(&id).await {
             // Decrypt encrypted_secrets if present
-            let env_store = state.orchestrator.secret_store().domain_store("workload_secrets");
+            let env_store = state
+                .orchestrator
+                .secret_store()
+                .domain_store("workload_secrets");
             let mut decrypted_secrets: HashMap<String, String> = HashMap::new();
-            if let Some(enc_hex) = resource.configuration.get("encrypted_secrets").and_then(|e| e.as_str()) {
+            if let Some(enc_hex) = resource
+                .configuration
+                .get("encrypted_secrets")
+                .and_then(|e| e.as_str())
+            {
                 if let Ok(ciphertext) = hex::decode(enc_hex) {
                     if let Ok(plaintext_bytes) = env_store.decrypt(&ciphertext) {
-                        if let Ok(map) = serde_json::from_slice::<HashMap<String, String>>(&plaintext_bytes) {
+                        if let Ok(map) =
+                            serde_json::from_slice::<HashMap<String, String>>(&plaintext_bytes)
+                        {
                             decrypted_secrets = map;
                         }
                     }
                 }
             }
 
-            if let Some(env_obj) = resource.configuration.get("env").and_then(|e| e.as_object()) {
+            if let Some(env_obj) = resource
+                .configuration
+                .get("env")
+                .and_then(|e| e.as_object())
+            {
                 for (k, v) in env_obj {
                     if let Some(decrypted_val) = decrypted_secrets.get(k) {
                         env_map.insert(k.clone(), serde_json::Value::String(decrypted_val.clone()));
@@ -1584,9 +1788,15 @@ async fn get_workload_env_handler(
             if is_sensitive_key(&k) {
                 masked_keys.push(k.clone());
                 if let Some(s) = v.as_str() {
-                    masked.insert(k.clone(), serde_json::Value::String(mask_sensitive_value(&k, s)));
+                    masked.insert(
+                        k.clone(),
+                        serde_json::Value::String(mask_sensitive_value(&k, s)),
+                    );
                 } else {
-                    masked.insert(k.clone(), serde_json::Value::String("[REDACTED_SECRET]".to_string()));
+                    masked.insert(
+                        k.clone(),
+                        serde_json::Value::String("[REDACTED_SECRET]".to_string()),
+                    );
                 }
             } else {
                 masked.insert(k, v);
@@ -1621,7 +1831,9 @@ async fn update_workload_env_handler(
     {
         return Err((
             StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": "Deploy scope required to update workload environment" })),
+            Json(
+                serde_json::json!({ "error": "Deploy scope required to update workload environment" }),
+            ),
         ));
     }
 
@@ -1639,11 +1851,7 @@ async fn update_workload_env_handler(
             ));
         }
     } else if !caller.is_operator
-        && caller
-            .identity
-            .as_ref()
-            .map(|i| i.workspace_id.as_str())
-            != Some("*")
+        && caller.identity.as_ref().map(|i| i.workspace_id.as_str()) != Some("*")
     {
         return Err((
             StatusCode::NOT_FOUND,
@@ -1655,7 +1863,10 @@ async fn update_workload_env_handler(
     }
 
     // 1. Process environment variables: encrypt sensitive values and mask for rest storage
-    let env_store = state.orchestrator.secret_store().domain_store("workload_secrets");
+    let env_store = state
+        .orchestrator
+        .secret_store()
+        .domain_store("workload_secrets");
     let mut clean_env_for_docker = HashMap::new();
     let mut secrets_to_encrypt = HashMap::new();
     let mut masked_env_for_storage = serde_json::Map::new();
@@ -1663,7 +1874,11 @@ async fn update_workload_env_handler(
     // Check existing encrypted secrets so we don't clobber if client sent back masked string
     let mut existing_secrets: HashMap<String, String> = HashMap::new();
     if let Ok(Some(ref existing_res)) = state.orchestrator.storage().get_resource(&id).await {
-        if let Some(enc_hex) = existing_res.configuration.get("encrypted_secrets").and_then(|e| e.as_str()) {
+        if let Some(enc_hex) = existing_res
+            .configuration
+            .get("encrypted_secrets")
+            .and_then(|e| e.as_str())
+        {
             if let Ok(ciphertext) = hex::decode(enc_hex) {
                 if let Ok(bytes) = env_store.decrypt(&ciphertext) {
                     if let Ok(map) = serde_json::from_slice::<HashMap<String, String>>(&bytes) {
@@ -1675,7 +1890,9 @@ async fn update_workload_env_handler(
     }
 
     for (k, v) in &body.env {
-        let resolved_v = if (v.contains("[REDACTED") || v.contains("[ENCRYPTED")) && existing_secrets.contains_key(k) {
+        let resolved_v = if (v.contains("[REDACTED") || v.contains("[ENCRYPTED"))
+            && existing_secrets.contains_key(k)
+        {
             existing_secrets[k].clone()
         } else {
             v.clone()
@@ -1685,7 +1902,10 @@ async fn update_workload_env_handler(
 
         if is_sensitive_key(k) {
             secrets_to_encrypt.insert(k.clone(), resolved_v.clone());
-            masked_env_for_storage.insert(k.clone(), serde_json::Value::String(mask_sensitive_value(k, &resolved_v)));
+            masked_env_for_storage.insert(
+                k.clone(),
+                serde_json::Value::String(mask_sensitive_value(k, &resolved_v)),
+            );
         } else {
             masked_env_for_storage.insert(k.clone(), serde_json::Value::String(resolved_v));
         }
@@ -1754,7 +1974,11 @@ async fn update_workload_env_handler(
                 .to_string();
 
             let mut binds = Vec::new();
-            if let Some(arr) = c.get("HostConfig").and_then(|h| h.get("Binds")).and_then(|b| b.as_array()) {
+            if let Some(arr) = c
+                .get("HostConfig")
+                .and_then(|h| h.get("Binds"))
+                .and_then(|b| b.as_array())
+            {
                 for item in arr {
                     if let Some(s) = item.as_str() {
                         binds.push(s.to_string());
@@ -1763,17 +1987,26 @@ async fn update_workload_env_handler(
             }
 
             let mut port_args = Vec::new();
-            if let Some(ports_obj) = c.get("HostConfig").and_then(|h| h.get("PortBindings")).and_then(|p| p.as_object()) {
+            if let Some(ports_obj) = c
+                .get("HostConfig")
+                .and_then(|h| h.get("PortBindings"))
+                .and_then(|p| p.as_object())
+            {
                 for (container_port_proto, host_bindings) in ports_obj {
                     if let Some(bindings_arr) = host_bindings.as_array() {
                         for b in bindings_arr {
-                            let host_port = b.get("HostPort").and_then(|hp| hp.as_str()).unwrap_or("");
+                            let host_port =
+                                b.get("HostPort").and_then(|hp| hp.as_str()).unwrap_or("");
                             let host_ip = b.get("HostIp").and_then(|ip| ip.as_str()).unwrap_or("");
                             if !host_port.is_empty() {
                                 if !host_ip.is_empty() && host_ip != "0.0.0.0" {
-                                    port_args.push(format!("{}:{}:{}", host_ip, host_port, container_port_proto));
+                                    port_args.push(format!(
+                                        "{}:{}:{}",
+                                        host_ip, host_port, container_port_proto
+                                    ));
                                 } else {
-                                    port_args.push(format!("{}:{}", host_port, container_port_proto));
+                                    port_args
+                                        .push(format!("{}:{}", host_port, container_port_proto));
                                 }
                             }
                         }
@@ -1782,7 +2015,11 @@ async fn update_workload_env_handler(
             }
 
             let mut networks = Vec::new();
-            if let Some(nets_obj) = c.get("NetworkSettings").and_then(|n| n.get("Networks")).and_then(|net| net.as_object()) {
+            if let Some(nets_obj) = c
+                .get("NetworkSettings")
+                .and_then(|n| n.get("Networks"))
+                .and_then(|net| net.as_object())
+            {
                 for (net_name, _) in nets_obj {
                     if net_name != "none" && net_name != "host" {
                         networks.push(net_name.clone());
@@ -1791,7 +2028,11 @@ async fn update_workload_env_handler(
             }
 
             let mut labels = Vec::new();
-            if let Some(labels_obj) = c.get("Config").and_then(|cfg| cfg.get("Labels")).and_then(|l| l.as_object()) {
+            if let Some(labels_obj) = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Labels"))
+                .and_then(|l| l.as_object())
+            {
                 for (k, v) in labels_obj {
                     if let Some(val_str) = v.as_str() {
                         if !k.starts_with("com.docker.compose.config-hash") {
@@ -1802,7 +2043,11 @@ async fn update_workload_env_handler(
             }
 
             let mut cmd_args = Vec::new();
-            if let Some(arr) = c.get("Config").and_then(|cfg| cfg.get("Cmd")).and_then(|a| a.as_array()) {
+            if let Some(arr) = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Cmd"))
+                .and_then(|a| a.as_array())
+            {
                 for item in arr {
                     if let Some(s) = item.as_str() {
                         cmd_args.push(s.to_string());
@@ -1811,14 +2056,22 @@ async fn update_workload_env_handler(
             }
 
             let mut entrypoint_str = None;
-            if let Some(arr) = c.get("Config").and_then(|cfg| cfg.get("Entrypoint")).and_then(|a| a.as_array()) {
+            if let Some(arr) = c
+                .get("Config")
+                .and_then(|cfg| cfg.get("Entrypoint"))
+                .and_then(|a| a.as_array())
+            {
                 if let Some(first) = arr.first().and_then(|s| s.as_str()) {
                     entrypoint_str = Some(first.to_string());
                 }
             }
 
             // 3. Transactional replacement with rollback
-            let backup_name = format!("{}_smoooth_backup_{}", clean_name, uuid::Uuid::new_v4().simple());
+            let backup_name = format!(
+                "{}_smoooth_backup_{}",
+                clean_name,
+                uuid::Uuid::new_v4().simple()
+            );
 
             // Stop container
             let _ = tokio::process::Command::new("docker")
@@ -1898,10 +2151,14 @@ async fn update_workload_env_handler(
                         .await;
 
                     // Update orchestrator state if registered
-                    if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
-                        resource.configuration["env"] = serde_json::Value::Object(masked_env_for_storage.clone());
+                    if let Ok(Some(mut resource)) =
+                        state.orchestrator.storage().get_resource(&id).await
+                    {
+                        resource.configuration["env"] =
+                            serde_json::Value::Object(masked_env_for_storage.clone());
                         if let Some(hex_str) = &enc_payload_hex {
-                            resource.configuration["encrypted_secrets"] = serde_json::Value::String(hex_str.clone());
+                            resource.configuration["encrypted_secrets"] =
+                                serde_json::Value::String(hex_str.clone());
                         } else if let Some(obj) = resource.configuration.as_object_mut() {
                             obj.remove("encrypted_secrets");
                         }
@@ -1919,12 +2176,25 @@ async fn update_workload_env_handler(
                 }
                 Ok(out) => {
                     let err_msg = String::from_utf8_lossy(&out.stderr).to_string();
-                    tracing::error!("Failed to start replacement container for '{}': {}. Rolling back...", clean_name, err_msg);
+                    tracing::error!(
+                        "Failed to start replacement container for '{}': {}. Rolling back...",
+                        clean_name,
+                        err_msg
+                    );
 
                     // Rollback
-                    let _ = tokio::process::Command::new("docker").args(["rm", "-f", &clean_name]).output().await;
-                    let _ = tokio::process::Command::new("docker").args(["rename", &backup_name, &clean_name]).output().await;
-                    let _ = tokio::process::Command::new("docker").args(["start", &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["rm", "-f", &clean_name])
+                        .output()
+                        .await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["rename", &backup_name, &clean_name])
+                        .output()
+                        .await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["start", &clean_name])
+                        .output()
+                        .await;
 
                     Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -1938,9 +2208,18 @@ async fn update_workload_env_handler(
                     tracing::error!("Execution error running replacement container for '{}': {}. Rolling back...", clean_name, e);
 
                     // Rollback
-                    let _ = tokio::process::Command::new("docker").args(["rm", "-f", &clean_name]).output().await;
-                    let _ = tokio::process::Command::new("docker").args(["rename", &backup_name, &clean_name]).output().await;
-                    let _ = tokio::process::Command::new("docker").args(["start", &clean_name]).output().await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["rm", "-f", &clean_name])
+                        .output()
+                        .await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["rename", &backup_name, &clean_name])
+                        .output()
+                        .await;
+                    let _ = tokio::process::Command::new("docker")
+                        .args(["start", &clean_name])
+                        .output()
+                        .await;
 
                     Err((
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -1956,9 +2235,11 @@ async fn update_workload_env_handler(
             // Fallback for storage-only / non-Docker test environment
             if let Ok(Some(mut resource)) = state.orchestrator.storage().get_resource(&id).await {
                 let resource_name = resource.name.clone();
-                resource.configuration["env"] = serde_json::Value::Object(masked_env_for_storage.clone());
+                resource.configuration["env"] =
+                    serde_json::Value::Object(masked_env_for_storage.clone());
                 if let Some(hex_str) = &enc_payload_hex {
-                    resource.configuration["encrypted_secrets"] = serde_json::Value::String(hex_str.clone());
+                    resource.configuration["encrypted_secrets"] =
+                        serde_json::Value::String(hex_str.clone());
                 } else if let Some(obj) = resource.configuration.as_object_mut() {
                     obj.remove("encrypted_secrets");
                 }
@@ -2003,9 +2284,7 @@ pub struct MigrateApplyRequest {
 }
 
 /// Detect format of foreign manifest
-async fn migrate_detect_handler(
-    Json(body): Json<MigrateDetectRequest>,
-) -> impl IntoResponse {
+async fn migrate_detect_handler(Json(body): Json<MigrateDetectRequest>) -> impl IntoResponse {
     let source = crate::migration::MigrationEngine::detect_format(&body.content);
     Json(serde_json::json!({
         "format": source,
@@ -2021,15 +2300,18 @@ async fn migrate_preview_handler(
     let ws = caller
         .effective_workspace(body.workspace.as_deref())?
         .to_string();
-    let forced = body.format.as_deref().and_then(|f| match f.to_lowercase().as_str() {
-        "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
-        "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
-        "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
-        "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
-        "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
-        "caprover" => Some(crate::migration::MigrationSource::CapRover),
-        _ => None,
-    });
+    let forced = body
+        .format
+        .as_deref()
+        .and_then(|f| match f.to_lowercase().as_str() {
+            "compose" | "docker-compose" => Some(crate::migration::MigrationSource::DockerCompose),
+            "coolify" | "coolify-json" => Some(crate::migration::MigrationSource::CoolifyJson),
+            "render" => Some(crate::migration::MigrationSource::RenderBlueprint),
+            "fly" | "fly.toml" => Some(crate::migration::MigrationSource::FlyToml),
+            "dokku" | "procfile" => Some(crate::migration::MigrationSource::DokkuApp),
+            "caprover" => Some(crate::migration::MigrationSource::CapRover),
+            _ => None,
+        });
 
     match crate::migration::MigrationEngine::preview(&body.content, forced, &ws) {
         Ok(preview) => Ok(Json(preview)),
@@ -2079,7 +2361,9 @@ async fn migrate_apply_handler(
         }
     });
 
-    match crate::migration::MigrationEngine::apply(&body.preview, &state.orchestrator, &approver).await {
+    match crate::migration::MigrationEngine::apply(&body.preview, &state.orchestrator, &approver)
+        .await
+    {
         Ok(res) => Ok(Json(res)),
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
