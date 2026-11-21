@@ -768,6 +768,21 @@ impl Storage for LocalStorage {
 
     async fn save_binding(&self, binding: ServiceBinding) -> Result<()> {
         self.mutate_and_persist(|state| {
+            if binding.source_resource_id == binding.target_resource_id {
+                return Err(crate::error::SmooothError::Validation(
+                    "Self-binding prohibited: source and target resources must differ".to_string(),
+                ));
+            }
+            if let Some(src) = state.resources.get(&binding.source_resource_id) {
+                if let Some(tgt) = state.resources.get(&binding.target_resource_id) {
+                    if src.workspace_id != tgt.workspace_id {
+                        return Err(crate::error::SmooothError::Security(format!(
+                            "Cross-workspace binding prohibited: source workspace '{}' vs target workspace '{}'",
+                            src.workspace_id, tgt.workspace_id
+                        )));
+                    }
+                }
+            }
             state.bindings.insert(binding.id.clone(), binding);
             Ok(((), true))
         })

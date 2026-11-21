@@ -10,7 +10,7 @@ pub mod postgres;
 pub use local::{FileLock, LocalStorage, RevocationEntry, StateSnapshot};
 pub use postgres::{
     AppliedMigration, AppliedMigrationSummary, Migration, MigrationReport, MigrationRunner,
-    MIGRATION_ADVISORY_LOCK_ID,
+    PostgresPool, PostgresStorage, MIGRATION_ADVISORY_LOCK_ID,
 };
 
 #[derive(Debug, Clone, PartialEq)]
