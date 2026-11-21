@@ -31,12 +31,10 @@ async fn test_subprocess_death_lock_recovery() {
     let stdout = child1.stdout.take().expect("failed to take child1 stdout");
     let reader = BufReader::new(stdout);
     let mut lock_held = false;
-    for line in reader.lines() {
-        if let Ok(l) = line {
-            if l.contains("LOCK_HELD") {
-                lock_held = true;
-                break;
-            }
+    for l in reader.lines().map_while(Result::ok) {
+        if l.contains("LOCK_HELD") {
+            lock_held = true;
+            break;
         }
     }
     assert!(lock_held, "Child 1 must report LOCK_HELD");
@@ -74,12 +72,10 @@ async fn test_subprocess_death_lock_recovery() {
     let child2_stdout = child2.stdout.take().expect("failed to take child2 stdout");
     let reader2 = BufReader::new(child2_stdout);
     let mut acquire_success = false;
-    for line in reader2.lines() {
-        if let Ok(l) = line {
-            if l.contains("ACQUIRE_SUCCESS") {
-                acquire_success = true;
-                break;
-            }
+    for l in reader2.lines().map_while(Result::ok) {
+        if l.contains("ACQUIRE_SUCCESS") {
+            acquire_success = true;
+            break;
         }
     }
     assert!(

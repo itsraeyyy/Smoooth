@@ -20,7 +20,7 @@ sha2 = "0.10"
 hex = "0.4"
 bollard = "0.18"
 futures-util = "0.3"
-tokio-postgres = "0.7"
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1"] }
 axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
 aes-gcm = "0.10"

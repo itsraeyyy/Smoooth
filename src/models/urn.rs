@@ -474,7 +474,8 @@ mod tests {
         ];
 
         for case in valid_cases {
-            let parsed = ResourceUrn::parse(case).expect(&format!("Failed to parse: {case}"));
+            let parsed =
+                ResourceUrn::parse(case).unwrap_or_else(|_| panic!("Failed to parse: {case}"));
             assert_eq!(parsed.to_canonical_string(), case);
             assert_eq!(format!("{parsed}"), case);
 
