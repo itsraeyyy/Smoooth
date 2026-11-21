@@ -29,7 +29,7 @@ impl PostgresStorage {
     pub async fn new_with_schema(config_str: &str, schema: Option<&str>) -> Result<Self> {
         let pool = Arc::new(PostgresPool::new_with_schema(
             config_str,
-            16,
+            8,
             schema.map(|s| s.to_string()),
         ));
 
@@ -59,6 +59,11 @@ impl PostgresStorage {
     /// Returns a direct connection from the pool.
     pub async fn get_client(&self) -> Result<PooledClient> {
         self.pool.get().await
+    }
+
+    /// Returns a reference to the underlying connection pool.
+    pub fn pool(&self) -> &PostgresPool {
+        &self.pool
     }
 
     // --- Helper methods for workspace and placeholder management ---
@@ -481,8 +486,13 @@ impl Storage for PostgresStorage {
     // =========================================================================
 
     async fn save_plan(&self, plan: Plan) -> Result<()> {
-        let client = self.pool.get().await?;
-        Self::ensure_workspace(&*client, &plan.spec.workspace_id).await?;
+        let mut client = self.pool.get().await?;
+        let tx = client
+            .transaction()
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Transaction begin error: {}", e)))?;
+
+        Self::ensure_workspace(&tx, &plan.spec.workspace_id).await?;
 
         let canonical_spec_json = serde_json::to_value(&plan.spec)
             .map_err(|e| SmooothError::Storage(format!("Failed to serialize plan spec: {}", e)))?;
@@ -492,6 +502,86 @@ impl Storage for PostgresStorage {
             .map(|a| serde_json::to_value(a).map_err(|e| SmooothError::Storage(e.to_string())))
             .transpose()?;
 
+        // 1. Check if plan already exists under this ID
+        let existing_row = tx
+            .query_opt(
+                "SELECT workspace_id, plan_hash, canonical_spec FROM plans WHERE id = $1 FOR UPDATE;",
+                &[&plan.id],
+            )
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Failed to query plan: {}", e)))?;
+
+        if let Some(r) = existing_row {
+            let existing_ws: String = r.get("workspace_id");
+            if existing_ws != plan.spec.workspace_id {
+                let _ = tx.rollback().await;
+                return Err(SmooothError::Security(format!(
+                    "Cross-workspace plan conflict: plan '{}' belongs to workspace '{}', cannot save under '{}'",
+                    plan.id, existing_ws, plan.spec.workspace_id
+                )));
+            }
+
+            let existing_hash: String = r.get("plan_hash");
+            if existing_hash != plan.plan_hash {
+                let _ = tx.rollback().await;
+                return Err(SmooothError::Validation(format!(
+                    "Plan '{}' is immutable: cannot modify plan_hash (existing: {}, attempted: {})",
+                    plan.id, existing_hash, plan.plan_hash
+                )));
+            }
+
+            let existing_spec_json: serde_json::Value = r.get("canonical_spec");
+            if existing_spec_json != canonical_spec_json {
+                let _ = tx.rollback().await;
+                return Err(SmooothError::Validation(format!(
+                    "Plan '{}' is immutable: canonical specification cannot be modified after creation",
+                    plan.id
+                )));
+            }
+
+            // Identical plan re-save: idempotent update of approval metadata
+            tx.execute(
+                "UPDATE plans SET
+                    approved_plan_hash = $2,
+                    approved_by = $3,
+                    approval = $4
+                 WHERE id = $1;",
+                &[
+                    &plan.id,
+                    &plan.approved_plan_hash,
+                    &plan.approved_by,
+                    &approval_json,
+                ],
+            )
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Failed to update plan approval: {}", e)))?;
+
+            tx.commit()
+                .await
+                .map_err(|e| SmooothError::Storage(format!("Transaction commit error: {}", e)))?;
+
+            return Ok(());
+        }
+
+        // 2. Check if plan_hash already belongs to a different plan
+        let existing_by_hash = tx
+            .query_opt(
+                "SELECT id FROM plans WHERE plan_hash = $1;",
+                &[&plan.plan_hash],
+            )
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Failed to query plan by hash: {}", e)))?;
+
+        if let Some(r) = existing_by_hash {
+            let other_id: String = r.get("id");
+            let _ = tx.rollback().await;
+            return Err(SmooothError::Validation(format!(
+                "Plan hash '{}' already belongs to plan '{}'",
+                plan.plan_hash, other_id
+            )));
+        }
+
+        // 3. Fresh insertion
         let risk_tier_str = match plan.risk_tier {
             RiskTier::Low => "low",
             RiskTier::Moderate => "moderate",
@@ -501,43 +591,34 @@ impl Storage for PostgresStorage {
         let schema_version = plan.spec.schema_version as i32;
         let cost_str = plan.estimated_monthly_cost_usd.map(|c| format!("{:.2}", c));
 
-        client
-            .execute(
-                "INSERT INTO plans (
-                    id, workspace_id, schema_version, environment, plan_hash,
-                    canonical_spec, risk_tier, estimated_monthly_cost_usd,
-                    approved_plan_hash, approved_by, approval, created_by, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::numeric(10,2), $9, $10, $11, $12, $13)
-                ON CONFLICT (id) DO UPDATE SET
-                    workspace_id = EXCLUDED.workspace_id,
-                    schema_version = EXCLUDED.schema_version,
-                    environment = EXCLUDED.environment,
-                    plan_hash = EXCLUDED.plan_hash,
-                    canonical_spec = EXCLUDED.canonical_spec,
-                    risk_tier = EXCLUDED.risk_tier,
-                    estimated_monthly_cost_usd = EXCLUDED.estimated_monthly_cost_usd,
-                    approved_plan_hash = EXCLUDED.approved_plan_hash,
-                    approved_by = EXCLUDED.approved_by,
-                    approval = EXCLUDED.approval,
-                    created_by = EXCLUDED.created_by;",
-                &[
-                    &plan.id,
-                    &plan.spec.workspace_id,
-                    &schema_version,
-                    &plan.spec.environment,
-                    &plan.plan_hash,
-                    &canonical_spec_json,
-                    &risk_tier_str,
-                    &cost_str,
-                    &plan.approved_plan_hash,
-                    &plan.approved_by,
-                    &approval_json,
-                    &plan.created_by,
-                    &plan.created_at,
-                ],
-            )
+        tx.execute(
+            "INSERT INTO plans (
+                id, workspace_id, schema_version, environment, plan_hash,
+                canonical_spec, risk_tier, estimated_monthly_cost_usd,
+                approved_plan_hash, approved_by, approval, created_by, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::numeric(10,2), $9, $10, $11, $12, $13);",
+            &[
+                &plan.id,
+                &plan.spec.workspace_id,
+                &schema_version,
+                &plan.spec.environment,
+                &plan.plan_hash,
+                &canonical_spec_json,
+                &risk_tier_str,
+                &cost_str,
+                &plan.approved_plan_hash,
+                &plan.approved_by,
+                &approval_json,
+                &plan.created_by,
+                &plan.created_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to save plan: {}", e)))?;
+
+        tx.commit()
             .await
-            .map_err(|e| SmooothError::Storage(format!("Failed to save plan: {}", e)))?;
+            .map_err(|e| SmooothError::Storage(format!("Transaction commit error: {}", e)))?;
 
         Ok(())
     }
@@ -717,148 +798,178 @@ impl Storage for PostgresStorage {
         idempotency_record: IdempotencyRecord,
         operation: Operation,
     ) -> Result<OperationInitOutcome> {
-        let mut client = self.pool.get().await?;
-        let tx = client
-            .transaction()
-            .await
-            .map_err(|e| SmooothError::Storage(format!("Transaction begin error: {}", e)))?;
+        for attempt in 0..5 {
+            let mut client = self.pool.get().await?;
+            let tx = client
+                .transaction()
+                .await
+                .map_err(|e| SmooothError::Storage(format!("Transaction begin error: {}", e)))?;
 
-        Self::ensure_workspace(&tx, &idempotency_record.key.workspace_id).await?;
+            Self::ensure_workspace(&tx, &idempotency_record.key.workspace_id).await?;
 
-        // 1. Lock and check idempotency record
-        let existing_idemp = tx
-            .query_opt(
-                "SELECT workspace_id, operation_type, client_key, request_hash, operation_id, created_at
-                 FROM idempotency_records
-                 WHERE workspace_id = $1 AND operation_type = $2 AND client_key = $3
-                 FOR UPDATE;",
-                &[
-                    &idempotency_record.key.workspace_id,
-                    &idempotency_record.key.operation_type,
-                    &idempotency_record.key.client_key,
-                ],
-            )
-            .await
-            .map_err(|e| SmooothError::Storage(format!("Failed to lock idempotency record: {}", e)))?;
-
-        if let Some(row) = existing_idemp {
-            let existing = Self::map_idempotency_row(&row);
-            if existing.request_hash != idempotency_record.request_hash {
-                return Err(SmooothError::IdempotencyConflict(format!(
-                    "Idempotency key '{}' reused with mismatched request hash. Prior: {}, Current: {}",
-                    idempotency_record.key.client_key, existing.request_hash, idempotency_record.request_hash
-                )));
-            }
-
-            // Retrieve existing operation
-            let op_row = tx
+            // 1. Lock and check idempotency record
+            let existing_idemp = tx
                 .query_opt(
-                    "SELECT id, workspace_id, operation_type, plan_id, plan_hash, request_hash,
-                            idempotency_client_key, status, progress_percent, lease_epoch,
-                            lease_owner, lease_expires_at, intended_state, observed_state,
-                            logs, evidence, error_message, created_at, updated_at
-                     FROM operations WHERE id = $1;",
-                    &[&existing.operation_id],
+                    "SELECT workspace_id, operation_type, client_key, request_hash, operation_id, created_at
+                     FROM idempotency_records
+                     WHERE workspace_id = $1 AND operation_type = $2 AND client_key = $3
+                     FOR UPDATE;",
+                    &[
+                        &idempotency_record.key.workspace_id,
+                        &idempotency_record.key.operation_type,
+                        &idempotency_record.key.client_key,
+                    ],
                 )
                 .await
-                .map_err(|e| {
-                    SmooothError::Storage(format!("Failed to query existing operation: {}", e))
+                .map_err(|e| SmooothError::Storage(format!("Failed to lock idempotency record: {}", e)))?;
+
+            if let Some(row) = existing_idemp {
+                let existing = Self::map_idempotency_row(&row);
+                if existing.request_hash != idempotency_record.request_hash {
+                    let _ = tx.rollback().await;
+                    return Err(SmooothError::IdempotencyConflict(format!(
+                        "Idempotency key '{}' reused with mismatched request hash. Prior: {}, Current: {}",
+                        idempotency_record.key.client_key, existing.request_hash, idempotency_record.request_hash
+                    )));
+                }
+
+                // Retrieve existing operation
+                let op_row = tx
+                    .query_opt(
+                        "SELECT id, workspace_id, operation_type, plan_id, plan_hash, request_hash,
+                                idempotency_client_key, status, progress_percent, lease_epoch,
+                                lease_owner, lease_expires_at, intended_state, observed_state,
+                                logs, evidence, error_message, created_at, updated_at
+                         FROM operations WHERE id = $1;",
+                        &[&existing.operation_id],
+                    )
+                    .await
+                    .map_err(|e| {
+                        SmooothError::Storage(format!("Failed to query existing operation: {}", e))
+                    })?;
+
+                tx.rollback().await.map_err(|e| {
+                    SmooothError::Storage(format!("Transaction rollback error: {}", e))
                 })?;
 
-            tx.rollback()
-                .await
-                .map_err(|e| SmooothError::Storage(format!("Transaction rollback error: {}", e)))?;
-
-            match op_row {
-                Some(r) => Ok(OperationInitOutcome::Existing(Self::map_operation_row(&r)?)),
-                None => Err(SmooothError::Storage(format!(
-                    "Inconsistent state: idempotency record references nonexistent operation '{}'",
-                    existing.operation_id
-                ))),
-            }
-        } else {
-            // 2. Ensure plan and foreign keys exist before operation insertion
-            Self::ensure_plan_placeholder(
-                &tx,
-                &operation.workspace_id,
-                &operation.plan_id,
-                &operation.plan_hash,
-            )
-            .await?;
-
-            let status_str = match operation.status {
-                OperationStatus::Pending => "pending",
-                OperationStatus::Running => "running",
-                OperationStatus::Succeeded => "succeeded",
-                OperationStatus::Failed => "failed",
-                OperationStatus::Cancelled => "cancelled",
-            };
-            let progress_i16 = operation.progress_percent as i16;
-            let lease_epoch_i64 = operation.lease_epoch as i64;
-            let logs_json = serde_json::to_value(&operation.logs).map_err(|e| {
-                SmooothError::Storage(format!("Failed to serialize operation logs: {}", e))
-            })?;
-
-            // Insert operation
-            tx.execute(
-                "INSERT INTO operations (
-                    id, workspace_id, operation_type, plan_id, plan_hash, request_hash,
-                    idempotency_client_key, status, progress_percent, lease_epoch,
-                    lease_owner, lease_expires_at, intended_state, observed_state,
-                    logs, evidence, error_message, created_at, updated_at
-                ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
-                );",
-                &[
-                    &operation.id,
+                match op_row {
+                    Some(r) => return Ok(OperationInitOutcome::Existing(Self::map_operation_row(&r)?)),
+                    None => return Err(SmooothError::Storage(format!(
+                        "Inconsistent state: idempotency record references nonexistent operation '{}'",
+                        existing.operation_id
+                    ))),
+                }
+            } else {
+                // 2. Ensure plan and foreign keys exist before operation insertion
+                Self::ensure_plan_placeholder(
+                    &tx,
                     &operation.workspace_id,
-                    &operation.operation_type,
                     &operation.plan_id,
                     &operation.plan_hash,
-                    &operation.request_hash,
-                    &operation.idempotency_client_key,
-                    &status_str,
-                    &progress_i16,
-                    &lease_epoch_i64,
-                    &operation.lease_owner,
-                    &operation.lease_expires_at,
-                    &operation.intended_state,
-                    &operation.observed_state,
-                    &logs_json,
-                    &operation.evidence,
-                    &operation.error_message,
-                    &operation.created_at,
-                    &operation.updated_at,
-                ],
-            )
-            .await
-            .map_err(|e| SmooothError::Storage(format!("Failed to insert operation: {}", e)))?;
+                )
+                .await?;
 
-            // Insert idempotency record bound to this operation
-            tx.execute(
-                "INSERT INTO idempotency_records (
-                    workspace_id, operation_type, client_key, request_hash, operation_id, created_at
-                ) VALUES ($1, $2, $3, $4, $5, $6);",
-                &[
-                    &idempotency_record.key.workspace_id,
-                    &idempotency_record.key.operation_type,
-                    &idempotency_record.key.client_key,
-                    &idempotency_record.request_hash,
-                    &operation.id,
-                    &idempotency_record.created_at,
-                ],
-            )
-            .await
-            .map_err(|e| {
-                SmooothError::Storage(format!("Failed to insert idempotency record: {}", e))
-            })?;
+                let status_str = match operation.status {
+                    OperationStatus::Pending => "pending",
+                    OperationStatus::Running => "running",
+                    OperationStatus::Succeeded => "succeeded",
+                    OperationStatus::Failed => "failed",
+                    OperationStatus::Cancelled => "cancelled",
+                };
+                let progress_i16 = operation.progress_percent as i16;
+                let lease_epoch_i64 = operation.lease_epoch as i64;
+                let logs_json = serde_json::to_value(&operation.logs).map_err(|e| {
+                    SmooothError::Storage(format!("Failed to serialize operation logs: {}", e))
+                })?;
 
-            tx.commit()
+                // Insert operation
+                tx.execute(
+                    "INSERT INTO operations (
+                        id, workspace_id, operation_type, plan_id, plan_hash, request_hash,
+                        idempotency_client_key, status, progress_percent, lease_epoch,
+                        lease_owner, lease_expires_at, intended_state, observed_state,
+                        logs, evidence, error_message, created_at, updated_at
+                    ) VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+                    );",
+                    &[
+                        &operation.id,
+                        &operation.workspace_id,
+                        &operation.operation_type,
+                        &operation.plan_id,
+                        &operation.plan_hash,
+                        &operation.request_hash,
+                        &operation.idempotency_client_key,
+                        &status_str,
+                        &progress_i16,
+                        &lease_epoch_i64,
+                        &operation.lease_owner,
+                        &operation.lease_expires_at,
+                        &operation.intended_state,
+                        &operation.observed_state,
+                        &logs_json,
+                        &operation.evidence,
+                        &operation.error_message,
+                        &operation.created_at,
+                        &operation.updated_at,
+                    ],
+                )
                 .await
-                .map_err(|e| SmooothError::Storage(format!("Transaction commit error: {}", e)))?;
+                .map_err(|e| SmooothError::Storage(format!("Failed to insert operation: {}", e)))?;
 
-            Ok(OperationInitOutcome::Created(operation))
+                // Insert idempotency record bound to this operation
+                let idemp_insert_res = tx.execute(
+                    "INSERT INTO idempotency_records (
+                        workspace_id, operation_type, client_key, request_hash, operation_id, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6);",
+                    &[
+                        &idempotency_record.key.workspace_id,
+                        &idempotency_record.key.operation_type,
+                        &idempotency_record.key.client_key,
+                        &idempotency_record.request_hash,
+                        &operation.id,
+                        &idempotency_record.created_at,
+                    ],
+                ).await;
+
+                match idemp_insert_res {
+                    Ok(_) => {
+                        tx.commit().await.map_err(|e| {
+                            SmooothError::Storage(format!("Transaction commit error: {}", e))
+                        })?;
+                        return Ok(OperationInitOutcome::Created(operation));
+                    }
+                    Err(e) => {
+                        // Check if this is a unique constraint collision from a concurrent winner
+                        let err_msg = e.to_string();
+                        let is_unique_collision = err_msg.contains("unique constraint")
+                            || err_msg.contains("23505")
+                            || err_msg.contains("idempotency_records_pkey");
+
+                        // Explicitly roll back the transaction so candidate operation is never orphaned
+                        let _ = tx.rollback().await;
+
+                        if is_unique_collision && attempt < 4 {
+                            // Another transaction won the initial race; next attempt will lock the committed winner
+                            tokio::time::sleep(std::time::Duration::from_millis(
+                                5 * (attempt + 1) as u64,
+                            ))
+                            .await;
+                            continue;
+                        }
+
+                        return Err(SmooothError::Storage(format!(
+                            "Failed to insert idempotency record: {}",
+                            e
+                        )));
+                    }
+                }
+            }
         }
+
+        Err(SmooothError::Storage(
+            "Exhausted retries during concurrent idempotency reservation".to_string(),
+        ))
     }
 
     // =========================================================================
@@ -1001,7 +1112,144 @@ impl Storage for PostgresStorage {
     }
 
     async fn update_operation(&self, operation: Operation) -> Result<()> {
-        self.save_operation(operation).await
+        let mut client = self.pool.get().await?;
+        let tx = client
+            .transaction()
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Transaction begin error: {}", e)))?;
+
+        // 1. Lock existing operation for atomic lease and fencing verification
+        let existing_row = tx
+            .query_opt(
+                "SELECT lease_epoch, lease_owner, lease_expires_at
+                 FROM operations WHERE id = $1 FOR UPDATE;",
+                &[&operation.id],
+            )
+            .await
+            .map_err(|e| {
+                SmooothError::Storage(format!("Failed to lock operation for update: {}", e))
+            })?;
+
+        let existing = match existing_row {
+            Some(r) => r,
+            None => {
+                let _ = tx.rollback().await;
+                return Err(SmooothError::NotFound(format!(
+                    "Operation '{}' not found for update",
+                    operation.id
+                )));
+            }
+        };
+
+        let current_epoch: i64 = existing.get("lease_epoch");
+        let current_epoch = current_epoch.max(1) as u64;
+        let current_owner: Option<String> = existing.get("lease_owner");
+        let current_expires_at: Option<DateTime<Utc>> = existing.get("lease_expires_at");
+        let now = Utc::now();
+
+        // 2. Reject stale worker with outdated fencing epoch
+        if operation.lease_epoch < current_epoch {
+            let _ = tx.rollback().await;
+            return Err(SmooothError::LeaseConflict(format!(
+                "Stale worker update rejected: current lease epoch {} > worker lease epoch {}",
+                current_epoch, operation.lease_epoch
+            )));
+        }
+
+        // 3. Epoch equality validation (same epoch)
+        if operation.lease_epoch == current_epoch {
+            // Check ownership: different worker cannot update without taking over (bumping epoch)
+            if current_owner.is_some()
+                && operation.lease_owner.is_some()
+                && current_owner != operation.lease_owner
+            {
+                let _ = tx.rollback().await;
+                return Err(SmooothError::LeaseConflict(format!(
+                    "Lease owner conflict: operation currently owned by '{:?}', update attempted by '{:?}'",
+                    current_owner, operation.lease_owner
+                )));
+            }
+
+            // Check expiration: if existing lease expired and update does not renew it into the future
+            if let Some(exp) = current_expires_at {
+                if exp <= now {
+                    let new_exp_valid =
+                        operation.lease_expires_at.map(|e| e > now).unwrap_or(false);
+                    if !new_exp_valid {
+                        let _ = tx.rollback().await;
+                        return Err(SmooothError::LeaseConflict(
+                            "Worker lease expired: cannot update operation under expired lease without extending expiry"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // 4. Update operation atomically under fencing guard
+        let status_str = match operation.status {
+            OperationStatus::Pending => "pending",
+            OperationStatus::Running => "running",
+            OperationStatus::Succeeded => "succeeded",
+            OperationStatus::Failed => "failed",
+            OperationStatus::Cancelled => "cancelled",
+        };
+        let progress_i16 = operation.progress_percent as i16;
+        let lease_epoch_i64 = operation.lease_epoch as i64;
+        let logs_json = serde_json::to_value(&operation.logs).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize operation logs: {}", e))
+        })?;
+
+        tx.execute(
+            "UPDATE operations SET
+                workspace_id = $2,
+                operation_type = $3,
+                plan_id = $4,
+                plan_hash = $5,
+                request_hash = $6,
+                idempotency_client_key = $7,
+                status = $8,
+                progress_percent = $9,
+                lease_epoch = $10,
+                lease_owner = $11,
+                lease_expires_at = $12,
+                intended_state = $13,
+                observed_state = $14,
+                logs = $15,
+                evidence = $16,
+                error_message = $17,
+                updated_at = NOW()
+             WHERE id = $1 AND lease_epoch <= $10;",
+            &[
+                &operation.id,
+                &operation.workspace_id,
+                &operation.operation_type,
+                &operation.plan_id,
+                &operation.plan_hash,
+                &operation.request_hash,
+                &operation.idempotency_client_key,
+                &status_str,
+                &progress_i16,
+                &lease_epoch_i64,
+                &operation.lease_owner,
+                &operation.lease_expires_at,
+                &operation.intended_state,
+                &operation.observed_state,
+                &logs_json,
+                &operation.evidence,
+                &operation.error_message,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            SmooothError::Storage(format!("Failed to execute fenced operation update: {}", e))
+        })?;
+
+        tx.commit()
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Transaction commit error: {}", e)))?;
+
+        Ok(())
     }
 
     // =========================================================================
@@ -1842,55 +2090,476 @@ impl Storage for PostgresStorage {
     }
 
     async fn import_snapshot(&self, snapshot: StateSnapshot) -> Result<()> {
-        for agent in snapshot.agents.into_values() {
-            self.save_agent(agent).await?;
+        let mut client = self.pool.get().await?;
+        let tx = client.transaction().await.map_err(|e| {
+            SmooothError::Storage(format!(
+                "Failed to begin transaction for snapshot import: {}",
+                e
+            ))
+        })?;
+
+        // 1. Ensure all workspaces exist
+        for agent in snapshot.agents.values() {
+            Self::ensure_workspace(&tx, &agent.workspace_id).await?;
+        }
+        for plan in snapshot.plans.values() {
+            Self::ensure_workspace(&tx, &plan.spec.workspace_id).await?;
+        }
+        for resource in snapshot.resources.values() {
+            Self::ensure_workspace(&tx, &resource.workspace_id).await?;
+        }
+        for operation in snapshot.operations.values() {
+            Self::ensure_workspace(&tx, &operation.workspace_id).await?;
+        }
+        for binding in snapshot.bindings.values() {
+            if !binding.workspace_id.is_empty() {
+                Self::ensure_workspace(&tx, &binding.workspace_id).await?;
+            }
+        }
+        for event in &snapshot.audit_events {
+            Self::ensure_workspace(&tx, &event.workspace_id).await?;
+        }
+        for ws in snapshot.fencing_epochs.keys() {
+            Self::ensure_workspace(&tx, ws).await?;
         }
 
+        // 2. Import plans
         for plan in snapshot.plans.into_values() {
-            self.save_plan(plan).await?;
+            Self::import_plan_tx(&tx, plan).await?;
         }
 
+        // 3. Import resources
         for resource in snapshot.resources.into_values() {
-            self.save_resource(resource).await?;
+            Self::import_resource_tx(&tx, resource).await?;
         }
 
+        // 4. Import agents
+        for agent in snapshot.agents.into_values() {
+            Self::import_agent_tx(&tx, agent).await?;
+        }
+
+        // 5. Import operations
         for operation in snapshot.operations.into_values() {
-            self.save_operation(operation).await?;
+            Self::import_operation_tx(&tx, operation).await?;
         }
 
+        // 6. Import service bindings
         for binding in snapshot.bindings.into_values() {
-            self.save_binding(binding).await?;
+            Self::import_binding_tx(&tx, binding).await?;
         }
 
+        // 7. Import audit events
         for event in snapshot.audit_events {
-            self.record_audit(event).await?;
+            Self::import_audit_tx(&tx, event).await?;
         }
 
+        // 8. Import revocations
         for entry in snapshot.revocations.into_values() {
             if let Ok(cap_uuid) = uuid::Uuid::parse_str(&entry.capability_id) {
-                self.record_revocation(&cap_uuid, &entry.reason, entry.expires_at)
-                    .await?;
+                tx.execute(
+                    "INSERT INTO capability_revocations (capability_id, reason, revoked_at, expires_at)
+                     VALUES ($1, $2, NOW(), $3)
+                     ON CONFLICT (capability_id) DO UPDATE SET
+                        reason = EXCLUDED.reason,
+                        expires_at = EXCLUDED.expires_at;",
+                    &[&cap_uuid, &entry.reason, &entry.expires_at],
+                )
+                .await
+                .map_err(|e| SmooothError::Storage(format!("Failed to import revocation: {}", e)))?;
             }
         }
 
+        // 9. Import used nonces
         for (nonce, exp) in snapshot.used_nonces {
-            self.record_used_nonce(&nonce, exp).await?;
+            tx.execute(
+                "INSERT INTO used_nonces (nonce, expires_at, consumed_at)
+                 VALUES ($1, $2, NOW())
+                 ON CONFLICT (nonce) DO UPDATE SET expires_at = EXCLUDED.expires_at;",
+                &[&nonce, &exp],
+            )
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Failed to import used nonce: {}", e)))?;
         }
 
-        let client = self.pool.get().await?;
+        // 10. Import fencing epochs
         for (ws, epoch) in snapshot.fencing_epochs {
-            Self::ensure_workspace(&*client, &ws).await?;
             let epoch_i64 = epoch as i64;
-            client
-                .execute(
-                    "INSERT INTO fencing_epochs (workspace_id, epoch, updated_at)
-                     VALUES ($1, $2, NOW())
-                     ON CONFLICT (workspace_id) DO UPDATE SET epoch = EXCLUDED.epoch, updated_at = NOW();",
-                    &[&ws, &epoch_i64],
+            tx.execute(
+                "INSERT INTO fencing_epochs (workspace_id, epoch, updated_at)
+                 VALUES ($1, $2, NOW())
+                 ON CONFLICT (workspace_id) DO UPDATE SET epoch = EXCLUDED.epoch, updated_at = NOW();",
+                &[&ws, &epoch_i64],
+            )
+            .await
+            .map_err(|e| SmooothError::Storage(format!("Failed to import fencing epoch: {}", e)))?;
+        }
+
+        tx.commit().await.map_err(|e| {
+            SmooothError::Storage(format!("Failed to commit snapshot import: {}", e))
+        })?;
+
+        Ok(())
+    }
+}
+
+impl PostgresStorage {
+    async fn import_plan_tx(tx: &tokio_postgres::Transaction<'_>, plan: Plan) -> Result<()> {
+        let canonical_spec_json = serde_json::to_value(&plan.spec)
+            .map_err(|e| SmooothError::Storage(format!("Failed to serialize plan spec: {}", e)))?;
+        let approval_json = plan
+            .approval
+            .as_ref()
+            .map(|a| serde_json::to_value(a).map_err(|e| SmooothError::Storage(e.to_string())))
+            .transpose()?;
+
+        let risk_tier_str = match plan.risk_tier {
+            RiskTier::Low => "low",
+            RiskTier::Moderate => "moderate",
+            RiskTier::High => "high",
+            RiskTier::Critical => "critical",
+        };
+        let schema_version = plan.spec.schema_version as i32;
+        let cost_str = plan.estimated_monthly_cost_usd.map(|c| c.to_string());
+
+        tx.execute(
+            "INSERT INTO plans (
+                id, workspace_id, schema_version, environment, plan_hash,
+                canonical_spec, risk_tier, estimated_monthly_cost_usd,
+                approved_plan_hash, approved_by, approval, created_by, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text::numeric(10,2), $9, $10, $11, $12, $13)
+            ON CONFLICT (id) DO UPDATE SET
+                approved_plan_hash = EXCLUDED.approved_plan_hash,
+                approved_by = EXCLUDED.approved_by,
+                approval = EXCLUDED.approval;",
+            &[
+                &plan.id,
+                &plan.spec.workspace_id,
+                &schema_version,
+                &plan.spec.environment,
+                &plan.plan_hash,
+                &canonical_spec_json,
+                &risk_tier_str,
+                &cost_str,
+                &plan.approved_plan_hash,
+                &plan.approved_by,
+                &approval_json,
+                &plan.created_by,
+                &plan.created_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import plan: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn import_resource_tx(
+        tx: &tokio_postgres::Transaction<'_>,
+        resource: Resource,
+    ) -> Result<()> {
+        let status_str = match resource.status {
+            ResourceStatus::Active => "active",
+            ResourceStatus::Degraded => "degraded",
+            ResourceStatus::Stopping => "stopping",
+            ResourceStatus::Stopped => "stopped",
+            ResourceStatus::Terminated => "terminated",
+            _ => "provisioning",
+        };
+        let ownership_str = match resource.ownership {
+            ResourceOwnership::External => "external",
+            ResourceOwnership::CustomWorkload => "discovered",
+            ResourceOwnership::SmooothManaged => "smoooth_managed",
+        };
+        let config_json = serde_json::to_value(&resource.configuration).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize resource config: {}", e))
+        })?;
+
+        tx.execute(
+            "INSERT INTO resources (
+                id, workspace_id, name, service_type, provider, is_persistent,
+                ownership, status, configuration, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (id) DO UPDATE SET
+                service_type = EXCLUDED.service_type,
+                provider = EXCLUDED.provider,
+                is_persistent = EXCLUDED.is_persistent,
+                ownership = EXCLUDED.ownership,
+                status = EXCLUDED.status,
+                configuration = EXCLUDED.configuration,
+                updated_at = EXCLUDED.updated_at;",
+            &[
+                &resource.id,
+                &resource.workspace_id,
+                &resource.name,
+                &resource.service_type,
+                &resource.provider,
+                &resource.is_persistent,
+                &ownership_str,
+                &status_str,
+                &config_json,
+                &resource.created_at,
+                &resource.updated_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import resource: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn import_agent_tx(
+        tx: &tokio_postgres::Transaction<'_>,
+        agent: AgentIdentity,
+    ) -> Result<()> {
+        let scopes_json = serde_json::to_value(&agent.scopes).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize agent scopes: {}", e))
+        })?;
+
+        tx.execute(
+            "INSERT INTO agents (
+                agent_id, name, token_hash, token_prefix, scopes, workspace_id,
+                created_at, expires_at, revoked, revoked_at, last_used_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (agent_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                token_hash = EXCLUDED.token_hash,
+                token_prefix = EXCLUDED.token_prefix,
+                scopes = EXCLUDED.scopes,
+                workspace_id = EXCLUDED.workspace_id,
+                expires_at = EXCLUDED.expires_at,
+                revoked = EXCLUDED.revoked,
+                revoked_at = EXCLUDED.revoked_at,
+                last_used_at = EXCLUDED.last_used_at;",
+            &[
+                &agent.agent_id,
+                &agent.name,
+                &agent.token_hash,
+                &agent.token_prefix,
+                &scopes_json,
+                &agent.workspace_id,
+                &agent.created_at,
+                &agent.expires_at,
+                &agent.revoked,
+                &agent.revoked_at,
+                &agent.last_used_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import agent: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn import_operation_tx(
+        tx: &tokio_postgres::Transaction<'_>,
+        operation: Operation,
+    ) -> Result<()> {
+        Self::ensure_plan_placeholder(
+            tx,
+            &operation.workspace_id,
+            &operation.plan_id,
+            &operation.plan_hash,
+        )
+        .await?;
+
+        let status_str = match operation.status {
+            OperationStatus::Pending => "pending",
+            OperationStatus::Running => "running",
+            OperationStatus::Succeeded => "succeeded",
+            OperationStatus::Failed => "failed",
+            OperationStatus::Cancelled => "cancelled",
+        };
+        let progress_i16 = operation.progress_percent as i16;
+        let lease_epoch_i64 = operation.lease_epoch as i64;
+        let logs_json = serde_json::to_value(&operation.logs).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize operation logs: {}", e))
+        })?;
+
+        tx.execute(
+            "INSERT INTO operations (
+                id, workspace_id, operation_type, plan_id, plan_hash, request_hash,
+                idempotency_client_key, status, progress_percent, lease_epoch,
+                lease_owner, lease_expires_at, intended_state, observed_state,
+                logs, evidence, error_message, created_at, updated_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                operation_type = EXCLUDED.operation_type,
+                plan_id = EXCLUDED.plan_id,
+                plan_hash = EXCLUDED.plan_hash,
+                request_hash = EXCLUDED.request_hash,
+                idempotency_client_key = EXCLUDED.idempotency_client_key,
+                status = EXCLUDED.status,
+                progress_percent = EXCLUDED.progress_percent,
+                lease_epoch = EXCLUDED.lease_epoch,
+                lease_owner = EXCLUDED.lease_owner,
+                lease_expires_at = EXCLUDED.lease_expires_at,
+                intended_state = EXCLUDED.intended_state,
+                observed_state = EXCLUDED.observed_state,
+                logs = EXCLUDED.logs,
+                evidence = EXCLUDED.evidence,
+                error_message = EXCLUDED.error_message,
+                updated_at = NOW();",
+            &[
+                &operation.id,
+                &operation.workspace_id,
+                &operation.operation_type,
+                &operation.plan_id,
+                &operation.plan_hash,
+                &operation.request_hash,
+                &operation.idempotency_client_key,
+                &status_str,
+                &progress_i16,
+                &lease_epoch_i64,
+                &operation.lease_owner,
+                &operation.lease_expires_at,
+                &operation.intended_state,
+                &operation.observed_state,
+                &logs_json,
+                &operation.evidence,
+                &operation.error_message,
+                &operation.created_at,
+                &operation.updated_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import operation: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn import_binding_tx(
+        tx: &tokio_postgres::Transaction<'_>,
+        mut binding: ServiceBinding,
+    ) -> Result<()> {
+        if binding.source_resource_id == binding.target_resource_id {
+            return Err(SmooothError::Validation(
+                "Self-binding prohibited: source and target resources must differ".to_string(),
+            ));
+        }
+
+        if binding.workspace_id.is_empty() {
+            let src_row = tx
+                .query_opt(
+                    "SELECT workspace_id FROM resources WHERE id = $1;",
+                    &[&binding.source_resource_id],
                 )
                 .await
-                .map_err(|e| SmooothError::Storage(format!("Failed to import fencing epoch: {}", e)))?;
+                .map_err(|e| {
+                    SmooothError::Storage(format!("Failed to query source resource: {}", e))
+                })?;
+
+            match src_row {
+                Some(r) => binding.workspace_id = r.get("workspace_id"),
+                None => {
+                    return Err(SmooothError::Storage(format!(
+                        "Cannot save service binding: source resource '{}' not found",
+                        binding.source_resource_id
+                    )))
+                }
+            }
         }
+
+        let stage_str = match binding.rotation_stage {
+            RotationStage::Overlapping => "overlapping",
+            RotationStage::Verifying => "verifying",
+            RotationStage::Retired => "retired",
+            RotationStage::RolledBack => "rolled_back",
+            RotationStage::Active => "active",
+        };
+        let ownership_str = match binding.ownership {
+            ResourceOwnership::External => "external",
+            ResourceOwnership::CustomWorkload => "discovered",
+            ResourceOwnership::SmooothManaged => "smoooth_managed",
+        };
+        let version_i32 = binding.binding_version as i32;
+        let endpoint_json = binding
+            .resolved_endpoint
+            .as_ref()
+            .map(|ep| serde_json::to_value(ep).map_err(|e| SmooothError::Storage(e.to_string())))
+            .transpose()?;
+        let conn_json = binding
+            .safe_connection_details
+            .as_ref()
+            .map(|cd| serde_json::to_value(cd).map_err(|e| SmooothError::Storage(e.to_string())))
+            .transpose()?;
+        let env_keys_json = serde_json::to_value(&binding.exposed_env_keys).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize exposed env keys: {}", e))
+        })?;
+        let env_mappings_json = serde_json::to_value(&binding.env_mappings).map_err(|e| {
+            SmooothError::Storage(format!("Failed to serialize env mappings: {}", e))
+        })?;
+
+        tx.execute(
+            "INSERT INTO service_bindings (
+                id, workspace_id, source_resource_id, target_resource_id,
+                binding_type, rotation_stage, ownership, binding_version,
+                key_fingerprint, resolved_endpoint, safe_connection_details,
+                encrypted_credentials, exposed_env_keys, env_mappings,
+                created_at, updated_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                workspace_id = EXCLUDED.workspace_id,
+                rotation_stage = EXCLUDED.rotation_stage,
+                ownership = EXCLUDED.ownership,
+                binding_version = EXCLUDED.binding_version,
+                key_fingerprint = EXCLUDED.key_fingerprint,
+                resolved_endpoint = EXCLUDED.resolved_endpoint,
+                safe_connection_details = EXCLUDED.safe_connection_details,
+                encrypted_credentials = EXCLUDED.encrypted_credentials,
+                exposed_env_keys = EXCLUDED.exposed_env_keys,
+                env_mappings = EXCLUDED.env_mappings,
+                updated_at = NOW();",
+            &[
+                &binding.id,
+                &binding.workspace_id,
+                &binding.source_resource_id,
+                &binding.target_resource_id,
+                &binding.binding_type,
+                &stage_str,
+                &ownership_str,
+                &version_i32,
+                &binding.key_fingerprint,
+                &endpoint_json,
+                &conn_json,
+                &binding.encrypted_credentials,
+                &env_keys_json,
+                &env_mappings_json,
+                &binding.created_at,
+                &binding.updated_at,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import service binding: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn import_audit_tx(
+        tx: &tokio_postgres::Transaction<'_>,
+        event: AuditEvent,
+    ) -> Result<()> {
+        tx.execute(
+            "INSERT INTO audit_events (
+                workspace_id, actor, action, target_resource_id, plan_hash, outcome, redacted_evidence, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);",
+            &[
+                &event.workspace_id,
+                &event.actor,
+                &event.action,
+                &event.target_resource_id,
+                &event.plan_hash,
+                &event.outcome,
+                &event.redacted_evidence,
+                &event.timestamp,
+            ],
+        )
+        .await
+        .map_err(|e| SmooothError::Storage(format!("Failed to import audit event: {}", e)))?;
 
         Ok(())
     }

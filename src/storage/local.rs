@@ -543,6 +543,46 @@ impl Storage for LocalStorage {
 
     async fn save_plan(&self, plan: Plan) -> Result<()> {
         self.mutate_and_persist(|state| {
+            if let Some(existing) = state.plans.get(&plan.id) {
+                if existing.spec.workspace_id != plan.spec.workspace_id {
+                    return Err(crate::error::SmooothError::Security(format!(
+                        "Cross-workspace plan conflict: plan '{}' belongs to workspace '{}', cannot save under '{}'",
+                        plan.id, existing.spec.workspace_id, plan.spec.workspace_id
+                    )));
+                }
+                if existing.plan_hash != plan.plan_hash {
+                    return Err(crate::error::SmooothError::Validation(format!(
+                        "Plan '{}' is immutable: cannot modify plan_hash (existing: {}, attempted: {})",
+                        plan.id, existing.plan_hash, plan.plan_hash
+                    )));
+                }
+                if existing.spec != plan.spec {
+                    return Err(crate::error::SmooothError::Validation(format!(
+                        "Plan '{}' is immutable: canonical specification cannot be modified after creation",
+                        plan.id
+                    )));
+                }
+                // Identical re-save: idempotent update of approval metadata
+                let mut updated = existing.clone();
+                updated.approved_plan_hash = plan.approved_plan_hash;
+                updated.approved_by = plan.approved_by;
+                updated.approval = plan.approval;
+                state.plans.insert(plan.id.clone(), updated);
+                return Ok(((), true));
+            }
+
+            // Check if plan_hash already belongs to another plan
+            if let Some(other) = state
+                .plans
+                .values()
+                .find(|p| p.plan_hash == plan.plan_hash && p.id != plan.id)
+            {
+                return Err(crate::error::SmooothError::Validation(format!(
+                    "Plan hash '{}' already belongs to plan '{}'",
+                    plan.plan_hash, other.id
+                )));
+            }
+
             state.plans.insert(plan.id.clone(), plan);
             Ok(((), true))
         })
@@ -675,6 +715,43 @@ impl Storage for LocalStorage {
 
     async fn update_operation(&self, operation: Operation) -> Result<()> {
         self.mutate_and_persist(|state| {
+            if let Some(existing) = state.operations.get(&operation.id) {
+                let now = chrono::Utc::now();
+                if operation.lease_epoch < existing.lease_epoch {
+                    return Err(crate::error::SmooothError::LeaseConflict(format!(
+                        "Stale worker update rejected: current lease epoch {} > worker lease epoch {}",
+                        existing.lease_epoch, operation.lease_epoch
+                    )));
+                }
+                if operation.lease_epoch == existing.lease_epoch {
+                    if existing.lease_owner.is_some()
+                        && operation.lease_owner.is_some()
+                        && existing.lease_owner != operation.lease_owner
+                    {
+                        return Err(crate::error::SmooothError::LeaseConflict(format!(
+                            "Lease owner conflict: operation currently owned by '{:?}', update attempted by '{:?}'",
+                            existing.lease_owner, operation.lease_owner
+                        )));
+                    }
+                    if let Some(exp) = existing.lease_expires_at {
+                        if exp <= now {
+                            let new_exp_valid =
+                                operation.lease_expires_at.map(|e| e > now).unwrap_or(false);
+                            if !new_exp_valid {
+                                return Err(crate::error::SmooothError::LeaseConflict(
+                                    "Worker lease expired: cannot update operation under expired lease without extending expiry"
+                                        .to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            } else {
+                return Err(crate::error::SmooothError::NotFound(format!(
+                    "Operation '{}' not found for update",
+                    operation.id
+                )));
+            }
             state.operations.insert(operation.id.clone(), operation);
             Ok(((), true))
         })

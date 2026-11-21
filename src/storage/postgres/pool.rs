@@ -1,8 +1,12 @@
 use crate::error::{Result, SmooothError};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio_postgres::{Client, NoTls};
+
+/// Default connection acquisition timeout (5 seconds).
+pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Bounded, leak-free connection pool for tokio-postgres.
 #[derive(Clone)]
@@ -15,6 +19,7 @@ struct PoolInner {
     schema: Option<String>,
     clients: Mutex<Vec<Client>>,
     semaphore: Arc<Semaphore>,
+    acquire_timeout: Duration,
 }
 
 pub struct PooledClient {
@@ -73,6 +78,16 @@ impl PostgresPool {
         max_connections: usize,
         schema: Option<String>,
     ) -> Self {
+        Self::new_with_timeout(config_str, max_connections, schema, DEFAULT_ACQUIRE_TIMEOUT)
+    }
+
+    /// Creates a new PostgresPool configured with an explicit timeout.
+    pub fn new_with_timeout(
+        config_str: impl Into<String>,
+        max_connections: usize,
+        schema: Option<String>,
+        acquire_timeout: Duration,
+    ) -> Self {
         let max_conns = max_connections.max(1);
         Self {
             inner: Arc::new(PoolInner {
@@ -80,21 +95,30 @@ impl PostgresPool {
                 schema,
                 clients: Mutex::new(Vec::with_capacity(max_conns)),
                 semaphore: Arc::new(Semaphore::new(max_conns)),
+                acquire_timeout,
             }),
         }
     }
 
-    /// Acquires an exclusive client connection from the pool.
+    /// Acquires an exclusive client connection from the pool, bounded by the configured timeout.
     pub async fn get(&self) -> Result<PooledClient> {
-        let permit = self
-            .inner
-            .semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|e| {
-                SmooothError::Storage(format!("Failed to acquire connection permit: {}", e))
-            })?;
+        self.get_timeout(self.inner.acquire_timeout).await
+    }
+
+    /// Acquires an exclusive client connection with a custom timeout.
+    pub async fn get_timeout(&self, timeout_dur: Duration) -> Result<PooledClient> {
+        let permit =
+            tokio::time::timeout(timeout_dur, self.inner.semaphore.clone().acquire_owned())
+                .await
+                .map_err(|_| {
+                    SmooothError::Timeout(format!(
+                        "PostgreSQL connection pool acquisition timed out after {:?}",
+                        timeout_dur
+                    ))
+                })?
+                .map_err(|e| {
+                    SmooothError::Storage(format!("Failed to acquire connection permit: {}", e))
+                })?;
 
         // 1. Check existing idle clients
         {
@@ -111,8 +135,15 @@ impl PostgresPool {
         }
 
         // 2. Establish new connection if queue empty or drained of closed sockets
-        let (client, connection) = tokio_postgres::connect(&self.inner.config_str, NoTls)
+        let connect_fut = tokio_postgres::connect(&self.inner.config_str, NoTls);
+        let (client, connection) = tokio::time::timeout(timeout_dur, connect_fut)
             .await
+            .map_err(|_| {
+                SmooothError::Timeout(format!(
+                    "PostgreSQL connection establishment timed out after {:?}",
+                    timeout_dur
+                ))
+            })?
             .map_err(|e| SmooothError::Storage(format!("PostgreSQL connection failure: {}", e)))?;
 
         tokio::spawn(async move {
@@ -142,5 +173,10 @@ impl PostgresPool {
     /// Returns the configured schema if set.
     pub fn schema(&self) -> Option<&str> {
         self.inner.schema.as_deref()
+    }
+
+    /// Returns currently available permits.
+    pub fn available_permits(&self) -> usize {
+        self.inner.semaphore.available_permits()
     }
 }
